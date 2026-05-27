@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../screens/signin.dart';
 
 class AppDrawer extends StatelessWidget {
   final int selectedIndex;
@@ -46,6 +47,7 @@ class AppDrawer extends StatelessWidget {
                   _buildSectionDivider('ADMINISTRATION'),
                   _buildNavItem(15, Icons.admin_panel_settings_outlined, 'Super Admin'),
                   _buildNavItem(16, Icons.group_work_outlined, 'HR & Payroll'),
+                  _buildNavItem(17, Icons.monitor_heart_outlined, 'Time Monitoring'),
                 ],
               ),
             ),
@@ -59,49 +61,11 @@ class AppDrawer extends StatelessWidget {
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppTheme.sidebarAccent,
-              borderRadius: BorderRadius.circular(10),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.sidebarAccent.withOpacity(0.4),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: const Icon(Icons.electric_bolt_rounded,
-                color: Colors.white, size: 22),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'ECRAFTZ',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 16,
-                  letterSpacing: 1.5,
-                ),
-              ),
-              Text(
-                'CRM Platform',
-                style: TextStyle(
-                  color: AppTheme.textMuted.withOpacity(0.7),
-                  fontSize: 11,
-                  letterSpacing: 0.3,
-                ),
-              ),
-            ],
-          ),
-        ],
+      alignment: Alignment.centerLeft,
+      child: Image.asset(
+        'assets/ecraftzlogolight.png',
+        height: 36,
+        fit: BoxFit.contain,
       ),
     );
   }
@@ -219,8 +183,17 @@ class AppDrawer extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(Icons.logout_rounded,
-              color: Color(0xFF8892B0), size: 18),
+          IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            icon: const Icon(Icons.logout_rounded, color: Color(0xFF8892B0), size: 18),
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginPage()),
+              );
+            },
+          ),
         ],
       ),
     );

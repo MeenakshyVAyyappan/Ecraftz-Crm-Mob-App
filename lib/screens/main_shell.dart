@@ -8,6 +8,15 @@ import 'tasks_screen.dart';
 import 'teams_screen.dart';
 import 'billing_invoice.dart';
 import 'asset_renewal.dart';
+import 'scheduler_screen.dart';
+import 'client_statement_screen.dart';
+import 'reports_screen.dart';
+import 'team_timesheets.dart';
+import 'leave_approval.dart';
+import 'roles_and_access.dart';
+import 'time_monitoring_screen.dart';
+import 'hr_and_payroll.dart';
+
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -72,6 +81,46 @@ class _MainShellState extends State<MainShell> {
           selectedIndex: _selectedIndex,
           onItemSelected: _onItemSelected,
         );  
+      case 9:
+        return ClientStatementsScreen(  
+          selectedIndex: _selectedIndex,
+          onItemSelected: _onItemSelected,
+        );
+      case 10:
+        return SchedulerScreen(  
+          selectedIndex: _selectedIndex,
+          onItemSelected: _onItemSelected,
+        );
+      case 11:
+        return ReportsScreen(  
+          selectedIndex: _selectedIndex,
+          onItemSelected: _onItemSelected,
+        );
+      case 12:
+        return TeamTimesheetsScreen(  
+          selectedIndex: _selectedIndex,
+          onItemSelected: _onItemSelected,
+        );
+      case 13:
+        return LeaveApprovalsScreen(  
+          selectedIndex: _selectedIndex,
+          onItemSelected: _onItemSelected,
+        );
+      case 14:
+        return RolesAccessScreen(  
+          selectedIndex: _selectedIndex,
+          onItemSelected: _onItemSelected,
+        );
+      case 17:
+        return TimeMonitorScreen(
+          selectedIndex: _selectedIndex,
+          onItemSelected: _onItemSelected,
+        );
+      case 16:
+        return HRPayrollScreen(
+          selectedIndex: _selectedIndex,
+          onItemSelected: _onItemSelected,
+        );
 
       default:
         return DashboardScreen(

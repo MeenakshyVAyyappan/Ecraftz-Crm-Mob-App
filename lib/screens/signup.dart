@@ -354,35 +354,10 @@ class _RegisterPageState extends State<RegisterPage> {
 // ─── PRIVATE HELPERS ─────────────────────────────────────────────────────────
 
 Widget _buildLogo() {
-  return Column(
-    children: [
-      Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          color: const Color(0xFF00BCD4),
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF00BCD4).withOpacity(0.35),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: const Icon(Icons.electric_bolt_rounded,
-            color: Colors.white, size: 30),
-      ),
-      const SizedBox(height: 12),
-      const Text('ECRAFTZ',
-          style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-              color: Color(0xFF111827),
-              letterSpacing: 2)),
-      const Text('CRM Platform',
-          style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
-    ],
+  return Image.asset(
+    'assets/ecraftzlogodark.png',
+    height: 55,
+    fit: BoxFit.contain,
   );
 }
 

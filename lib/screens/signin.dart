@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'signup.dart';
 import 'main_shell.dart'; // your main shell
+import 'Employee/employee_dashboard.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -30,10 +31,21 @@ class _LoginPageState extends State<LoginPage> {
     await Future.delayed(const Duration(seconds: 1));
     setState(() => _loading = false);
     if (!mounted) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const MainShell()),
-    );
+
+    final email = _emailCtrl.text.trim();
+    final password = _passCtrl.text.trim();
+
+    if (email == 'employee@ecraftz.com' && password == 'employee123') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const EmployeeDashboardScreen()),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const MainShell()),
+      );
+    }
   }
 
   @override
@@ -205,35 +217,10 @@ class _LoginPageState extends State<LoginPage> {
 // ─── SHARED WIDGETS ───────────────────────────────────────────────────────────
 
 Widget _buildLogo() {
-  return Column(
-    children: [
-      Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          color: const Color(0xFF00BCD4),
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF00BCD4).withOpacity(0.35),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: const Icon(Icons.electric_bolt_rounded,
-            color: Colors.white, size: 30),
-      ),
-      const SizedBox(height: 12),
-      const Text('ECRAFTZ',
-          style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-              color: Color(0xFF111827),
-              letterSpacing: 2)),
-      const Text('CRM Platform',
-          style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
-    ],
+  return Image.asset(
+    'assets/ecraftzlogodark.png',
+    height: 55,
+    fit: BoxFit.contain,
   );
 }
 
