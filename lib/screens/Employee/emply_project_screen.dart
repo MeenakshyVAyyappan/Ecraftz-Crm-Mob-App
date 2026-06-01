@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../theme/app_theme.dart';
+import '../../blocs/project/project_bloc.dart';
+import '../../models/project_model.dart';
 
 class ProjectsScreen extends StatefulWidget {
   const ProjectsScreen({super.key});
@@ -14,20 +17,6 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
 
-  final List<Map<String, dynamic>> _projects = [
-    // Sample - initially empty like the app
-  ];
-
-  List<Map<String, dynamic>> get _filtered {
-    if (_searchQuery.isEmpty) return _projects;
-    return _projects
-        .where((p) => p['name']
-            .toString()
-            .toLowerCase()
-            .contains(_searchQuery.toLowerCase()))
-        .toList();
-  }
-
   @override
   void dispose() {
     _searchController.dispose();
@@ -40,92 +29,114 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: null,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Breadcrumb
-            _buildBreadcrumb(['Dashboard', 'Projects']),
-            const SizedBox(height: 12),
-            // Header
-            Text('Projects & Growth',
-                style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : const Color(0xFF1A1A2E))),
-            Text('Manage active and archived projects.',
-                style: TextStyle(
-                    fontSize: 13, color: isDark ? const Color(0xFF8E9CB8) : Colors.grey[600])),
-            const SizedBox(height: 16),
-            // Active tab
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 9),
-              decoration: BoxDecoration(
-                border: Border.all(color: isDark ? AppTheme.borderDark : Colors.grey[300]!),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text('ACTIVE PROJECTS',
-                  style: TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black)),
-            ),
-            const SizedBox(height: 16),
-            // Search + Filter + View
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isDark ? AppTheme.bgCardDark : Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                    color: const Color(0xFF2196F3), width: 1.5),
-                boxShadow: isDark ? [] : [
-                  BoxShadow(
-                      color: Colors.grey.withOpacity(0.06),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2))
-                ],
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          onChanged: (v) =>
-                              setState(() => _searchQuery = v),
-                          style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                          decoration: InputDecoration(
-                            hintText: 'Search projects...',
-                            hintStyle: TextStyle(
-                                color: isDark ? const Color(0xFF596780) : Colors.grey[400],
-                                fontSize: 13),
-                            prefixIcon: Icon(Icons.search,
-                                color: isDark ? const Color(0xFF8E9CB8) : Colors.grey[400],
-                                size: 18),
-                            border: InputBorder.none,
-                            contentPadding:
-                                const EdgeInsets.symmetric(
-                                    vertical: 10),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      _buildStatusDropdown(),
-                      const SizedBox(width: 8),
-                      _buildViewModeButtons(),
+      body: BlocBuilder<ProjectBloc, ProjectState>(
+        builder: (context, state) {
+          final filteredProjects = state.projects.where((p) {
+            // Apply search query
+            final matchesSearch = p.name.toLowerCase().contains(_searchQuery.toLowerCase());
+            if (!matchesSearch) return false;
+
+            // Apply status filter
+            if (_selectedStatus == 'Active') {
+              return p.status == ProjectStatus.inProgress ||
+                     p.status == ProjectStatus.planning ||
+                     p.status == ProjectStatus.onHold;
+            } else if (_selectedStatus == 'Completed') {
+              return p.status == ProjectStatus.completed;
+            } else if (_selectedStatus == 'On Hold') {
+              return p.status == ProjectStatus.onHold;
+            }
+            return true; // 'All Status'
+          }).toList();
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Breadcrumb
+                _buildBreadcrumb(['Dashboard', 'Projects']),
+                const SizedBox(height: 12),
+                // Header
+                Text('Projects & Growth',
+                    style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : const Color(0xFF1A1A2E))),
+                Text('Manage active and archived projects.',
+                    style: TextStyle(
+                        fontSize: 13, color: isDark ? const Color(0xFF8E9CB8) : Colors.grey[600])),
+                const SizedBox(height: 16),
+                // Active tab
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 9),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: isDark ? AppTheme.borderDark : Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text('ACTIVE PROJECTS',
+                      style: TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black)),
+                ),
+                const SizedBox(height: 16),
+                // Search + Filter + View
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppTheme.bgCardDark : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: const Color(0xFF2196F3), width: 1.5),
+                    boxShadow: isDark ? [] : [
+                      BoxShadow(
+                          color: Colors.grey.withOpacity(0.06),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2))
                     ],
                   ),
-                  const Divider(height: 16),
-                  _filtered.isEmpty
-                      ? _buildEmptyState()
-                      : _buildProjectsContent(),
-                ],
-              ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _searchController,
+                              onChanged: (v) =>
+                                  setState(() => _searchQuery = v),
+                              style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                              decoration: InputDecoration(
+                                hintText: 'Search projects...',
+                                hintStyle: TextStyle(
+                                    color: isDark ? const Color(0xFF596780) : Colors.grey[400],
+                                    fontSize: 13),
+                                prefixIcon: Icon(Icons.search,
+                                    color: isDark ? const Color(0xFF8E9CB8) : Colors.grey[400],
+                                    size: 18),
+                                border: InputBorder.none,
+                                contentPadding:
+                                    const EdgeInsets.symmetric(
+                                        vertical: 10),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildStatusDropdown(),
+                          const SizedBox(width: 8),
+                          _buildViewModeButtons(),
+                        ],
+                      ),
+                      const Divider(height: 16),
+                      filteredProjects.isEmpty
+                          ? _buildEmptyState()
+                          : _buildProjectsContent(filteredProjects),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddProjectDialog(),
@@ -134,45 +145,6 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
         label: const Text('New Project',
             style: TextStyle(color: Colors.white)),
       ),
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return AppBar(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      elevation: 0,
-      leading: IconButton(
-        icon: Icon(Icons.arrow_back_ios,
-            color: isDark ? Colors.white : const Color(0xFF2C3E50), size: 18),
-        onPressed: () => Navigator.pop(context),
-      ),
-      title: Text('Projects',
-          style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : const Color(0xFF1A1A2E))),
-      actions: [
-        IconButton(
-            icon: Icon(Icons.search,
-                color: isDark ? Colors.white : const Color(0xFF2C3E50)),
-            onPressed: () {}),
-        IconButton(
-            icon: Icon(Icons.notifications_outlined,
-                color: isDark ? Colors.white : const Color(0xFF2C3E50)),
-            onPressed: () {}),
-        Container(
-          margin: const EdgeInsets.only(right: 12),
-          child: Text('EMPLOYEE',
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white : const Color(0xFF1A1A2E))),
-        ),
-      ],
-      bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(color: AppTheme.borderOf(context), height: 1)),
     );
   }
 
@@ -296,23 +268,23 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     );
   }
 
-  Widget _buildProjectsContent() {
-    if (_viewMode == 2) return _buildListView();
-    if (_viewMode == 1) return _buildGridView();
-    return _buildKanbanView();
+  Widget _buildProjectsContent(List<Project> projects) {
+    if (_viewMode == 2) return _buildListView(projects);
+    if (_viewMode == 1) return _buildGridView(projects);
+    return _buildKanbanView(projects);
   }
 
-  Widget _buildListView() {
+  Widget _buildListView(List<Project> projects) {
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: _filtered.length,
+      itemCount: projects.length,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (ctx, i) => _buildProjectListTile(_filtered[i]),
+      itemBuilder: (ctx, i) => _buildProjectListTile(projects[i]),
     );
   }
 
-  Widget _buildGridView() {
+  Widget _buildGridView(List<Project> projects) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -322,16 +294,16 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
         mainAxisSpacing: 10,
         childAspectRatio: 1.2,
       ),
-      itemCount: _filtered.length,
-      itemBuilder: (ctx, i) => _buildProjectGridCard(_filtered[i]),
+      itemCount: projects.length,
+      itemBuilder: (ctx, i) => _buildProjectGridCard(projects[i]),
     );
   }
 
-  Widget _buildKanbanView() {
-    return _buildListView();
+  Widget _buildKanbanView(List<Project> projects) {
+    return _buildListView(projects);
   }
 
-  Widget _buildProjectListTile(Map<String, dynamic> project) {
+  Widget _buildProjectListTile(Project project) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(12),
@@ -345,7 +317,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
               backgroundColor: const Color(0xFF2196F3),
               radius: 16,
               child: Text(
-                  project['name'].toString().substring(0, 1),
+                  project.name.isNotEmpty ? project.name.substring(0, 1).toUpperCase() : '',
                   style: const TextStyle(
                       color: Colors.white, fontSize: 12))),
           const SizedBox(width: 10),
@@ -353,12 +325,12 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(project['name'],
+                Text(project.name,
                     style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
                         color: isDark ? Colors.white : Colors.black)),
-                Text(project['status'] ?? 'Active',
+                Text(project.status.label.toUpperCase(),
                     style: TextStyle(
                         fontSize: 11, color: isDark ? const Color(0xFF8E9CB8) : Colors.grey)),
               ],
@@ -370,7 +342,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     );
   }
 
-  Widget _buildProjectGridCard(Map<String, dynamic> project) {
+  Widget _buildProjectGridCard(Project project) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(12),
@@ -385,16 +357,16 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
               backgroundColor: const Color(0xFF2196F3),
               radius: 16,
               child: Text(
-                  project['name'].toString().substring(0, 1),
+                  project.name.isNotEmpty ? project.name.substring(0, 1).toUpperCase() : '',
                   style: const TextStyle(
                       color: Colors.white, fontSize: 12))),
           const SizedBox(height: 8),
-          Text(project['name'],
+          Text(project.name,
               style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 12,
                   color: isDark ? Colors.white : Colors.black)),
-          Text(project['status'] ?? 'Active',
+          Text(project.status.label.toUpperCase(),
               style: TextStyle(
                   fontSize: 10, color: isDark ? const Color(0xFF8E9CB8) : Colors.grey)),
         ],
@@ -456,10 +428,17 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
               ElevatedButton(
                 onPressed: () {
                   if (nameCtrl.text.isNotEmpty) {
-                    setState(() => _projects.add({
-                          'name': nameCtrl.text,
-                          'status': 'Active',
-                        }));
+                    context.read<ProjectBloc>().add(
+                          AddProjectEvent(
+                            Project(
+                              id: DateTime.now().millisecondsSinceEpoch.toString(),
+                              name: nameCtrl.text,
+                              clientName: 'Demo Client',
+                              status: ProjectStatus.inProgress,
+                              isArchived: false,
+                            ),
+                          ),
+                        );
                     Navigator.pop(ctx);
                   }
                 },

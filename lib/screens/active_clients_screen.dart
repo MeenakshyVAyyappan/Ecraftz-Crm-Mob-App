@@ -1,36 +1,8 @@
-// active_clients_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../widgets/app_drawer.dart';
-
-// ─── DATA MODELS ─────────────────────────────────────────────────────────────
-
-class ActiveClient {
-  final String id;
-  final String name;
-  final String email;
-  final List<String> services;
-  final double contractValue;
-  final DateTime onboardedAt;
-  final String templateUsed;
-
-  const ActiveClient({
-    required this.id,
-    required this.name,
-    required this.email,
-    required this.services,
-    required this.contractValue,
-    required this.onboardedAt,
-    required this.templateUsed,
-  });
-
-  String get initials {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    }
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
-  }
-}
+import '../models/client_model.dart';
+import '../blocs/client/client_bloc.dart';
 
 // ─── SERVICE COLORS ───────────────────────────────────────────────────────────
 
@@ -49,8 +21,6 @@ Color _serviceColor(String service) {
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
 class ActiveClientsPage extends StatefulWidget {
-  // Pass submitted onboarding data from ClientOnboardingPage here
-  final List<ActiveClient> externalClients;
   final int selectedIndex;
   final Function(int) onItemSelected;
 
@@ -58,7 +28,6 @@ class ActiveClientsPage extends StatefulWidget {
     super.key,
     required this.selectedIndex,
     required this.onItemSelected,
-    this.externalClients = const [],
   });
 
   @override
@@ -70,58 +39,16 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
   String _searchQuery = '';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  // Sample clients (from onboarding submissions)
-  final List<ActiveClient> _clients = [
-    ActiveClient(
-      id: '1',
-      name: 'arsenal',
-      email: 'arsenal@gmail.com',
-      services: ['Digital Marketing'],
-      contractValue: 30000,
-      onboardedAt: DateTime.now().subtract(const Duration(days: 3)),
-      templateUsed: 'Digital Marketing Premium Intake v1',
-    ),
-    ActiveClient(
-      id: '2',
-      name: 'janani',
-      email: 'livein@janani.in',
-      services: ['Web Development', 'SEO Services'],
-      contractValue: 20000,
-      onboardedAt: DateTime.now().subtract(const Duration(days: 6)),
-      templateUsed: 'Web Development Dynamic Specification v1',
-    ),
-    ActiveClient(
-      id: '3',
-      name: 'Steve rogers',
-      email: 'viswajith.ecraftz@gmail.com',
-      services: ['Design'],
-      contractValue: 0,
-      onboardedAt: DateTime.now().subtract(const Duration(days: 1)),
-      templateUsed: 'Content Creation Requirements Questionnaire',
-    ),
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    // Add any externally passed clients (from onboarding submissions)
-    for (final c in widget.externalClients) {
-      if (!_clients.any((x) => x.id == c.id)) {
-        _clients.add(c);
-      }
-    }
-  }
-
   @override
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
   }
 
-  List<ActiveClient> get _filtered {
-    if (_searchQuery.isEmpty) return _clients;
+  List<ActiveClient> _filtered(List<ActiveClient> clients) {
+    if (_searchQuery.isEmpty) return clients;
     final q = _searchQuery.toLowerCase();
-    return _clients.where((c) =>
+    return clients.where((c) =>
         c.name.toLowerCase().contains(q) ||
         c.email.toLowerCase().contains(q) ||
         c.services.any((s) => s.toLowerCase().contains(q))).toList();
@@ -134,7 +61,7 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
       backgroundColor: Colors.transparent,
       builder: (_) => _BulkImportSheet(
         onImport: (clients) {
-          setState(() => _clients.addAll(clients));
+          context.read<ClientBloc>().add(AddClientsBulkEvent(clients));
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('${clients.length} client(s) imported successfully'),
@@ -174,7 +101,7 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
             onPressed: () {
-              setState(() => _clients.removeWhere((c) => c.id == client.id));
+              context.read<ClientBloc>().add(DeleteClientEvent(client.id));
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Client removed'), backgroundColor: Colors.red),
@@ -189,7 +116,6 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final clients = _filtered;
     final isWide = MediaQuery.of(context).size.width > 600;
 
     return Scaffold(
@@ -246,59 +172,65 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
           child: Container(height: 1, color: const Color(0xFFE5E7EB)),
         ),
       ),
-      body: Column(
-        children: [
-          // Stats strip
-          _buildStatsStrip(),
-          // Search bar
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: (v) => setState(() => _searchQuery = v),
-              decoration: InputDecoration(
-                hintText: 'Search active clients...',
-                hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
-                prefixIcon: const Icon(Icons.search, color: Color(0xFF9CA3AF), size: 18),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.close, size: 16, color: Color(0xFF6B7280)),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          setState(() => _searchQuery = '');
-                        })
-                    : null,
-                filled: true,
-                fillColor: const Color(0xFFF9FAFB),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+      body: BlocBuilder<ClientBloc, ClientState>(
+        builder: (context, state) {
+          final allClients = state.clients;
+          final clients = _filtered(allClients);
+          return Column(
+            children: [
+              // Stats strip
+              _buildStatsStrip(allClients),
+              // Search bar
+              Container(
+                color: Colors.white,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                  decoration: InputDecoration(
+                    hintText: 'Search active clients...',
+                    hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
+                    prefixIcon: const Icon(Icons.search, color: Color(0xFF9CA3AF), size: 18),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close, size: 16, color: Color(0xFF6B7280)),
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              setState(() => _searchQuery = '');
+                            })
+                        : null,
+                    filled: true,
+                    fillColor: const Color(0xFFF9FAFB),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
               ),
-            ),
-          ),
-          // Table
-          Expanded(
-            child: clients.isEmpty
-                ? _buildEmpty()
-                : _buildTable(clients, isWide),
-          ),
-        ],
+              // Table
+              Expanded(
+                child: clients.isEmpty
+                    ? _buildEmpty()
+                    : _buildTable(clients, isWide),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildStatsStrip() {
-    final total = _clients.length;
-    final totalValue = _clients.fold<double>(0, (s, c) => s + c.contractValue);
-    final services = _clients.expand((c) => c.services).toSet().length;
+  Widget _buildStatsStrip(List<ActiveClient> allClients) {
+    final total = allClients.length;
+    final totalValue = allClients.fold<double>(0, (s, c) => s + c.contractValue);
+    final services = allClients.expand((c) => c.services).toSet().length;
 
     return Container(
       color: Colors.white,

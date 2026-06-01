@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../theme/app_theme.dart';
-import '../screens/signin.dart';
+import '../blocs/auth/auth_bloc.dart';
 
 class AppDrawer extends StatelessWidget {
   final int selectedIndex;
@@ -188,10 +189,8 @@ class AppDrawer extends StatelessWidget {
             constraints: const BoxConstraints(),
             icon: const Icon(Icons.logout_rounded, color: Color(0xFF8892B0), size: 18),
             onPressed: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginPage()),
-              );
+              // Dispatch logout event; AuthWrapper handles navigation back to login.
+              context.read<AuthBloc>().add(AuthLogoutEvent());
             },
           ),
         ],

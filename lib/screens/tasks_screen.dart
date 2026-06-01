@@ -1,182 +1,9 @@
 // tasks_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../blocs/task/task_bloc.dart';
+import '../models/task_model.dart';
 import '../widgets/app_drawer.dart';
-
-// ─── ENUMS & MODELS ──────────────────────────────────────────────────────────
-
-enum TaskStatus { toDo, inProgress, review, done }
-enum TaskPriority { low, medium, high }
-
-extension TaskStatusExt on TaskStatus {
-  String get label {
-    switch (this) {
-      case TaskStatus.toDo: return 'To Do';
-      case TaskStatus.inProgress: return 'In Progress';
-      case TaskStatus.review: return 'Review';
-      case TaskStatus.done: return 'Done';
-    }
-  }
-  Color get color {
-    switch (this) {
-      case TaskStatus.toDo: return const Color(0xFF94A3B8);
-      case TaskStatus.inProgress: return const Color(0xFF0EA5E9);
-      case TaskStatus.review: return const Color(0xFFF59E0B);
-      case TaskStatus.done: return const Color(0xFF10B981);
-    }
-  }
-  Color get bgColor {
-    switch (this) {
-      case TaskStatus.toDo: return const Color(0xFFF1F5F9);
-      case TaskStatus.inProgress: return const Color(0xFFE0F2FE);
-      case TaskStatus.review: return const Color(0xFFFEF3C7);
-      case TaskStatus.done: return const Color(0xFFD1FAE5);
-    }
-  }
-}
-
-extension TaskPriorityExt on TaskPriority {
-  String get label {
-    switch (this) {
-      case TaskPriority.low: return 'LOW';
-      case TaskPriority.medium: return 'MEDIUM';
-      case TaskPriority.high: return 'HIGH';
-    }
-  }
-  Color get color {
-    switch (this) {
-      case TaskPriority.low: return const Color(0xFF10B981);
-      case TaskPriority.medium: return const Color(0xFFF59E0B);
-      case TaskPriority.high: return const Color(0xFFEF4444);
-    }
-  }
-  Color get bgColor {
-    switch (this) {
-      case TaskPriority.low: return const Color(0xFFD1FAE5);
-      case TaskPriority.medium: return const Color(0xFFFEF3C7);
-      case TaskPriority.high: return const Color(0xFFFEE2E2);
-    }
-  }
-}
-
-class TaskItem {
-  final String id;
-  String summary;
-  String description;
-  String? parentProject;
-  String? owner;
-  DateTime? dueDate;
-  TaskStatus status;
-  TaskPriority priority;
-
-  TaskItem({
-    required this.id,
-    required this.summary,
-    this.description = '',
-    this.parentProject,
-    this.owner,
-    this.dueDate,
-    required this.status,
-    required this.priority,
-  });
-}
-
-class TeamMember {
-  final String id;
-  final String name;
-  final String role;
-  final String department;
-  final int weeklyLoad;
-  final int weeklyLimit;
-  final List<TaskItem> tasks;
-
-  TeamMember({
-    required this.id,
-    required this.name,
-    required this.role,
-    required this.department,
-    this.weeklyLoad = 0,
-    this.weeklyLimit = 40,
-    required this.tasks,
-  });
-
-  String get initials => name.isNotEmpty ? name[0].toUpperCase() : '?';
-
-  String get workloadStatus {
-    final pct = weeklyLoad / weeklyLimit;
-    if (pct >= 1.0) return 'Overloaded';
-    if (pct >= 0.8) return 'At Risk';
-    return 'Balanced';
-  }
-
-  Color get workloadColor {
-    final pct = weeklyLoad / weeklyLimit;
-    if (pct >= 1.0) return const Color(0xFFEF4444);
-    if (pct >= 0.8) return const Color(0xFFF59E0B);
-    return const Color(0xFF10B981);
-  }
-}
-
-// ─── SAMPLE DATA ─────────────────────────────────────────────────────────────
-
-List<TaskItem> _sampleTasks = [
-  TaskItem(
-    id: '1',
-    summary: 'landing page',
-    parentProject: 'ARSENAL - DIGITAL MARKETING PREMIUM INTAKE...',
-    owner: 'Chimbu',
-    dueDate: DateTime(2026, 5, 27),
-    status: TaskStatus.inProgress,
-    priority: TaskPriority.low,
-  ),
-  TaskItem(
-    id: '2',
-    summary: 'hello brooo',
-    parentProject: 'ARSENAL - DIGITAL MARKETING PREMIUM INTAKE...',
-    owner: 'Tony Stark',
-    dueDate: DateTime(2026, 5, 28),
-    status: TaskStatus.done,
-    priority: TaskPriority.medium,
-  ),
-  TaskItem(
-    id: '3',
-    summary: 'design dashboard',
-    parentProject: 'ARSENAL - DIGITAL MARKETING PREMIUM INTAKE...',
-    owner: 'Chimbu',
-    dueDate: DateTime(2026, 5, 23),
-    status: TaskStatus.done,
-    priority: TaskPriority.high,
-  ),
-  TaskItem(
-    id: '4',
-    summary: 'develop this',
-    parentProject: 'JANANI - WEB DEVELOPMENT DYNAMIC SPECIFICA...',
-    owner: 'Chimbu',
-    dueDate: DateTime(2026, 5, 22),
-    status: TaskStatus.done,
-    priority: TaskPriority.high,
-  ),
-];
-
-List<TeamMember> _sampleMembers = [
-  TeamMember(
-    id: '1',
-    name: 'Chimbu',
-    role: 'TEAM LEAD',
-    department: 'WEB DEVELOPING',
-    weeklyLoad: 0,
-    weeklyLimit: 40,
-    tasks: _sampleTasks.where((t) => t.owner == 'Chimbu').toList(),
-  ),
-  TeamMember(
-    id: '2',
-    name: 'Tony Stark',
-    role: 'SALES',
-    department: 'BDE',
-    weeklyLoad: 0,
-    weeklyLimit: 40,
-    tasks: _sampleTasks.where((t) => t.owner == 'Tony Stark').toList(),
-  ),
-];
 
 // ─── TASKS PAGE ───────────────────────────────────────────────────────────────
 
@@ -196,8 +23,6 @@ class TasksPage extends StatefulWidget {
 class _TasksPageState extends State<TasksPage> {
   int _viewIndex = 0; // 0=Kanban, 1=List, 2=Workload
   String _searchQuery = '';
-  List<TaskItem> _tasks = List.from(_sampleTasks);
-  List<TeamMember> _members = List.from(_sampleMembers);
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   static const Color _primary = Color(0xFF0EA5E9);
@@ -206,16 +31,16 @@ class _TasksPageState extends State<TasksPage> {
   static const Color _textSecondary = Color(0xFF64748B);
   static const Color _border = Color(0xFFE2E8F0);
 
-  List<TaskItem> get _filtered => _tasks.where((t) {
+  List<TaskItem> _filtered(List<TaskItem> tasks) => tasks.where((t) {
         if (_searchQuery.isEmpty) return true;
         return t.summary.toLowerCase().contains(_searchQuery.toLowerCase());
       }).toList();
 
-  int get _unassignedCount =>
-      _tasks.where((t) => t.owner == null || t.owner!.isEmpty).length;
+  int _unassignedCount(List<TaskItem> tasks) =>
+      tasks.where((t) => t.owner == null || t.owner!.isEmpty).length;
 
-  int get _overloadedCount =>
-      _members.where((m) => m.workloadStatus == 'Overloaded').length;
+  int _overloadedCount(List<TeamMember> members) =>
+      members.where((m) => m.workloadStatus == 'Overloaded').length;
 
   @override
   Widget build(BuildContext context) {
@@ -259,12 +84,16 @@ class _TasksPageState extends State<TasksPage> {
         ),
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            _buildViewTabs(),
-            Expanded(child: _buildBody()),
-          ],
+        child: BlocBuilder<TaskBloc, TaskState>(
+          builder: (context, state) {
+            return Column(
+              children: [
+                _buildHeader(state.tasks, state.members),
+                _buildViewTabs(),
+                Expanded(child: _buildBody(state.tasks, state.members)),
+              ],
+            );
+          },
         ),
       ),
       floatingActionButton: FloatingActionButton(
@@ -275,7 +104,7 @@ class _TasksPageState extends State<TasksPage> {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(List<TaskItem> tasks, List<TeamMember> members) {
     final isWide = MediaQuery.of(context).size.width > 600;
 
     final importBtn = OutlinedButton.icon(
@@ -303,7 +132,7 @@ class _TasksPageState extends State<TasksPage> {
     );
 
     final newTaskBtn = ElevatedButton.icon(
-      onPressed: () => _showCreateTaskModal(context),
+      onPressed: () => _showCreateTaskModal(context, members: members),
       icon: const Icon(Icons.add, size: 14),
       label: const Text('New Task'),
       style: ElevatedButton.styleFrom(
@@ -394,19 +223,20 @@ class _TasksPageState extends State<TasksPage> {
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(List<TaskItem> tasks, List<TeamMember> members) {
     switch (_viewIndex) {
-      case 0: return _buildKanban();
-      case 1: return _buildListView();
-      case 2: return _buildWorkload();
-      default: return _buildKanban();
+      case 0: return _buildKanban(tasks, members);
+      case 1: return _buildListView(tasks, members);
+      case 2: return _buildWorkload(tasks, members);
+      default: return _buildKanban(tasks, members);
     }
   }
 
   // ── KANBAN ────────────────────────────────────────────────────────────────
 
-  Widget _buildKanban() {
+  Widget _buildKanban(List<TaskItem> allTasks, List<TeamMember> members) {
     final columns = TaskStatus.values;
+    final filteredTasks = _filtered(allTasks);
     return LayoutBuilder(builder: (context, constraints) {
       final isWide = constraints.maxWidth > 700;
       if (isWide) {
@@ -416,13 +246,13 @@ class _TasksPageState extends State<TasksPage> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: columns.map((s) {
-              final colTasks = _filtered.where((t) => t.status == s).toList();
+              final colTasks = filteredTasks.where((t) => t.status == s).toList();
               return _KanbanColumn(
                 status: s,
                 tasks: colTasks,
                 width: 240,
-                onTaskTap: (t) => _showTaskDetail(context, t),
-                onAddTask: () => _showCreateTaskModal(context, status: s),
+                onTaskTap: (t) => _showTaskDetail(context, t, members),
+                onAddTask: () => _showCreateTaskModal(context, status: s, members: members),
               );
             }).toList(),
           ),
@@ -432,12 +262,12 @@ class _TasksPageState extends State<TasksPage> {
       return ListView(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 80),
         children: columns.map((s) {
-          final colTasks = _filtered.where((t) => t.status == s).toList();
+          final colTasks = filteredTasks.where((t) => t.status == s).toList();
           return _KanbanColumnMobile(
             status: s,
             tasks: colTasks,
-            onTaskTap: (t) => _showTaskDetail(context, t),
-            onAddTask: () => _showCreateTaskModal(context, status: s),
+            onTaskTap: (t) => _showTaskDetail(context, t, members),
+            onAddTask: () => _showCreateTaskModal(context, status: s, members: members),
           );
         }).toList(),
       );
@@ -446,8 +276,8 @@ class _TasksPageState extends State<TasksPage> {
 
   // ── LIST VIEW ─────────────────────────────────────────────────────────────
 
-  Widget _buildListView() {
-    final tasks = _filtered;
+  Widget _buildListView(List<TaskItem> allTasks, List<TeamMember> members) {
+    final tasks = _filtered(allTasks);
     if (tasks.isEmpty) return _buildEmptyState('No tasks found');
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 80),
@@ -455,15 +285,17 @@ class _TasksPageState extends State<TasksPage> {
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (_, i) => _TaskListTile(
         task: tasks[i],
-        onTap: () => _showTaskDetail(context, tasks[i]),
-        onStatusChange: (s) => setState(() => tasks[i].status = s),
+        onTap: () => _showTaskDetail(context, tasks[i], members),
+        onStatusChange: (s) {
+          context.read<TaskBloc>().add(UpdateTaskStatusEvent(tasks[i].id, s));
+        },
       ),
     );
   }
 
   // ── WORKLOAD ──────────────────────────────────────────────────────────────
 
-  Widget _buildWorkload() {
+  Widget _buildWorkload(List<TaskItem> allTasks, List<TeamMember> members) {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 80),
       child: Column(
@@ -473,10 +305,10 @@ class _TasksPageState extends State<TasksPage> {
           LayoutBuilder(builder: (context, constraints) {
             final isWide = constraints.maxWidth > 600;
             final stats = [
-              _StatCard(label: 'TEAM SIZE', value: '${_members.length} Members', icon: Icons.people_outline, iconColor: _primary),
+              _StatCard(label: 'TEAM SIZE', value: '${members.length} Members', icon: Icons.people_outline, iconColor: _primary),
               _StatCard(label: 'TOTAL BACKLOG EST.', value: '0 hrs', icon: Icons.access_time_outlined, iconColor: _primary),
-              _StatCard(label: 'OVER-ALLOCATED TEAM', value: '$_overloadedCount Overloaded', icon: Icons.warning_amber_outlined, iconColor: const Color(0xFFF59E0B)),
-              _StatCard(label: 'UNASSIGNED TASKS', value: '$_unassignedCount Pending', icon: Icons.person_off_outlined, iconColor: const Color(0xFF6366F1)),
+              _StatCard(label: 'OVER-ALLOCATED TEAM', value: '${_overloadedCount(members)} Overloaded', icon: Icons.warning_amber_outlined, iconColor: const Color(0xFFF59E0B)),
+              _StatCard(label: 'UNASSIGNED TASKS', value: '${_unassignedCount(allTasks)} Pending', icon: Icons.person_off_outlined, iconColor: const Color(0xFF6366F1)),
             ];
             if (isWide) {
               return Row(children: stats.map((s) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 10), child: s))).toList());
@@ -502,7 +334,7 @@ class _TasksPageState extends State<TasksPage> {
               ),
               const Spacer(),
               OutlinedButton.icon(
-                onPressed: () => setState(() {}),
+                onPressed: () {},
                 icon: const Icon(Icons.sync, size: 14),
                 label: const Text('Sync Board'),
                 style: OutlinedButton.styleFrom(
@@ -524,23 +356,23 @@ class _TasksPageState extends State<TasksPage> {
             if (isWide) {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: _members.map((m) => Expanded(
+                children: members.map((m) => Expanded(
                   child: Padding(
                     padding: const EdgeInsets.only(right: 10),
                     child: _WorkloadCard(
                       member: m,
-                      onViewBreakout: () => _showWorkloadBreakout(context, m),
+                      onViewBreakout: () => _showWorkloadBreakout(context, m, members),
                     ),
                   ),
                 )).toList(),
               );
             }
             return Column(
-              children: _members.map((m) => Padding(
+              children: members.map((m) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _WorkloadCard(
                   member: m,
-                  onViewBreakout: () => _showWorkloadBreakout(context, m),
+                  onViewBreakout: () => _showWorkloadBreakout(context, m, members),
                 ),
               )).toList(),
             );
@@ -569,44 +401,47 @@ class _TasksPageState extends State<TasksPage> {
 
   // ── MODALS ────────────────────────────────────────────────────────────────
 
-  void _showCreateTaskModal(BuildContext context, {TaskStatus? status}) {
+  void _showCreateTaskModal(BuildContext context, {TaskStatus? status, List<TeamMember>? members}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _CreateTaskModal(
         initialStatus: status ?? TaskStatus.toDo,
-        members: _members,
-        onSubmit: (task) => setState(() => _tasks.add(task)),
+        members: members ?? const [],
+        onSubmit: (task) {
+          context.read<TaskBloc>().add(AddTaskEvent(task));
+        },
       ),
     );
   }
 
-  void _showTaskDetail(BuildContext context, TaskItem task) {
+  void _showTaskDetail(BuildContext context, TaskItem task, List<TeamMember> members) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _TaskDetailModal(
         task: task,
-        members: _members,
-        onUpdate: () => setState(() {}),
-        onDelete: () => setState(() => _tasks.removeWhere((t) => t.id == task.id)),
+        members: members,
+        onUpdate: () {
+          context.read<TaskBloc>().add(UpdateTaskEvent(task));
+        },
+        onDelete: () {
+          context.read<TaskBloc>().add(DeleteTaskEvent(task.id));
+        },
       ),
     );
   }
 
-  void _showWorkloadBreakout(BuildContext context, TeamMember member) {
+  void _showWorkloadBreakout(BuildContext context, TeamMember member, List<TeamMember> allMembers) {
     showDialog(
       context: context,
       builder: (_) => _WorkloadBreakoutDialog(
         member: member,
-        allMembers: _members,
+        allMembers: allMembers,
         onReallocate: (taskId, newOwner) {
-          setState(() {
-            final t = _tasks.firstWhere((t) => t.id == taskId, orElse: () => _tasks.first);
-            t.owner = newOwner;
-          });
+          context.read<TaskBloc>().add(ReallocateTaskEvent(taskId, newOwner));
         },
       ),
     );

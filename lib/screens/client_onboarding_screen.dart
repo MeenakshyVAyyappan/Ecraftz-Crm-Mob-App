@@ -1,5 +1,8 @@
 // client_onboarding_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../blocs/client/client_bloc.dart';
+import '../models/client_model.dart';
 import '../widgets/app_drawer.dart';
 
 int _uniqueIdCounter = 0;
@@ -197,10 +200,18 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
   String _templateFilter = 'All Templates';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  final List<Submission> _submissions = [
-    const Submission(id: '1', clientName: 'arsenal', templateName: 'Digital Marketing Premium Intake v1', progress: 1.0, status: IntakeStatus.approved, submittedAgo: '3 days ago'),
-    const Submission(id: '2', clientName: 'janani', templateName: 'Web Development Dynamic Specification v1', progress: 1.0, status: IntakeStatus.approved, submittedAgo: '6 days ago'),
-  ];
+  late List<Submission> _submissions;
+
+  @override
+  void initState() {
+    super.initState();
+    _submissions = [
+      const Submission(id: '1', clientName: 'arsenal', templateName: 'Digital Marketing Premium Intake v1', progress: 1.0, status: IntakeStatus.approved, submittedAgo: '3 days ago'),
+      const Submission(id: '2', clientName: 'janani', templateName: 'Web Development Dynamic Specification v1', progress: 1.0, status: IntakeStatus.approved, submittedAgo: '6 days ago'),
+      const Submission(id: '3', clientName: 'Steve Rogers', templateName: 'Content Creation Requirements Questionnaire', progress: 0.8, status: IntakeStatus.pending, submittedAgo: '2 hours ago'),
+      const Submission(id: '4', clientName: 'Tony Stark', templateName: 'Web Development Dynamic Specification v1', progress: 0.6, status: IntakeStatus.review, submittedAgo: '1 day ago'),
+    ];
+  }
 
   final List<OnboardingTemplate> _templates = [
     OnboardingTemplate(
@@ -265,6 +276,95 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
     return _submissions.where((s) =>
         s.clientName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
         s.templateName.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+  }
+
+  void _viewSubmission(Submission s) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.description_outlined, color: Color(0xFF00BCD4)),
+              SizedBox(width: 8),
+              Text(
+                'Submission Details',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Client Name: ${s.clientName}', style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Text('Template: ${s.templateName}'),
+              const SizedBox(height: 6),
+              Text('Status: ${s.status.label.toUpperCase()}'),
+              const SizedBox(height: 6),
+              Text('Progress: ${(s.progress * 100).toInt()}%'),
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text('Submitted Answers:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 6),
+              const Text('• Company Name: ...\n• Project Scope: Needs high performance CRM modules\n• Budget: Premium tier setup\n• Timeline: 4 weeks', style: TextStyle(fontSize: 12, color: Colors.black87)),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+            if (s.status != IntakeStatus.approved)
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () {
+                  final client = ActiveClient(
+                    id: _generateUniqueId(),
+                    name: s.clientName,
+                    email: '${s.clientName.toLowerCase().replaceAll(' ', '')}@ecraftz.com',
+                    services: [s.templateName.contains('Web') ? 'Web Development' : 'Digital Marketing'],
+                    contractValue: 25000,
+                    onboardedAt: DateTime.now(),
+                    templateUsed: s.templateName,
+                  );
+                  context.read<ClientBloc>().add(AddClientEvent(client));
+                  
+                  setState(() {
+                    final idx = _submissions.indexWhere((x) => x.id == s.id);
+                    if (idx != -1) {
+                      _submissions[idx] = Submission(
+                        id: s.id,
+                        clientName: s.clientName,
+                        templateName: s.templateName,
+                        progress: 1.0,
+                        status: IntakeStatus.approved,
+                        submittedAgo: 'Just now',
+                      );
+                    }
+                  });
+                  
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Client "${s.clientName}" approved & onboarded successfully!'),
+                      backgroundColor: const Color(0xFF10B981),
+                    ),
+                  );
+                },
+                child: const Text('Approve & Onboard Client'),
+              ),
+          ],
+        );
+      },
+    );
   }
 
   void _openFormBuilder({OnboardingTemplate? template}) {
@@ -646,7 +746,17 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
               ),
             )
           else
-            ...subs.map((s) => _SubmissionRow(submission: s, isWide: isWide, isLast: s == subs.last)).toList(),
+            ...subs.map((s) => _SubmissionRow(
+              submission: s,
+              isWide: isWide,
+              isLast: s == subs.last,
+              onView: () => _viewSubmission(s),
+              onDelete: () {
+                setState(() {
+                  _submissions.removeWhere((x) => x.id == s.id);
+                });
+              },
+            )).toList(),
           const SizedBox(height: 24),
         ],
       ),
@@ -799,11 +909,15 @@ class _SubmissionRow extends StatelessWidget {
   final Submission submission;
   final bool isWide;
   final bool isLast;
+  final VoidCallback onView;
+  final VoidCallback onDelete;
 
   const _SubmissionRow({
     required this.submission,
     required this.isWide,
     required this.isLast,
+    required this.onView,
+    required this.onDelete,
   });
 
   @override
@@ -897,7 +1011,7 @@ class _SubmissionRow extends StatelessWidget {
                 Row(
                   children: [
                     GestureDetector(
-                      onTap: () {},
+                      onTap: onView,
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -913,7 +1027,7 @@ class _SubmissionRow extends StatelessWidget {
                     ),
                     const SizedBox(width: 14),
                     GestureDetector(
-                      onTap: () {},
+                      onTap: onDelete,
                       child: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
                     ),
                   ],
@@ -1018,7 +1132,7 @@ class _SubmissionRow extends StatelessWidget {
             child: Row(
               children: [
                 GestureDetector(
-                  onTap: () {},
+                  onTap: onView,
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -1033,7 +1147,7 @@ class _SubmissionRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 GestureDetector(
-                  onTap: () {},
+                  onTap: onDelete,
                   child: const Icon(Icons.delete_outline, size: 16, color: Color(0xFF9CA3AF)),
                 ),
               ],

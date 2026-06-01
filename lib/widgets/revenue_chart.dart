@@ -1,9 +1,11 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../models/dashboard_models.dart' show RevenuePoint;
 
 class RevenueChart extends StatefulWidget {
-  const RevenueChart({super.key});
+  final List<RevenuePoint> points;
+  const RevenueChart({super.key, required this.points});
 
   @override
   State<RevenueChart> createState() => _RevenueChartState();
@@ -13,15 +15,6 @@ class _RevenueChartState extends State<RevenueChart>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
-
-  final List<Map<String, dynamic>> data = [
-    {'month': 'Dec', 'pipeline': 0.0, 'actual': 0.0},
-    {'month': 'Jan', 'pipeline': 200.0, 'actual': 100.0},
-    {'month': 'Feb', 'pipeline': 600.0, 'actual': 400.0},
-    {'month': 'Mar', 'pipeline': 1000.0, 'actual': 700.0},
-    {'month': 'Apr', 'pipeline': 2500.0, 'actual': 2500.0},
-    {'month': 'May', 'pipeline': 2800.0, 'actual': 2500.0},
-  ];
 
   @override
   void initState() {
@@ -49,18 +42,24 @@ class _RevenueChartState extends State<RevenueChart>
     final borderColor = AppTheme.borderOf(context);
     final textColor = AppTheme.textMutedOf(context);
 
+    final List<Map<String, dynamic>> chartData = widget.points.map((p) => {
+      'month': p.month,
+      'pipeline': p.pipeline,
+      'actual': p.actual,
+    }).toList();
+
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, _) {
         return CustomPaint(
           painter: _ChartPainter(
-            data: data,
+            data: chartData,
             progress: _animation.value,
             surfaceColor: surfaceColor,
             borderColor: borderColor,
             textColor: textColor,
           ),
-          child: const SizedBox(height: 160),
+          child: const SizedBox(height: 160, width: double.infinity),
         );
       },
     );
@@ -84,7 +83,19 @@ class _ChartPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    const double maxVal = 3000;
+    if (data.isEmpty) return;
+
+    // Dynamically calculate maxVal based on data values
+    double maxVal = 0.0;
+    for (final item in data) {
+      final pVal = (item['pipeline'] as num).toDouble();
+      final aVal = (item['actual'] as num).toDouble();
+      if (pVal > maxVal) maxVal = pVal;
+      if (aVal > maxVal) maxVal = aVal;
+    }
+    if (maxVal <= 0.0) maxVal = 1000.0;
+    maxVal = (maxVal / 100).ceil() * 100.0; // round up to nearest 100
+
     const double paddingLeft = 8;
     const double paddingRight = 8;
     const double paddingTop = 10;
@@ -92,15 +103,15 @@ class _ChartPainter extends CustomPainter {
 
     final double chartW = size.width - paddingLeft - paddingRight;
     final double chartH = size.height - paddingTop - paddingBottom;
-    final double stepX = chartW / (data.length - 1);
+    final double stepX = data.length > 1 ? chartW / (data.length - 1) : chartW;
 
     List<Offset> pipelinePoints = [];
     List<Offset> actualPoints = [];
 
     for (int i = 0; i < data.length; i++) {
       final double x = paddingLeft + i * stepX;
-      final double py = paddingTop + chartH - (data[i]['pipeline'] / maxVal) * chartH;
-      final double ay = paddingTop + chartH - (data[i]['actual'] / maxVal) * chartH;
+      final double py = paddingTop + chartH - ((data[i]['pipeline'] as num) / maxVal) * chartH * progress;
+      final double ay = paddingTop + chartH - ((data[i]['actual'] as num) / maxVal) * chartH * progress;
       pipelinePoints.add(Offset(x, py));
       actualPoints.add(Offset(x, ay));
     }
@@ -146,7 +157,7 @@ class _ChartPainter extends CustomPainter {
     for (int i = 0; i < data.length; i++) {
       final x = paddingLeft + i * stepX;
       final tp = TextPainter(
-        text: TextSpan(text: data[i]['month'], style: textStyle),
+        text: TextSpan(text: data[i]['month']?.toString() ?? '', style: textStyle),
         textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(canvas,
@@ -218,5 +229,5 @@ class _ChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_ChartPainter old) => old.progress != progress;
+  bool shouldRepaint(_ChartPainter old) => old.progress != progress || old.data != data;
 }

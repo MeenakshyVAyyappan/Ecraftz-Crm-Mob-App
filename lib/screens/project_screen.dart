@@ -1,130 +1,9 @@
 // projects_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../blocs/project/project_bloc.dart';
+import '../models/project_model.dart';
 import '../widgets/app_drawer.dart';
-
-// ─── DATA MODELS ────────────────────────────────────────────────────────────
-
-enum ProjectStatus { planning, inProgress, onHold, completed, cancelled }
-
-extension ProjectStatusExt on ProjectStatus {
-  String get label {
-    switch (this) {
-      case ProjectStatus.planning:
-        return 'planning';
-      case ProjectStatus.inProgress:
-        return 'in progress';
-      case ProjectStatus.onHold:
-        return 'on hold';
-      case ProjectStatus.completed:
-        return 'completed';
-      case ProjectStatus.cancelled:
-        return 'cancelled';
-    }
-  }
-
-  Color get color {
-    switch (this) {
-      case ProjectStatus.planning:
-        return const Color(0xFF6366F1);
-      case ProjectStatus.inProgress:
-        return const Color(0xFF10B981);
-      case ProjectStatus.onHold:
-        return const Color(0xFFF59E0B);
-      case ProjectStatus.completed:
-        return const Color(0xFF3B82F6);
-      case ProjectStatus.cancelled:
-        return const Color(0xFFEF4444);
-    }
-  }
-
-  Color get bgColor {
-    switch (this) {
-      case ProjectStatus.planning:
-        return const Color(0xFFEEF2FF);
-      case ProjectStatus.inProgress:
-        return const Color(0xFFD1FAE5);
-      case ProjectStatus.onHold:
-        return const Color(0xFFFEF3C7);
-      case ProjectStatus.completed:
-        return const Color(0xFFDBEAFE);
-      case ProjectStatus.cancelled:
-        return const Color(0xFFFEE2E2);
-    }
-  }
-}
-
-class Project {
-  final String id;
-  final String name;
-  final String clientName;
-  final ProjectStatus status;
-  final String? deadline;
-  final int totalTasks;
-  final int completedTasks;
-  final double progress;
-  final String? teamLead;
-  final bool isArchived;
-
-  Project({
-    required this.id,
-    required this.name,
-    required this.clientName,
-    required this.status,
-    this.deadline,
-    this.totalTasks = 0,
-    this.completedTasks = 0,
-    this.progress = 0.0,
-    this.teamLead,
-    this.isArchived = false,
-  });
-}
-
-// ─── SAMPLE DATA ─────────────────────────────────────────────────────────────
-
-final List<Project> sampleProjects = [
-  Project(
-    id: '1',
-    name: 'ecocraft',
-    clientName: 'ecocraft',
-    status: ProjectStatus.inProgress,
-    isArchived: true,
-  ),
-  Project(
-    id: '2',
-    name: 'aliya',
-    clientName: 'shock stark',
-    status: ProjectStatus.inProgress,
-    isArchived: true,
-  ),
-  Project(
-    id: '3',
-    name: 'aesthetrix',
-    clientName: 'meethu',
-    status: ProjectStatus.cancelled,
-    isArchived: true,
-  ),
-  Project(
-    id: '4',
-    name: 'flexora',
-    clientName: '',
-    status: ProjectStatus.onHold,
-    isArchived: true,
-  ),
-  Project(
-    id: '5',
-    name: 'livekeralam',
-    clientName: '',
-    status: ProjectStatus.completed,
-    isArchived: true,
-  ),
-  Project(
-    id: '6',
-    name: 'arsenal',
-    clientName: '',
-    status: ProjectStatus.inProgress,
-    isArchived: true,
-  ),
-];
 
 // ─── MAIN PROJECTS PAGE ───────────────────────────────────────────────────────
 
@@ -147,7 +26,6 @@ class _ProjectsPageState extends State<ProjectsPage>
   int _viewMode = 0; // 0=kanban, 1=grid, 2=list
   ProjectStatus? _selectedStatus;
   String _searchQuery = '';
-  List<Project> _projects = List.from(sampleProjects);
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   static const Color _primary = Color(0xFF0EA5E9);
@@ -160,6 +38,9 @@ class _ProjectsPageState extends State<ProjectsPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      setState(() {});
+    });
   }
 
   @override
@@ -168,9 +49,8 @@ class _ProjectsPageState extends State<ProjectsPage>
     super.dispose();
   }
 
-  List<Project> get _filteredProjects {
-    bool archived = _tabController.index == 1;
-    return _projects.where((p) {
+  List<Project> _filteredProjects(List<Project> projects, bool archived) {
+    return projects.where((p) {
       if (p.isArchived != archived) return false;
       if (_selectedStatus != null && p.status != _selectedStatus) return false;
       if (_searchQuery.isNotEmpty &&
@@ -224,22 +104,26 @@ class _ProjectsPageState extends State<ProjectsPage>
         ),
       ),
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(),
-            _buildTabBar(),
-            _buildFilterBar(),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildProjectsList(false),
-                  _buildProjectsList(true),
-                ],
-              ),
-            ),
-          ],
+        child: BlocBuilder<ProjectBloc, ProjectState>(
+          builder: (context, state) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeader(),
+                _buildTabBar(),
+                _buildFilterBar(),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildProjectsList(state.projects, false),
+                      _buildProjectsList(state.projects, true),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
       floatingActionButton: FloatingActionButton(
@@ -365,8 +249,8 @@ class _ProjectsPageState extends State<ProjectsPage>
     );
   }
 
-  Widget _buildProjectsList(bool archived) {
-    final projects = _filteredProjects;
+  Widget _buildProjectsList(List<Project> allProjects, bool archived) {
+    final projects = _filteredProjects(allProjects, archived);
 
     if (projects.isEmpty) {
       return _buildEmptyState();
@@ -439,7 +323,7 @@ class _ProjectsPageState extends State<ProjectsPage>
       backgroundColor: Colors.transparent,
       builder: (_) => _CreateProjectModal(
         onSubmit: (project) {
-          setState(() => _projects.add(project));
+          context.read<ProjectBloc>().add(AddProjectEvent(project));
         },
       ),
     );
@@ -458,7 +342,30 @@ class _ProjectsPageState extends State<ProjectsPage>
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              final bulkProjects = [
+                Project(
+                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                  name: 'Imported Project A',
+                  clientName: 'Client A',
+                  status: ProjectStatus.planning,
+                ),
+                Project(
+                  id: (DateTime.now().millisecondsSinceEpoch + 1).toString(),
+                  name: 'Imported Project B',
+                  clientName: 'Client B',
+                  status: ProjectStatus.inProgress,
+                ),
+              ];
+              context.read<ProjectBloc>().add(AddProjectsBulkEvent(bulkProjects));
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Bulk imported 2 projects!'),
+                  backgroundColor: Color(0xFF10B981),
+                ),
+              );
+            },
             style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0EA5E9)),
             child: const Text('Upload CSV',
@@ -682,7 +589,48 @@ class _ProjectCard extends StatelessWidget {
               children: [
                 _StatusBadge(status: project.status),
                 const Spacer(),
-                Icon(Icons.more_horiz, size: 18, color: const Color(0xFF94A3B8)),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_horiz, size: 18, color: Color(0xFF94A3B8)),
+                  padding: EdgeInsets.zero,
+                  onSelected: (value) {
+                    if (value == 'delete') {
+                      context.read<ProjectBloc>().add(DeleteProjectEvent(project.id));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Project deleted'), backgroundColor: Colors.red),
+                      );
+                    } else if (value == 'archive') {
+                      final updated = Project(
+                        id: project.id,
+                        name: project.name,
+                        clientName: project.clientName,
+                        status: project.status,
+                        deadline: project.deadline,
+                        totalTasks: project.totalTasks,
+                        completedTasks: project.completedTasks,
+                        progress: project.progress,
+                        teamLead: project.teamLead,
+                        isArchived: !project.isArchived,
+                      );
+                      context.read<ProjectBloc>().add(UpdateProjectEvent(updated));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(project.isArchived ? 'Project unarchived' : 'Project archived'),
+                          backgroundColor: const Color(0xFF10B981),
+                        ),
+                      );
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'archive',
+                      child: Text(project.isArchived ? 'Unarchive' : 'Archive'),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Text('Delete', style: TextStyle(color: Colors.red)),
+                    ),
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -871,6 +819,49 @@ class _ProjectListTile extends StatelessWidget {
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF0EA5E9)),
+              ),
+            ],
+          ),
+          const SizedBox(width: 8),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, size: 18, color: Color(0xFF94A3B8)),
+            padding: EdgeInsets.zero,
+            onSelected: (value) {
+              if (value == 'delete') {
+                context.read<ProjectBloc>().add(DeleteProjectEvent(project.id));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Project deleted'), backgroundColor: Colors.red),
+                );
+              } else if (value == 'archive') {
+                final updated = Project(
+                  id: project.id,
+                  name: project.name,
+                  clientName: project.clientName,
+                  status: project.status,
+                  deadline: project.deadline,
+                  totalTasks: project.totalTasks,
+                  completedTasks: project.completedTasks,
+                  progress: project.progress,
+                  teamLead: project.teamLead,
+                  isArchived: !project.isArchived,
+                );
+                context.read<ProjectBloc>().add(UpdateProjectEvent(updated));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(project.isArchived ? 'Project unarchived' : 'Project archived'),
+                    backgroundColor: const Color(0xFF10B981),
+                  ),
+                );
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'archive',
+                child: Text(project.isArchived ? 'Unarchive' : 'Archive'),
+              ),
+              const PopupMenuItem(
+                value: 'delete',
+                child: Text('Delete', style: TextStyle(color: Colors.red)),
               ),
             ],
           ),

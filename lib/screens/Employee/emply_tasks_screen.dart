@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
+import '../../blocs/task/task_bloc.dart';
+import '../../models/task_model.dart';
 
 class EmployeeTasksScreen extends StatefulWidget {
   const EmployeeTasksScreen({super.key});
@@ -14,52 +18,6 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
 
-  final List<Map<String, dynamic>> _tasks = [
-    {
-      'name': 'UI Designing & Responsiveness',
-      'project': 'CRM Mobile App',
-      'priority': 'HIGH',
-      'priorityColor': const Color(0xFFEF5350),
-      'priorityBg': const Color(0xFFFFEBEE),
-      'status': 'In Progress',
-      'statusColor': const Color(0xFFFF9800),
-      'statusBg': const Color(0xFFFFF3E0),
-      'dueDate': 'MAY 30, 2026',
-    },
-    {
-      'name': 'Develop employee auth flow',
-      'project': 'CRM Backend',
-      'priority': 'HIGH',
-      'priorityColor': const Color(0xFFEF5350),
-      'priorityBg': const Color(0xFFFFEBEE),
-      'status': 'Completed',
-      'statusColor': const Color(0xFF4CAF50),
-      'statusBg': const Color(0xFFE8F5E9),
-      'dueDate': 'MAY 26, 2026',
-    },
-    {
-      'name': 'Scheduler calendar integration',
-      'project': 'CRM Mobile App',
-      'priority': 'MEDIUM',
-      'priorityColor': const Color(0xFFFFB74D),
-      'priorityBg': const Color(0xFFFFF8E1),
-      'status': 'Pending',
-      'statusColor': Colors.grey,
-      'statusBg': const Color(0xFFF5F5F5),
-      'dueDate': 'JUNE 5, 2026',
-    },
-  ];
-
-  List<Map<String, dynamic>> get _filtered {
-    return _tasks.where((t) {
-      final matchesSearch = t['name'].toString().toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          t['project'].toString().toLowerCase().contains(_searchQuery.toLowerCase());
-      final matchesStatus = _selectedStatus == 'All Status' ||
-          t['status'].toString().toLowerCase() == _selectedStatus.toLowerCase();
-      return matchesSearch && matchesStatus;
-    }).toList();
-  }
-
   @override
   void dispose() {
     _searchController.dispose();
@@ -71,100 +29,119 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildBreadcrumb(['Dashboard', 'Tasks']),
-            const SizedBox(height: 12),
-            Text(
-              'My Tasks',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : const Color(0xFF1A1A2E),
-              ),
-            ),
-            Text(
-              'Track and update your assigned tasks and self-made tasks.',
-              style: TextStyle(fontSize: 13, color: isDark ? const Color(0xFF8E9CB8) : Colors.grey[600]),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isDark ? AppTheme.bgCardDark : Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF2196F3), width: 1.5),
-                boxShadow: isDark ? [] : [
-                  BoxShadow(
-                    color: Colors.grey.withOpacity(0.06),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  )
-                ],
-              ),
-              child: Column(
-                children: [
-                  LayoutBuilder(builder: (ctx, constraints) {
-                    if (constraints.maxWidth < 450) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          TextField(
-                            controller: _searchController,
-                            onChanged: (v) => setState(() => _searchQuery = v),
-                            style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                            decoration: InputDecoration(
-                              hintText: 'Search tasks...',
-                              hintStyle: TextStyle(color: isDark ? const Color(0xFF596780) : Colors.grey[400], fontSize: 13),
-                              prefixIcon: Icon(Icons.search, color: isDark ? const Color(0xFF8E9CB8) : Colors.grey[400], size: 18),
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                            ),
-                          ),
-                          Divider(color: isDark ? AppTheme.borderDark : Colors.grey[200]),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: BlocBuilder<TaskBloc, TaskState>(
+        builder: (context, state) {
+          final filteredTasks = state.tasks.where((t) {
+            final matchesSearch = t.summary.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                (t.parentProject != null && t.parentProject!.toLowerCase().contains(_searchQuery.toLowerCase()));
+            if (!matchesSearch) return false;
+
+            if (_selectedStatus == 'Pending') {
+              return t.status == TaskStatus.toDo || t.status == TaskStatus.review;
+            } else if (_selectedStatus == 'In Progress') {
+              return t.status == TaskStatus.inProgress;
+            } else if (_selectedStatus == 'Completed') {
+              return t.status == TaskStatus.done;
+            }
+            return true; // 'All Status'
+          }).toList();
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildBreadcrumb(['Dashboard', 'Tasks']),
+                const SizedBox(height: 12),
+                Text(
+                  'My Tasks',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : const Color(0xFF1A1A2E),
+                  ),
+                ),
+                Text(
+                  'Track and update your assigned tasks and self-made tasks.',
+                  style: TextStyle(fontSize: 13, color: isDark ? const Color(0xFF8E9CB8) : Colors.grey[600]),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppTheme.bgCardDark : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF2196F3), width: 1.5),
+                    boxShadow: isDark ? [] : [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.06),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      )
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      LayoutBuilder(builder: (ctx, constraints) {
+                        if (constraints.maxWidth < 450) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              _buildStatusDropdown(),
-                              _buildViewModeButtons(),
+                              TextField(
+                                controller: _searchController,
+                                onChanged: (v) => setState(() => _searchQuery = v),
+                                style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                                decoration: InputDecoration(
+                                  hintText: 'Search tasks...',
+                                  hintStyle: TextStyle(color: isDark ? const Color(0xFF596780) : Colors.grey[400], fontSize: 13),
+                                  prefixIcon: Icon(Icons.search, color: isDark ? const Color(0xFF8E9CB8) : Colors.grey[400], size: 18),
+                                  border: InputBorder.none,
+                                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                                ),
+                              ),
+                              Divider(color: isDark ? AppTheme.borderDark : Colors.grey[200]),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  _buildStatusDropdown(),
+                                  _buildViewModeButtons(),
+                                ],
+                              ),
                             ],
-                          ),
-                        ],
-                      );
-                    }
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _searchController,
-                            onChanged: (v) => setState(() => _searchQuery = v),
-                            style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                            decoration: InputDecoration(
-                              hintText: 'Search tasks...',
-                              hintStyle: TextStyle(color: isDark ? const Color(0xFF596780) : Colors.grey[400], fontSize: 13),
-                              prefixIcon: Icon(Icons.search, color: isDark ? const Color(0xFF8E9CB8) : Colors.grey[400], size: 18),
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                          );
+                        }
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _searchController,
+                                onChanged: (v) => setState(() => _searchQuery = v),
+                                style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                                decoration: InputDecoration(
+                                  hintText: 'Search tasks...',
+                                  hintStyle: TextStyle(color: isDark ? const Color(0xFF596780) : Colors.grey[400], fontSize: 13),
+                                  prefixIcon: Icon(Icons.search, color: isDark ? const Color(0xFF8E9CB8) : Colors.grey[400], size: 18),
+                                  border: InputBorder.none,
+                                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        _buildStatusDropdown(),
-                        const SizedBox(width: 8),
-                        _buildViewModeButtons(),
-                      ],
-                    );
-                  }),
-                  Divider(height: 16, color: isDark ? AppTheme.borderDark : Colors.grey[200]),
-                  _filtered.isEmpty ? _buildEmptyState() : _buildTasksContent(),
-                ],
-              ),
+                            const SizedBox(width: 8),
+                            _buildStatusDropdown(),
+                            const SizedBox(width: 8),
+                            _buildViewModeButtons(),
+                          ],
+                        );
+                      }),
+                      Divider(height: 16, color: isDark ? AppTheme.borderDark : Colors.grey[200]),
+                      filteredTasks.isEmpty ? _buildEmptyState() : _buildTasksContent(filteredTasks),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddTaskDialog(),
@@ -288,23 +265,23 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
     );
   }
 
-  Widget _buildTasksContent() {
-    if (_viewMode == 1) return _buildGridView();
-    if (_viewMode == 0) return _buildKanbanView();
-    return _buildListView();
+  Widget _buildTasksContent(List<TaskItem> tasks) {
+    if (_viewMode == 1) return _buildGridView(tasks);
+    if (_viewMode == 0) return _buildKanbanView(tasks);
+    return _buildListView(tasks);
   }
 
-  Widget _buildListView() {
+  Widget _buildListView(List<TaskItem> tasks) {
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: _filtered.length,
+      itemCount: tasks.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (ctx, i) => _buildTaskListTile(_filtered[i]),
+      itemBuilder: (ctx, i) => _buildTaskListTile(tasks[i]),
     );
   }
 
-  Widget _buildGridView() {
+  Widget _buildGridView(List<TaskItem> tasks) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -314,16 +291,15 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
         mainAxisSpacing: 10,
         childAspectRatio: 1.15,
       ),
-      itemCount: _filtered.length,
-      itemBuilder: (ctx, i) => _buildTaskGridCard(_filtered[i]),
+      itemCount: tasks.length,
+      itemBuilder: (ctx, i) => _buildTaskGridCard(tasks[i]),
     );
   }
 
-  Widget _buildKanbanView() {
-    // Kanban grouped layout
-    final pending = _filtered.where((t) => t['status'] == 'Pending').toList();
-    final inProgress = _filtered.where((t) => t['status'] == 'In Progress').toList();
-    final completed = _filtered.where((t) => t['status'] == 'Completed').toList();
+  Widget _buildKanbanView(List<TaskItem> tasks) {
+    final pending = tasks.where((t) => t.status == TaskStatus.toDo || t.status == TaskStatus.review).toList();
+    final inProgress = tasks.where((t) => t.status == TaskStatus.inProgress).toList();
+    final completed = tasks.where((t) => t.status == TaskStatus.done).toList();
 
     return LayoutBuilder(builder: (ctx, constraints) {
       if (constraints.maxWidth < 600) {
@@ -350,7 +326,7 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
     });
   }
 
-  Widget _kanbanColumn(String title, List<Map<String, dynamic>> list) {
+  Widget _kanbanColumn(String title, List<TaskItem> list) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(10),
@@ -406,7 +382,7 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
     );
   }
 
-  Widget _buildTaskListTile(Map<String, dynamic> task) {
+  Widget _buildTaskListTile(TaskItem task) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(12),
@@ -418,9 +394,9 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
       child: Row(
         children: [
           CircleAvatar(
-            backgroundColor: task['priorityColor'].withOpacity(0.1),
+            backgroundColor: task.priority.color.withOpacity(0.1),
             radius: 16,
-            child: Icon(Icons.task_alt_outlined, color: task['priorityColor'], size: 16),
+            child: Icon(Icons.task_alt_rounded, color: task.priority.color, size: 16),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -428,13 +404,13 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  task['name'],
+                  task.summary,
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: isDark ? Colors.white : const Color(0xFF1A1A2E)),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  '${task['project']} • Due ${task['dueDate']}',
+                  '${task.parentProject ?? "N/A"} • Due ${task.dueDate != null ? DateFormat('MMM d, y').format(task.dueDate!).toUpperCase() : "TODAY"}',
                   style: TextStyle(fontSize: 11, color: isDark ? const Color(0xFF8E9CB8) : Colors.grey[600]),
                 ),
               ],
@@ -447,24 +423,24 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: isDark ? task['statusBg'].withOpacity(0.2) : task['statusBg'],
+                  color: isDark ? task.status.color.withOpacity(0.2) : task.status.bgColor,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  task['status'],
-                  style: TextStyle(fontSize: 9, color: task['statusColor'], fontWeight: FontWeight.bold),
+                  task.status.label,
+                  style: TextStyle(fontSize: 9, color: task.status.color, fontWeight: FontWeight.bold),
                 ),
               ),
               const SizedBox(height: 4),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: isDark ? task['priorityBg'].withOpacity(0.2) : task['priorityBg'],
+                  color: isDark ? task.priority.color.withOpacity(0.2) : task.priority.bgColor,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  task['priority'],
-                  style: TextStyle(fontSize: 8, color: task['priorityColor'], fontWeight: FontWeight.bold),
+                  task.priority.label,
+                  style: TextStyle(fontSize: 8, color: task.priority.color, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -474,7 +450,7 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
     );
   }
 
-  Widget _buildTaskGridCard(Map<String, dynamic> task) {
+  Widget _buildTaskGridCard(TaskItem task) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(12),
@@ -493,23 +469,23 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: isDark ? task['priorityBg'].withOpacity(0.2) : task['priorityBg'],
+                  color: isDark ? task.priority.color.withOpacity(0.2) : task.priority.bgColor,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  task['priority'],
-                  style: TextStyle(fontSize: 8, color: task['priorityColor'], fontWeight: FontWeight.bold),
+                  task.priority.label,
+                  style: TextStyle(fontSize: 8, color: task.priority.color, fontWeight: FontWeight.bold),
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: isDark ? task['statusBg'].withOpacity(0.2) : task['statusBg'],
+                  color: isDark ? task.status.color.withOpacity(0.2) : task.status.bgColor,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  task['status'],
-                  style: TextStyle(fontSize: 8, color: task['statusColor'], fontWeight: FontWeight.bold),
+                  task.status.label,
+                  style: TextStyle(fontSize: 8, color: task.status.color, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -517,7 +493,7 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
           const SizedBox(height: 8),
           Expanded(
             child: Text(
-              task['name'],
+              task.summary,
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: isDark ? Colors.white : const Color(0xFF1A1A2E)),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -525,13 +501,13 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            task['project'],
+            task.parentProject ?? 'N/A',
             style: TextStyle(fontSize: 10, color: isDark ? const Color(0xFF8E9CB8) : Colors.grey[500]),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           Text(
-            'Due: ${task['dueDate']}',
+            'Due: ${task.dueDate != null ? DateFormat('MMM d, y').format(task.dueDate!) : "TODAY"}',
             style: TextStyle(fontSize: 9, color: isDark ? const Color(0xFF8E9CB8) : Colors.grey, fontWeight: FontWeight.w500),
           ),
         ],
@@ -633,39 +609,27 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
                 ElevatedButton(
                   onPressed: () {
                     if (nameCtrl.text.isNotEmpty && projCtrl.text.isNotEmpty) {
-                      Color pColor = const Color(0xFFFFB74D);
-                      Color pBg = const Color(0xFFFFF8E1);
-                      if (priority == 'HIGH') {
-                        pColor = const Color(0xFFEF5350);
-                        pBg = const Color(0xFFFFEBEE);
-                      } else if (priority == 'LOW') {
-                        pColor = const Color(0xFF4CAF50);
-                        pBg = const Color(0xFFE8F5E9);
-                      }
+                      final tPriority = priority == 'HIGH'
+                          ? TaskPriority.high
+                          : (priority == 'LOW' ? TaskPriority.low : TaskPriority.medium);
+                      
+                      final tStatus = status == 'Completed'
+                          ? TaskStatus.done
+                          : (status == 'In Progress' ? TaskStatus.inProgress : TaskStatus.toDo);
 
-                      Color sColor = Colors.grey;
-                      Color sBg = const Color(0xFFF5F5F5);
-                      if (status == 'In Progress') {
-                        sColor = const Color(0xFFFF9800);
-                        sBg = const Color(0xFFFFF3E0);
-                      } else if (status == 'Completed') {
-                        sColor = const Color(0xFF4CAF50);
-                        sBg = const Color(0xFFE8F5E9);
-                      }
-
-                      setState(() {
-                        _tasks.insert(0, {
-                          'name': nameCtrl.text,
-                          'project': projCtrl.text,
-                          'priority': priority,
-                          'priorityColor': pColor,
-                          'priorityBg': pBg,
-                          'status': status,
-                          'statusColor': sColor,
-                          'statusBg': sBg,
-                          'dueDate': 'TODAY',
-                        });
-                      });
+                      context.read<TaskBloc>().add(
+                        AddTaskEvent(
+                          TaskItem(
+                            id: DateTime.now().millisecondsSinceEpoch.toString(),
+                            summary: nameCtrl.text,
+                            parentProject: projCtrl.text,
+                            owner: 'Chimbu',
+                            dueDate: DateTime.now(),
+                            status: tStatus,
+                            priority: tPriority,
+                          ),
+                        ),
+                      );
                       Navigator.pop(ctx);
                     }
                   },

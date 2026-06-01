@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
+import '../../blocs/theme/theme_bloc.dart';
+import '../../blocs/auth/auth_bloc.dart';
+import '../../blocs/task/task_bloc.dart';
+import '../../models/task_model.dart';
 import '../../theme/app_theme.dart';
-import '../../main.dart';
-import '../signin.dart';
 import 'emply_project_screen.dart';
 import 'emply_tasks_screen.dart';
 import 'emply_my_timesheet.dart';
@@ -146,17 +150,16 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
         ],
       ),
       actions: [
-        ValueListenableBuilder<ThemeMode>(
-          valueListenable: themeNotifier,
-          builder: (context, mode, child) {
-            final isDarkTheme = mode == ThemeMode.dark;
+        BlocBuilder<ThemeBloc, ThemeState>(
+          builder: (context, state) {
+            final isDarkTheme = state.themeMode == ThemeMode.dark;
             return IconButton(
               icon: Icon(
                 isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
                 color: isDarkTheme ? Colors.white : const Color(0xFF2C3E50),
               ),
               onPressed: () {
-                themeNotifier.value = isDarkTheme ? ThemeMode.light : ThemeMode.dark;
+                context.read<ThemeBloc>().add(ToggleThemeEvent());
               },
             );
           },
@@ -325,10 +328,8 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
             constraints: const BoxConstraints(),
             icon: const Icon(Icons.logout_rounded, color: Color(0xFF8892B0), size: 18),
             onPressed: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginPage()),
-              );
+              // Dispatch logout event; AuthWrapper handles navigation back to login.
+              context.read<AuthBloc>().add(AuthLogoutEvent());
             },
           ),
         ],
@@ -1251,96 +1252,130 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
 
   Widget _buildAssignedTasksCard() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.bgCardDark : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: isDark ? [] : [
-          BoxShadow(
-              color: Colors.grey.withOpacity(0.08),
-              blurRadius: 6,
-              offset: const Offset(0, 2))
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.assignment_outlined,
-                  color: Color(0xFF2196F3), size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('MY ASSIGNED TASKS',
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : const Color(0xFF1A1A2E))),
-                    const Text('1 ACTIVE •',
-                        style: TextStyle(
-                            fontSize: 10, color: Color(0xFF2196F3))),
-                  ],
-                ),
-              ),
-              GestureDetector(
-                onTap: () {},
-                child: const Row(
-                  children: [
-                    Text('ALL TASKS',
-                        style: TextStyle(
-                            fontSize: 10,
-                            color: Color(0xFF2196F3),
-                            fontWeight: FontWeight.w600)),
-                    Icon(Icons.arrow_forward,
-                        size: 12, color: Color(0xFF2196F3)),
-                  ],
-                ),
-              ),
+    return BlocBuilder<TaskBloc, TaskState>(
+      builder: (context, state) {
+        final myTasks = state.tasks.where((t) => t.owner == 'Chimbu').toList();
+        final activeCount = myTasks.where((t) => t.status != TaskStatus.done).length;
+
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isDark ? AppTheme.bgCardDark : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: isDark ? [] : [
+              BoxShadow(
+                  color: Colors.grey.withOpacity(0.08),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2))
             ],
           ),
-          const SizedBox(height: 10),
-          // Filter tabs
-          Row(
-            children: ['ALL (1)', 'TODAY', 'THIS WEEK'].map((f) {
-              return GestureDetector(
-                onTap: () {},
-                child: Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    border: Border(
-                        bottom: BorderSide(
-                            color: f == 'ALL (1)'
-                                ? const Color(0xFF2196F3)
-                                : Colors.transparent,
-                            width: 2)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.assignment_outlined,
+                      color: Color(0xFF2196F3), size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('MY ASSIGNED TASKS',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : const Color(0xFF1A1A2E))),
+                        Text('$activeCount ACTIVE •',
+                            style: const TextStyle(
+                                fontSize: 10, color: Color(0xFF2196F3))),
+                      ],
+                    ),
                   ),
-                  child: Text(f,
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: f == 'ALL (1)'
-                              ? const Color(0xFF2196F3)
-                              : (isDark ? const Color(0xFF8E9CB8) : Colors.grey[500]),
-                          fontWeight: FontWeight.w500)),
+                  GestureDetector(
+                    onTap: () {
+                      final parentState = context.findAncestorStateOfType<_EmployeeDashboardScreenState>();
+                      if (parentState != null) {
+                        parentState.setState(() {
+                          parentState._selectedIndex = 2;
+                        });
+                      }
+                    },
+                    child: const Row(
+                      children: [
+                        Text('ALL TASKS',
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: Color(0xFF2196F3),
+                                fontWeight: FontWeight.w600)),
+                        Icon(Icons.arrow_forward,
+                            size: 12, color: Color(0xFF2196F3)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              // Filter tabs
+              Row(
+                children: ['ALL (${myTasks.length})', 'TODAY', 'THIS WEEK'].map((f) {
+                  return GestureDetector(
+                    onTap: () {},
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        border: Border(
+                            bottom: BorderSide(
+                                color: f.startsWith('ALL')
+                                    ? const Color(0xFF2196F3)
+                                    : Colors.transparent,
+                                width: 2)),
+                      ),
+                      child: Text(f,
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: f.startsWith('ALL')
+                                  ? const Color(0xFF2196F3)
+                                  : (isDark ? const Color(0xFF8E9CB8) : Colors.grey[500]),
+                              fontWeight: FontWeight.w500)),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 10),
+              if (myTasks.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Center(
+                    child: Text('No assigned tasks',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? const Color(0xFF596780) : Colors.grey[400])),
+                  ),
+                )
+              else
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: myTasks.length > 3 ? 3 : myTasks.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (ctx, idx) {
+                    final t = myTasks[idx];
+                    return _buildTaskItem(
+                      t.summary,
+                      '${t.parentProject ?? "N/A"} • ${t.description.isNotEmpty ? t.description : t.summary}',
+                      t.priority.label,
+                      t.status.label,
+                      t.dueDate != null ? DateFormat('MMM d').format(t.dueDate!) : 'TODAY',
+                    );
+                  },
                 ),
-              );
-            }).toList(),
+            ],
           ),
-          const SizedBox(height: 10),
-          _buildTaskItem(
-            'hello brooo',
-            'arsenal - Digital Marketing Premium Intake v1 • hello',
-            'Medium',
-            'Done',
-            'May 28',
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 

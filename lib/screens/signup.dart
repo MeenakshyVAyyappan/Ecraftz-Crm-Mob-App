@@ -1,7 +1,8 @@
-// register_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'signin.dart';
 import 'teams_screen.dart';
+import '../blocs/auth/auth_bloc.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -18,7 +19,6 @@ class _RegisterPageState extends State<RegisterPage> {
   final _confirmCtrl = TextEditingController();
   bool _obscurePass = true;
   bool _obscureConfirm = true;
-  bool _loading = false;
   bool _submitted = false;
 
   @override
@@ -30,26 +30,15 @@ class _RegisterPageState extends State<RegisterPage> {
     super.dispose();
   }
 
-  Future<void> _register() async {
+  void _register() {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _loading = true);
-    await Future.delayed(const Duration(seconds: 1));
-
-    final newMember = TeamMember(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      name: _nameCtrl.text.trim(),
-      email: _emailCtrl.text.trim(),
-      role: 'Employee',
-      department: 'No Department',
-      status: MemberStatus.pending,
-      registeredAt: DateTime.now(),
+    context.read<AuthBloc>().add(
+      AuthRegisterEvent(
+        email: _emailCtrl.text.trim(),
+        password: _passCtrl.text.trim(),
+        name: _nameCtrl.text.trim(),
+      ),
     );
-    teamMembers.add(newMember);
-
-    setState(() {
-      _loading = false;
-      _submitted = true;
-    });
   }
 
   @override
@@ -57,24 +46,74 @@ class _RegisterPageState extends State<RegisterPage> {
     final size = MediaQuery.of(context).size;
     final isWide = size.width > 600;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: isWide ? size.width * 0.3 : 24,
-              vertical: 32,
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is Authenticated) {
+          final name = _nameCtrl.text.trim();
+          final email = _emailCtrl.text.trim();
+          final newMember = TeamMember(
+            id: state.user.id,
+            name: name,
+            email: email,
+            role: 'Employee',
+            department: 'No Department',
+            status: MemberStatus.pending,
+            registeredAt: DateTime.now(),
+          );
+          teamMembers.add(newMember);
+
+          setState(() {
+            _submitted = true;
+          });
+        } else if (state is AuthError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.message),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              action: SnackBarAction(
+                label: 'Demo Mode',
+                textColor: Colors.white,
+                onPressed: () {
+                  ScaffoldMessenger.of(context).clearSnackBars();
+                  final newMember = TeamMember(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    name: _nameCtrl.text.trim(),
+                    email: _emailCtrl.text.trim(),
+                    role: 'Employee',
+                    department: 'No Department',
+                    status: MemberStatus.pending,
+                    registeredAt: DateTime.now(),
+                  );
+                  teamMembers.add(newMember);
+                  setState(() {
+                    _submitted = true;
+                  });
+                },
+              ),
             ),
-            child: Column(
-              children: [
-                _buildLogo(),
-                const SizedBox(height: 32),
-                if (_submitted)
-                  _buildSuccessCard()
-                else
-                  _buildForm(),
-              ],
+          );
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF5F7FA),
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(
+                horizontal: isWide ? size.width * 0.3 : 24,
+                vertical: 32,
+              ),
+              child: Column(
+                children: [
+                  _buildLogo(),
+                  const SizedBox(height: 32),
+                  if (_submitted)
+                    _buildSuccessCard()
+                  else
+                    _buildForm(),
+                ],
+              ),
             ),
           ),
         ),
@@ -304,28 +343,33 @@ class _RegisterPageState extends State<RegisterPage> {
               },
             ),
             const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: _loading ? null : _register,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00BCD4),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
-                ),
-                child: _loading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
-                    : const Text('Register Account',
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w700)),
-              ),
+            BlocBuilder<AuthBloc, AuthState>(
+              builder: (context, state) {
+                final loading = state is AuthLoading;
+                return SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: loading ? null : _register,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00BCD4),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      elevation: 0,
+                    ),
+                    child: loading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                        : const Text('Register Account',
+                            style: TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w700)),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 20),
             Row(

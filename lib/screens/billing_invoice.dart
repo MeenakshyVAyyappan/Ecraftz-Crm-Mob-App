@@ -1,104 +1,9 @@
 // billing_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../blocs/billing/billing_bloc.dart';
+import '../models/billing_model.dart';
 import '../widgets/app_drawer.dart';
-
-// ─── DATA MODELS ─────────────────────────────────────────────────────────────
-
-enum InvoiceStatus { sent, paid, draft, overdue, cancelled }
-
-extension InvoiceStatusExt on InvoiceStatus {
-  String get label {
-    switch (this) {
-      case InvoiceStatus.sent: return 'SENT';
-      case InvoiceStatus.paid: return 'PAID';
-      case InvoiceStatus.draft: return 'DRAFT';
-      case InvoiceStatus.overdue: return 'OVERDUE';
-      case InvoiceStatus.cancelled: return 'CANCELLED';
-    }
-  }
-
-  Color get color {
-    switch (this) {
-      case InvoiceStatus.sent: return const Color(0xFF3B82F6);
-      case InvoiceStatus.paid: return const Color(0xFF10B981);
-      case InvoiceStatus.draft: return const Color(0xFF6B7280);
-      case InvoiceStatus.overdue: return const Color(0xFFEF4444);
-      case InvoiceStatus.cancelled: return const Color(0xFF9CA3AF);
-    }
-  }
-}
-
-class InvoiceItem {
-  String description;
-  double quantity;
-  double unitPrice;
-  double taxPercent;
-
-  InvoiceItem({
-    required this.description,
-    this.quantity = 1,
-    required this.unitPrice,
-    this.taxPercent = 0,
-  });
-
-  double get subtotal => quantity * unitPrice;
-  double get taxAmount => subtotal * taxPercent / 100;
-  double get total => subtotal + taxAmount;
-}
-
-class Invoice {
-  final String id;
-  final String invoiceNumber;
-  String clientName;
-  String clientEntity;
-  List<InvoiceItem> items;
-  InvoiceStatus status;
-  final DateTime issuedDate;
-  DateTime dueDate;
-  String notes;
-
-  Invoice({
-    required this.id,
-    required this.invoiceNumber,
-    required this.clientName,
-    required this.clientEntity,
-    required this.items,
-    required this.status,
-    required this.issuedDate,
-    required this.dueDate,
-    this.notes = '',
-  });
-
-  double get grossAmount => items.fold(0, (s, i) => s + i.total);
-
-  String get formattedDue {
-    const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return 'DUE: ${m[dueDate.month-1].toUpperCase()} ${dueDate.day}, ${dueDate.year}';
-  }
-
-  String get formattedIssued {
-    const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return 'Issued: ${m[issuedDate.month-1]} ${issuedDate.day}, ${issuedDate.year}';
-  }
-}
-
-// ─── GST PROFILE MODEL ────────────────────────────────────────────────────────
-
-class GstProfile {
-  String gstin;
-  String legalName;
-  String brandName;
-  String panNumber;
-  String state;
-
-  GstProfile({
-    this.gstin = '',
-    this.legalName = '',
-    this.brandName = '',
-    this.panNumber = '',
-    this.state = '',
-  });
-}
 
 const _indianStates = [
   'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh',
@@ -132,19 +37,9 @@ class _BillingPageState extends State<BillingPage> {
   String _statusFilter = 'All Statuses';
   DateTime? _fromDate;
   DateTime? _toDate;
-  GstProfile _gstProfile = GstProfile();
 
-  final List<Invoice> _invoices = [
-    Invoice(id:'1', invoiceNumber:'INV-432', clientName:'janani', clientEntity:'JANANI - WEB DEVELOPMENT DYNAMIC SPECIFICATION V1', items:[InvoiceItem(description:'Web Development', unitPrice:2000)], status:InvoiceStatus.sent, issuedDate:DateTime(2026,5,23), dueDate:DateTime(2026,5,23)),
-    Invoice(id:'2', invoiceNumber:'INV-5446', clientName:'Steve rogers', clientEntity:'ARSENAL', items:[InvoiceItem(description:'Design', unitPrice:300)], status:InvoiceStatus.paid, issuedDate:DateTime(2026,5,12), dueDate:DateTime(2026,5,12)),
-    Invoice(id:'3', invoiceNumber:'INV-5904', clientName:'shock stark', clientEntity:'ALIYA', items:[InvoiceItem(description:'Digital Marketing', unitPrice:300)], status:InvoiceStatus.paid, issuedDate:DateTime(2026,5,12), dueDate:DateTime(2026,5,12)),
-    Invoice(id:'4', invoiceNumber:'INV-7344', clientName:'meethu', clientEntity:'CIVICEYE', items:[InvoiceItem(description:'SEO Services', unitPrice:200)], status:InvoiceStatus.sent, issuedDate:DateTime(2026,5,12), dueDate:DateTime(2026,5,12)),
-    Invoice(id:'5', invoiceNumber:'INV-8821', clientName:'arsenal', clientEntity:'ARSENAL', items:[InvoiceItem(description:'Content Creation', unitPrice:500)], status:InvoiceStatus.draft, issuedDate:DateTime(2026,5,10), dueDate:DateTime(2026,5,30)),
-    Invoice(id:'6', invoiceNumber:'INV-9012', clientName:'Viswajith e', clientEntity:'ECRAFTZ', items:[InvoiceItem(description:'Branding', unitPrice:1700)], status:InvoiceStatus.overdue, issuedDate:DateTime(2026,5,1), dueDate:DateTime(2026,5,15)),
-  ];
-
-  List<Invoice> get _filtered {
-    return _invoices.where((inv) {
+  List<Invoice> _filtered(List<Invoice> invoices) {
+    return invoices.where((inv) {
       final matchSearch = _search.isEmpty ||
           inv.invoiceNumber.toLowerCase().contains(_search.toLowerCase()) ||
           inv.clientName.toLowerCase().contains(_search.toLowerCase()) ||
@@ -157,28 +52,28 @@ class _BillingPageState extends State<BillingPage> {
     }).toList();
   }
 
-  double get _totalInvoiced => _invoices.fold(0, (s, i) => s + i.grossAmount);
-  double get _totalPaid => _invoices.where((i) => i.status == InvoiceStatus.paid).fold(0, (s, i) => s + i.grossAmount);
-  double get _outstanding => _totalInvoiced - _totalPaid;
+  double _totalInvoiced(List<Invoice> invoices) => invoices.fold(0, (s, i) => s + i.grossAmount);
+  double _totalPaid(List<Invoice> invoices) => invoices.where((i) => i.status == InvoiceStatus.paid).fold(0, (s, i) => s + i.grossAmount);
+  double _outstanding(List<Invoice> invoices) => _totalInvoiced(invoices) - _totalPaid(invoices);
 
-  void _showGstSettings() {
+  void _showGstSettings(GstProfile profile) {
     showDialog(
       context: context,
       builder: (_) => _GstSettingsDialog(
-        profile: _gstProfile,
-        onSave: (p) => setState(() => _gstProfile = p),
+        profile: profile,
+        onSave: (p) => context.read<BillingBloc>().add(SaveGstProfileEvent(p)),
       ),
     );
   }
 
-  void _showNewInvoice() {
+  void _showNewInvoice(GstProfile profile) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _NewInvoiceSheet(
-        gstProfile: _gstProfile,
-        onSave: (inv) => setState(() => _invoices.insert(0, inv)),
+        gstProfile: profile,
+        onSave: (inv) => context.read<BillingBloc>().add(AddInvoiceEvent(inv)),
       ),
     );
   }
@@ -190,8 +85,12 @@ class _BillingPageState extends State<BillingPage> {
       backgroundColor: Colors.transparent,
       builder: (_) => _InvoiceDetailSheet(
         invoice: inv,
-        onStatusChange: (s) => setState(() => inv.status = s),
-        onDelete: () => setState(() => _invoices.removeWhere((x) => x.id == inv.id)),
+        onStatusChange: (s) {
+          context.read<BillingBloc>().add(UpdateInvoiceStatusEvent(inv.id, s));
+        },
+        onDelete: () {
+          context.read<BillingBloc>().add(DeleteInvoiceEvent(inv.id));
+        },
       ),
     );
   }
@@ -215,126 +114,130 @@ class _BillingPageState extends State<BillingPage> {
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width > 650;
-    final filtered = _filtered;
 
-    return Scaffold(
-      key: _scaffoldKey,
-      drawer: AppDrawer(
-        selectedIndex: widget.selectedIndex,
-        onItemSelected: (i) {
-          widget.onItemSelected(i);
-          Navigator.pop(context);
-        },
-      ),
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: isWide
-            ? null
-            : IconButton(
-                icon: const Icon(Icons.menu_rounded, color: Color(0xFF374151)),
-                onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-              ),
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Billing & Invoices',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF111827))),
-            Text('Manage client invoicing, payments, and financial history.',
-                style: TextStyle(fontSize: 10, color: Color(0xFF6B7280))),
-          ],
-        ),
-        actions: isWide
-            ? [
-                _TopBtn(Icons.upload_file_outlined, 'Bulk Import', onTap: () {}),
-                _TopBtn(Icons.shield_outlined, 'GST Settings', onTap: _showGstSettings),
-                _TopBtn(Icons.trending_up_rounded, 'Profitability', onTap: () {}),
-                _TopBtn(Icons.download_outlined, 'Export CSV', onTap: () {}),
-                Padding(
-                  padding: const EdgeInsets.only(right: 12, left: 4),
-                  child: ElevatedButton.icon(
-                    onPressed: _showNewInvoice,
-                    icon: const Icon(Icons.add, size: 15),
-                    label: const Text('New Invoice', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00BCD4),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+    return BlocBuilder<BillingBloc, BillingState>(
+      builder: (context, state) {
+        final filtered = _filtered(state.invoices);
+        return Scaffold(
+          key: _scaffoldKey,
+          drawer: AppDrawer(
+            selectedIndex: widget.selectedIndex,
+            onItemSelected: (i) {
+              widget.onItemSelected(i);
+              Navigator.pop(context);
+            },
+          ),
+          backgroundColor: const Color(0xFFF5F7FA),
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            elevation: 0,
+            leading: isWide
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.menu_rounded, color: Color(0xFF374151)),
+                    onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+                  ),
+            title: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Billing & Invoices',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF111827))),
+                Text('Manage client invoicing, payments, and financial history.',
+                    style: TextStyle(fontSize: 10, color: Color(0xFF6B7280))),
+              ],
+            ),
+            actions: isWide
+                ? [
+                    _TopBtn(Icons.upload_file_outlined, 'Bulk Import', onTap: () {}),
+                    _TopBtn(Icons.shield_outlined, 'GST Settings', onTap: () => _showGstSettings(state.gstProfile)),
+                    _TopBtn(Icons.trending_up_rounded, 'Profitability', onTap: () {}),
+                    _TopBtn(Icons.download_outlined, 'Export CSV', onTap: () {}),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12, left: 4),
+                      child: ElevatedButton.icon(
+                        onPressed: () => _showNewInvoice(state.gstProfile),
+                        icon: const Icon(Icons.add, size: 15),
+                        label: const Text('New Invoice', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00BCD4),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        ),
+                      ),
+                    ),
+                  ]
+                : [
+                    IconButton(
+                        icon: const Icon(Icons.shield_outlined, color: Color(0xFF374151)),
+                        onPressed: () => _showGstSettings(state.gstProfile)),
+                    IconButton(
+                        icon: const Icon(Icons.add_circle, color: Color(0xFF00BCD4), size: 28),
+                        onPressed: () => _showNewInvoice(state.gstProfile)),
+                  ],
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1),
+              child: Container(height: 1, color: const Color(0xFFE5E7EB)),
+            ),
+          ),
+          body: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // Stats cards
+              _buildStatsRow(state.invoices, isWide),
+              const SizedBox(height: 16),
+              // Filter section
+              _buildFilters(isWide),
+              const SizedBox(height: 12),
+              // Search + sort
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchCtrl,
+                      onChanged: (v) => setState(() => _search = v),
+                      decoration: InputDecoration(
+                        hintText: 'Search by invoice number or client...',
+                        hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 12),
+                        prefixIcon: const Icon(Icons.search, color: Color(0xFF9CA3AF), size: 18),
+                        suffixIcon: _search.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.close, size: 16, color: Color(0xFF6B7280)),
+                                onPressed: () { _searchCtrl.clear(); setState(() => _search = ''); })
+                            : null,
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
                     ),
                   ),
-                ),
-              ]
-            : [
-                IconButton(
-                    icon: const Icon(Icons.shield_outlined, color: Color(0xFF374151)),
-                    onPressed: _showGstSettings),
-                IconButton(
-                    icon: const Icon(Icons.add_circle, color: Color(0xFF00BCD4), size: 28),
-                    onPressed: _showNewInvoice),
-              ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: const Color(0xFFE5E7EB)),
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Stats cards
-          _buildStatsRow(isWide),
-          const SizedBox(height: 16),
-          // Filter section
-          _buildFilters(isWide),
-          const SizedBox(height: 12),
-          // Search + sort
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchCtrl,
-                  onChanged: (v) => setState(() => _search = v),
-                  decoration: InputDecoration(
-                    hintText: 'Search by invoice number or client...',
-                    hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 12),
-                    prefixIcon: const Icon(Icons.search, color: Color(0xFF9CA3AF), size: 18),
-                    suffixIcon: _search.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.close, size: 16, color: Color(0xFF6B7280)),
-                            onPressed: () { _searchCtrl.clear(); setState(() => _search = ''); })
-                        : null,
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                  ),
-                ),
+                  const SizedBox(width: 8),
+                  _FilterChip(Icons.filter_list_rounded, 'Quick Sort', onTap: () {}),
+                ],
               ),
-              const SizedBox(width: 8),
-              _FilterChip(Icons.filter_list_rounded, 'Quick Sort', onTap: () {}),
+              const SizedBox(height: 4),
+              Text('Filtering ${filtered.length} total records',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+              const SizedBox(height: 12),
+              // Table
+              _buildTable(filtered, isWide),
             ],
           ),
-          const SizedBox(height: 4),
-          Text('Filtering ${filtered.length} total records',
-              style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
-          const SizedBox(height: 12),
-          // Table
-          _buildTable(filtered, isWide),
-        ],
-      ),
+        );
+      },
     );
   }
 
   // ── STATS ────────────────────────────────────────────────────────────────────
 
-  Widget _buildStatsRow(bool isWide) {
+  Widget _buildStatsRow(List<Invoice> invoices, bool isWide) {
     final cards = [
-      _StatCard(title: 'TOTAL INVOICED', value: '₹${_fmt(_totalInvoiced)}', icon: Icons.trending_up_rounded, color: const Color(0xFF374151), bgColor: Colors.white, valueColor: const Color(0xFF111827)),
-      _StatCard(title: 'TOTAL PAID', value: '₹${_fmt(_totalPaid)}', icon: Icons.check_circle_outline, color: const Color(0xFF10B981), bgColor: const Color(0xFFF0FDF4), valueColor: const Color(0xFF10B981)),
-      _StatCard(title: 'OUTSTANDING', value: '₹${_fmt(_outstanding)}', icon: Icons.circle, color: const Color(0xFFEF4444), bgColor: const Color(0xFFFEF2F2), valueColor: const Color(0xFFEF4444)),
+      _StatCard(title: 'TOTAL INVOICED', value: '₹${_fmt(_totalInvoiced(invoices))}', icon: Icons.trending_up_rounded, color: const Color(0xFF374151), bgColor: Colors.white, valueColor: const Color(0xFF111827)),
+      _StatCard(title: 'TOTAL PAID', value: '₹${_fmt(_totalPaid(invoices))}', icon: Icons.check_circle_outline, color: const Color(0xFF10B981), bgColor: const Color(0xFFF0FDF4), valueColor: const Color(0xFF10B981)),
+      _StatCard(title: 'OUTSTANDING', value: '₹${_fmt(_outstanding(invoices))}', icon: Icons.circle, color: const Color(0xFFEF4444), bgColor: const Color(0xFFFEF2F2), valueColor: const Color(0xFFEF4444)),
     ];
 
     return isWide

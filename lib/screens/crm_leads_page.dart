@@ -1,99 +1,8 @@
-// crm_leads_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../widgets/app_drawer.dart';
-
-// ─── DATA MODELS ─────────────────────────────────────────────────────────────
-
-enum LeadStatus {
-  newLead,
-  contacted,
-  qualified,
-  proposalSent,
-  negotiation,
-  awaitingPayment,
-  convertedClient,
-  closedLost,
-}
-
-extension LeadStatusExtension on LeadStatus {
-  String get label {
-    switch (this) {
-      case LeadStatus.newLead: return 'NEW LEAD';
-      case LeadStatus.contacted: return 'CONTACTED';
-      case LeadStatus.qualified: return 'QUALIFIED';
-      case LeadStatus.proposalSent: return 'PROPOSAL SENT';
-      case LeadStatus.negotiation: return 'NEGOTIATION';
-      case LeadStatus.awaitingPayment: return 'AWAITING PAYMENT';
-      case LeadStatus.convertedClient: return 'ACTIVE CLIENT';
-      case LeadStatus.closedLost: return 'CLOSED LOST';
-    }
-  }
-
-  Color get color {
-    switch (this) {
-      case LeadStatus.newLead: return const Color(0xFF6B7280);
-      case LeadStatus.contacted: return const Color(0xFFF59E0B);
-      case LeadStatus.qualified: return const Color(0xFF8B5CF6);
-      case LeadStatus.proposalSent: return const Color(0xFF3B82F6);
-      case LeadStatus.negotiation: return const Color(0xFFF97316);
-      case LeadStatus.awaitingPayment: return const Color(0xFFEF4444);
-      case LeadStatus.convertedClient: return const Color(0xFF10B981);
-      case LeadStatus.closedLost: return const Color(0xFF374151);
-    }
-  }
-
-  Color get bgColor => color.withOpacity(0.12);
-}
-
-enum AcquisitionSource { website, referral, socialMedia, coldCall, email, other }
-
-extension AcquisitionSourceExt on AcquisitionSource {
-  String get label {
-    switch (this) {
-      case AcquisitionSource.website: return 'Website';
-      case AcquisitionSource.referral: return 'Referral';
-      case AcquisitionSource.socialMedia: return 'Social Media';
-      case AcquisitionSource.coldCall: return 'Cold Call';
-      case AcquisitionSource.email: return 'Email';
-      case AcquisitionSource.other: return 'Other';
-    }
-  }
-}
-
-class Lead {
-  final String id;
-  String firstName;
-  String lastName;
-  String email;
-  String companyName;
-  String jobTitle;
-  String phone;
-  LeadStatus status;
-  AcquisitionSource source;
-  double value;
-  final DateTime createdAt;
-
-  Lead({
-    required this.id,
-    required this.firstName,
-    required this.lastName,
-    required this.email,
-    this.companyName = '',
-    this.jobTitle = '',
-    this.phone = '',
-    required this.status,
-    this.source = AcquisitionSource.website,
-    this.value = 0,
-    required this.createdAt,
-  });
-
-  String get fullName => '$firstName $lastName'.trim();
-  String get initials {
-    final f = firstName.isNotEmpty ? firstName[0].toUpperCase() : '';
-    final l = lastName.isNotEmpty ? lastName[0].toUpperCase() : '';
-    return '$f$l'.isEmpty ? '?' : '$f$l';
-  }
-}
+import '../models/lead_model.dart';
+import '../blocs/lead/lead_bloc.dart';
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
@@ -119,31 +28,19 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
   final TextEditingController _searchController = TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  final List<Lead> _leads = [
-    Lead(id: '1', firstName: 'shock', lastName: 'stark', email: 'ananthu890@gmail.com', companyName: 'TALKIOS', status: LeadStatus.newLead, value: 200, createdAt: DateTime.now()),
-    Lead(id: '2', firstName: 'Viswajith', lastName: 'e', email: 'viswajith.lcs@gmail.com', companyName: 'JANANI', status: LeadStatus.newLead, value: 100, createdAt: DateTime.now()),
-    Lead(id: '3', firstName: 'amegh', lastName: 'kp', email: 'ameghkp111@gmail.com', companyName: 'ECARFTZ', status: LeadStatus.contacted, value: 0, createdAt: DateTime.now()),
-    Lead(id: '4', firstName: 'viswajith', lastName: '', email: 'viswajith802@gmail.com', companyName: 'ARSENAL', status: LeadStatus.qualified, value: 150, createdAt: DateTime.now()),
-    Lead(id: '5', firstName: 'sasi', lastName: 'jith', email: 'sasi@gmail.com', companyName: 'ANUGRAHA', status: LeadStatus.proposalSent, value: 100, createdAt: DateTime.now()),
-    Lead(id: '6', firstName: 'meethu', lastName: '', email: 'meethu@gmail.com', companyName: 'IOSS', status: LeadStatus.negotiation, value: 150, createdAt: DateTime.now()),
-    Lead(id: '7', firstName: 'Hari', lastName: '', email: 'hari@gmail.com', companyName: '', status: LeadStatus.awaitingPayment, value: 200, createdAt: DateTime.now()),
-    Lead(id: '8', firstName: 'Steve', lastName: 'rogers', email: 'viswajith.ecraftz@gmail.com', companyName: 'ECRAFTZ', status: LeadStatus.convertedClient, value: 0, createdAt: DateTime.now()),
-    Lead(id: '9', firstName: 'Chimbu', lastName: '', email: 'chimbu@gmail.com', companyName: '', status: LeadStatus.closedLost, value: 100, createdAt: DateTime.now()),
-  ];
-
-  List<Lead> get _filteredLeads {
-    if (_searchQuery.isEmpty) return _leads;
+  List<Lead> _filteredLeads(List<Lead> leads) {
+    if (_searchQuery.isEmpty) return leads;
     final q = _searchQuery.toLowerCase();
-    return _leads.where((l) =>
+    return leads.where((l) =>
       l.fullName.toLowerCase().contains(q) ||
       l.email.toLowerCase().contains(q) ||
       l.companyName.toLowerCase().contains(q)).toList();
   }
 
-  Map<LeadStatus, List<Lead>> get _leadsByStatus {
+  Map<LeadStatus, List<Lead>> _leadsByStatus(List<Lead> filteredLeads) {
     final map = <LeadStatus, List<Lead>>{};
     for (final s in LeadStatus.values) {
-      map[s] = _filteredLeads.where((l) => l.status == s).toList();
+      map[s] = filteredLeads.where((l) => l.status == s).toList();
     }
     return map;
   }
@@ -167,14 +64,11 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
       builder: (_) => _AddLeadDialog(
         existing: existing,
         onSave: (lead) {
-          setState(() {
-            if (existing != null) {
-              final idx = _leads.indexWhere((l) => l.id == existing.id);
-              if (idx != -1) _leads[idx] = lead;
-            } else {
-              _leads.add(lead);
-            }
-          });
+          if (existing != null) {
+            context.read<LeadBloc>().add(UpdateLeadEvent(lead));
+          } else {
+            context.read<LeadBloc>().add(AddLeadEvent(lead));
+          }
         },
       ),
     );
@@ -190,7 +84,7 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
             onPressed: () {
-              setState(() => _leads.removeWhere((l) => l.id == lead.id));
+              context.read<LeadBloc>().add(DeleteLeadEvent(lead.id));
               Navigator.pop(context);
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
@@ -201,7 +95,7 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
   }
 
   void _changeStatus(Lead lead, LeadStatus newStatus) {
-    setState(() => lead.status = newStatus);
+    context.read<LeadBloc>().add(ChangeLeadStatusEvent(lead.id, newStatus));
   }
 
   @override
@@ -278,60 +172,66 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
           child: Container(height: 1, color: const Color(0xFFE5E7EB)),
         ),
       ),
-      body: Column(
-        children: [
-          // Search bar
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-            child: TextField(
-              controller: _searchController,
-              onChanged: (v) => setState(() => _searchQuery = v),
-              decoration: InputDecoration(
-                hintText: 'Search leads by name, email or company…',
-                hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
-                prefixIcon: const Icon(Icons.search, color: Color(0xFF9CA3AF), size: 20),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.close, size: 18, color: Color(0xFF6B7280)),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                        })
-                    : null,
-                filled: true,
-                fillColor: const Color(0xFFF9FAFB),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      body: BlocBuilder<LeadBloc, LeadState>(
+        builder: (context, state) {
+          final leads = state.leads;
+          final filtered = _filteredLeads(leads);
+          return Column(
+            children: [
+              // Search bar
+              Container(
+                color: Colors.white,
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                  decoration: InputDecoration(
+                    hintText: 'Search leads by name, email or company…',
+                    hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
+                    prefixIcon: const Icon(Icons.search, color: Color(0xFF9CA3AF), size: 20),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close, size: 18, color: Color(0xFF6B7280)),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            })
+                        : null,
+                    filled: true,
+                    fillColor: const Color(0xFFF9FAFB),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
                 ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5),
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
               ),
-            ),
-          ),
-          // Stats strip
-          _buildStatsStrip(),
-          // Content
-          Expanded(
-            child: _isKanban ? _buildKanban() : _buildList(),
-          ),
-        ],
+              // Stats strip
+              _buildStatsStrip(filtered),
+              // Content
+              Expanded(
+                child: _isKanban ? _buildKanban(filtered) : _buildList(filtered),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildStatsStrip() {
-    final total = _filteredLeads.length;
-    final totalValue = _filteredLeads.fold<double>(0, (s, l) => s + l.value);
-    final converted = _filteredLeads.where((l) => l.status == LeadStatus.convertedClient).length;
+  Widget _buildStatsStrip(List<Lead> filteredLeads) {
+    final total = filteredLeads.length;
+    final totalValue = filteredLeads.fold<double>(0, (s, l) => s + l.value);
+    final converted = filteredLeads.where((l) => l.status == LeadStatus.convertedClient).length;
 
     return Container(
       color: Colors.white,
@@ -371,8 +271,8 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
 
   // ── KANBAN ──────────────────────────────────────────────────────────────────
 
-  Widget _buildKanban() {
-    final byStatus = _leadsByStatus;
+  Widget _buildKanban(List<Lead> filteredLeads) {
+    final byStatus = _leadsByStatus(filteredLeads);
     return ListView.builder(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.all(16),
@@ -394,8 +294,7 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
 
   // ── LIST ────────────────────────────────────────────────────────────────────
 
-  Widget _buildList() {
-    final leads = _filteredLeads;
+  Widget _buildList(List<Lead> leads) {
     if (leads.isEmpty) {
       return const Center(
         child: Text('No leads found', style: TextStyle(color: Color(0xFF6B7280))),
@@ -446,7 +345,7 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
           _deleteLead(lead);
         },
         onStatusChange: (s) {
-          setState(() => lead.status = s);
+          context.read<LeadBloc>().add(ChangeLeadStatusEvent(lead.id, s));
           Navigator.pop(context);
         },
       ),
