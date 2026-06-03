@@ -207,12 +207,54 @@ class _ProjectsPageState extends State<ProjectsPage>
   }
 
   Widget _buildFilterBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
+    final isWide = MediaQuery.of(context).size.width > 600;
+    if (isWide) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Container(
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: _border),
+                ),
+                child: TextField(
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                  decoration: InputDecoration(
+                    hintText: 'Search projects...',
+                    hintStyle:
+                        const TextStyle(fontSize: 13, color: _textSecondary),
+                    prefixIcon: const Icon(Icons.search,
+                        size: 18, color: _textSecondary),
+                    border: InputBorder.none,
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            _StatusDropdown(
+              selected: _selectedStatus,
+              onChanged: (s) => setState(() => _selectedStatus = s),
+            ),
+            const SizedBox(width: 8),
+            _ViewToggle(
+              viewMode: _viewMode,
+              onChanged: (v) => setState(() => _viewMode = v),
+            ),
+          ],
+        ),
+      );
+    } else {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+        child: Column(
+          children: [
+            Container(
               height: 40,
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -233,20 +275,26 @@ class _ProjectsPageState extends State<ProjectsPage>
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          _StatusDropdown(
-            selected: _selectedStatus,
-            onChanged: (s) => setState(() => _selectedStatus = s),
-          ),
-          const SizedBox(width: 8),
-          _ViewToggle(
-            viewMode: _viewMode,
-            onChanged: (v) => setState(() => _viewMode = v),
-          ),
-        ],
-      ),
-    );
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _StatusDropdown(
+                    selected: _selectedStatus,
+                    onChanged: (s) => setState(() => _selectedStatus = s),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _ViewToggle(
+                  viewMode: _viewMode,
+                  onChanged: (v) => setState(() => _viewMode = v),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Widget _buildProjectsList(List<Project> allProjects, bool archived) {
@@ -260,13 +308,16 @@ class _ProjectsPageState extends State<ProjectsPage>
       return _buildListView(projects);
     }
 
+    final isWide = MediaQuery.of(context).size.width > 600;
+    final textScale = MediaQuery.maybeOf(context)?.textScaleFactor ?? 1.0;
+
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 100),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 400,
         crossAxisSpacing: 14,
         mainAxisSpacing: 14,
-        mainAxisExtent: 195,
+        mainAxisExtent: (isWide ? 215.0 : 240.0) * textScale,
       ),
       itemCount: projects.length,
       itemBuilder: (_, i) => _ProjectCard(project: projects[i]),
@@ -449,6 +500,7 @@ class _StatusDropdown extends StatelessWidget {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<ProjectStatus?>(
           value: selected,
+          isExpanded: true,
           hint: const Text('All Status',
               style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
           icon: const Icon(Icons.keyboard_arrow_down, size: 18),
@@ -581,7 +633,7 @@ class _ProjectCard extends StatelessWidget {
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -633,7 +685,7 @@ class _ProjectCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             Text(
               project.name,
               style: const TextStyle(
@@ -641,6 +693,8 @@ class _ProjectCard extends StatelessWidget {
                 fontWeight: FontWeight.w700,
                 color: Color(0xFF0F172A),
               ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 2),
             Text(
@@ -649,6 +703,8 @@ class _ProjectCard extends StatelessWidget {
                   : project.clientName,
               style: const TextStyle(
                   fontSize: 12, color: Color(0xFF94A3B8)),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             const Spacer(),
             Row(
@@ -672,7 +728,7 @@ class _ProjectCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Row(
               children: [
                 const Text('Progress',
@@ -699,7 +755,7 @@ class _ProjectCard extends StatelessWidget {
                 minHeight: 5,
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             Row(
               children: [
                 Container(
@@ -732,6 +788,8 @@ class _ProjectCard extends StatelessWidget {
                         color: Color(0xFF64748B),
                         letterSpacing: 0.3,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -792,6 +850,8 @@ class _ProjectListTile extends StatelessWidget {
                     fontSize: 14,
                     color: Color(0xFF0F172A),
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   project.clientName.isEmpty
@@ -799,6 +859,8 @@ class _ProjectListTile extends StatelessWidget {
                       : project.clientName,
                   style: const TextStyle(
                       fontSize: 12, color: Color(0xFF94A3B8)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),

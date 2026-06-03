@@ -126,7 +126,7 @@ class Lead {
       'last_name': lastName,
       'email': email,
       'company': companyName,
-      'job_title': jobTitle,
+      // 'job_title' is not present in the database table schema
       'phone': phone,
       'status': _leadStatusToString(status),
       'source': _sourceToString(source),

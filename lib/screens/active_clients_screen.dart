@@ -40,6 +40,12 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
+  void initState() {
+    super.initState();
+    context.read<ClientBloc>().add(LoadClientsEvent());
+  }
+
+  @override
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();

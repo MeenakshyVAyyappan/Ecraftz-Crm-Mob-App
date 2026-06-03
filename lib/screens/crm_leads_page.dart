@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../widgets/app_drawer.dart';
@@ -27,6 +28,54 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final ScrollController _kanbanScrollController = ScrollController();
+  Offset? _lastDragOffset;
+  Timer? _scrollTimer;
+
+  void _handleDragMove(DragTargetDetails<Lead> details) {
+    _lastDragOffset = details.offset;
+    _startScrollTimerIfNecessary();
+  }
+
+  void _startScrollTimerIfNecessary() {
+    if (_scrollTimer != null) return;
+    _scrollTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
+      if (_lastDragOffset == null) {
+        _cancelScrollTimer();
+        return;
+      }
+      final dx = _lastDragOffset!.dx;
+      final screenWidth = MediaQuery.of(context).size.width;
+      const threshold = 60.0;
+      const scrollStep = 15.0;
+
+      if (dx < threshold) {
+        if (_kanbanScrollController.hasClients) {
+          final newOffset = (_kanbanScrollController.offset - scrollStep)
+              .clamp(0.0, _kanbanScrollController.position.maxScrollExtent);
+          _kanbanScrollController.jumpTo(newOffset);
+        }
+      } else if (dx > screenWidth - threshold) {
+        if (_kanbanScrollController.hasClients) {
+          final newOffset = (_kanbanScrollController.offset + scrollStep)
+              .clamp(0.0, _kanbanScrollController.position.maxScrollExtent);
+          _kanbanScrollController.jumpTo(newOffset);
+        }
+      } else {
+        _cancelScrollTimer();
+      }
+    });
+  }
+
+  void _cancelScrollTimer() {
+    _scrollTimer?.cancel();
+    _scrollTimer = null;
+  }
+
+  void _handleDragEnd() {
+    _cancelScrollTimer();
+    _lastDragOffset = null;
+  }
 
   List<Lead> _filteredLeads(List<Lead> leads) {
     if (_searchQuery.isEmpty) return leads;
@@ -49,10 +98,13 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: LeadStatus.values.length, vsync: this);
+    context.read<LeadBloc>().add(LoadLeadsEvent());
   }
 
   @override
   void dispose() {
+    _cancelScrollTimer();
+    _kanbanScrollController.dispose();
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -274,6 +326,7 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
   Widget _buildKanban(List<Lead> filteredLeads) {
     final byStatus = _leadsByStatus(filteredLeads);
     return ListView.builder(
+      controller: _kanbanScrollController,
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.all(16),
       itemCount: LeadStatus.values.length,
@@ -287,6 +340,9 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
           onTap: (l) => _showLeadDetail(l),
           onDelete: _deleteLead,
           onStatusChange: _changeStatus,
+          onDragStarted: () {},
+          onDragEnd: _handleDragEnd,
+          onDragMove: _handleDragMove,
         );
       },
     );
@@ -355,13 +411,16 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
 
 // ─── KANBAN COLUMN ────────────────────────────────────────────────────────────
 
-class _KanbanColumn extends StatelessWidget {
+class _KanbanColumn extends StatefulWidget {
   final LeadStatus status;
   final List<Lead> leads;
   final VoidCallback onAddLead;
   final Function(Lead) onTap;
   final Function(Lead) onDelete;
   final Function(Lead, LeadStatus) onStatusChange;
+  final VoidCallback onDragStarted;
+  final VoidCallback onDragEnd;
+  final Function(DragTargetDetails<Lead>) onDragMove;
 
   const _KanbanColumn({
     required this.status,
@@ -370,88 +429,139 @@ class _KanbanColumn extends StatelessWidget {
     required this.onTap,
     required this.onDelete,
     required this.onStatusChange,
+    required this.onDragStarted,
+    required this.onDragEnd,
+    required this.onDragMove,
   });
 
   @override
+  State<_KanbanColumn> createState() => _KanbanColumnState();
+}
+
+class _KanbanColumnState extends State<_KanbanColumn> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 240,
-      margin: const EdgeInsets.only(right: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Column header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: status.color,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(status.label,
-                      style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF374151),
-                          letterSpacing: 0.3)),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: status.bgColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text('${leads.length}',
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: status.color)),
-                ),
-              ],
+    return DragTarget<Lead>(
+      onWillAccept: (lead) {
+        return lead != null && lead.status != widget.status;
+      },
+      onAccept: (lead) {
+        widget.onStatusChange(lead, widget.status);
+        setState(() {
+          _isHovered = false;
+        });
+      },
+      onMove: (details) {
+        widget.onDragMove(details);
+        if (!_isHovered) {
+          setState(() {
+            _isHovered = true;
+          });
+        }
+      },
+      onLeave: (lead) {
+        setState(() {
+          _isHovered = false;
+        });
+      },
+      builder: (context, candidateData, rejectedData) {
+        return Container(
+          width: 240,
+          margin: const EdgeInsets.only(right: 12),
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: _isHovered 
+                ? widget.status.color.withOpacity(0.08) 
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: _isHovered 
+                  ? widget.status.color.withOpacity(0.3) 
+                  : Colors.transparent,
+              width: 1.5,
             ),
           ),
-          const SizedBox(height: 8),
-          // Cards
-          Expanded(
-            child: leads.isEmpty
-                ? Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                          color: const Color(0xFFE5E7EB), style: BorderStyle.solid),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Column header
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: widget.status.color,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                    child: const Center(
-                      child: Text('No leads',
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(widget.status.label,
+                          style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF374151),
+                              letterSpacing: 0.3)),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: widget.status.bgColor,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text('${widget.leads.length}',
                           style: TextStyle(
-                              color: Color(0xFFD1D5DB), fontSize: 12)),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: widget.status.color)),
                     ),
-                  )
-                : ListView.separated(
-                    itemCount: leads.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) => _KanbanCard(
-                      lead: leads[i],
-                      onTap: () => onTap(leads[i]),
-                      onDelete: () => onDelete(leads[i]),
-                      onStatusChange: (s) => onStatusChange(leads[i], s),
-                    ),
-                  ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Cards
+              Expanded(
+                child: widget.leads.isEmpty
+                    ? Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: const Color(0xFFE5E7EB), style: BorderStyle.solid),
+                        ),
+                        child: const Center(
+                          child: Text('No leads',
+                              style: TextStyle(
+                                  color: Color(0xFFD1D5DB), fontSize: 12)),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: widget.leads.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (_, i) => _KanbanCard(
+                          lead: widget.leads[i],
+                          onTap: () => widget.onTap(widget.leads[i]),
+                          onDelete: () => widget.onDelete(widget.leads[i]),
+                          onStatusChange: (s) => widget.onStatusChange(widget.leads[i], s),
+                          onDragStarted: widget.onDragStarted,
+                          onDragEnd: widget.onDragEnd,
+                        ),
+                      ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -463,107 +573,131 @@ class _KanbanCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onDelete;
   final Function(LeadStatus) onStatusChange;
+  final VoidCallback onDragStarted;
+  final VoidCallback onDragEnd;
 
   const _KanbanCard({
     required this.lead,
     required this.onTap,
     required this.onDelete,
     required this.onStatusChange,
+    required this.onDragStarted,
+    required this.onDragEnd,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            )
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                _Avatar(name: lead.initials, color: lead.status.color),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(lead.fullName,
+    final cardContent = Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _Avatar(name: lead.initials, color: lead.status.color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(lead.fullName,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF111827)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                    if (lead.companyName.isNotEmpty)
+                      Text('@ ${lead.companyName.toLowerCase()}',
                           style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF111827)),
+                              fontSize: 11, color: Color(0xFF6B7280)),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
-                      if (lead.companyName.isNotEmpty)
-                        Text('@ ${lead.companyName.toLowerCase()}',
-                            style: const TextStyle(
-                                fontSize: 11, color: Color(0xFF6B7280)),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                    ],
-                  ),
-                ),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_horiz,
-                      size: 16, color: Color(0xFF9CA3AF)),
-                  padding: EdgeInsets.zero,
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red, fontSize: 13))),
                   ],
-                  onSelected: (v) {
-                    if (v == 'delete') onDelete();
-                  },
                 ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
+              ),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_horiz,
+                    size: 16, color: Color(0xFF9CA3AF)),
+                padding: EdgeInsets.zero,
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red, fontSize: 13))),
+                ],
+                onSelected: (v) {
+                  if (v == 'delete') onDelete();
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text('GENERAL',
+                    style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6B7280),
+                        letterSpacing: 0.5)),
+              ),
+              const SizedBox(width: 6),
+              if (lead.value > 0)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE5E7EB),
+                    color: const Color(0xFFECFDF5),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: const Text('GENERAL',
-                      style: TextStyle(
-                          fontSize: 9,
+                  child: Text('₹${lead.value.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                          fontSize: 10,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF6B7280),
-                          letterSpacing: 0.5)),
+                          color: Color(0xFF059669))),
                 ),
-                const SizedBox(width: 6),
-                if (lead.value > 0)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFECFDF5),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text('₹${lead.value.toStringAsFixed(0)}',
-                        style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF059669))),
-                  ),
-              ],
-            ),
-          ],
+            ],
+          ),
+        ],
+      ),
+    );
+
+    return LongPressDraggable<Lead>(
+      data: lead,
+      feedback: Material(
+        elevation: 6,
+        borderRadius: BorderRadius.circular(10),
+        color: Colors.transparent,
+        child: SizedBox(
+          width: 220,
+          child: cardContent,
         ),
+      ),
+      childWhenDragging: Opacity(
+        opacity: 0.3,
+        child: cardContent,
+      ),
+      onDragStarted: onDragStarted,
+      onDragEnd: (_) => onDragEnd(),
+      child: GestureDetector(
+        onTap: onTap,
+        child: cardContent,
       ),
     );
   }

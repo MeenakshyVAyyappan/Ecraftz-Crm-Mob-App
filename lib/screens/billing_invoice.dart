@@ -38,6 +38,12 @@ class _BillingPageState extends State<BillingPage> {
   DateTime? _fromDate;
   DateTime? _toDate;
 
+  @override
+  void initState() {
+    super.initState();
+    context.read<BillingBloc>().add(LoadInvoicesEvent());
+  }
+
   List<Invoice> _filtered(List<Invoice> invoices) {
     return invoices.where((inv) {
       final matchSearch = _search.isEmpty ||
