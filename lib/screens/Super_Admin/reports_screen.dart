@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import '../widgets/app_drawer.dart';
-
-
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../widgets/app_drawer.dart';
+import '../../theme/app_theme.dart';
+import '../../blocs/theme/theme_bloc.dart';
 // ─── THEME ────────────────────────────────────────────────────────────────────
 
 class RTheme {
@@ -226,6 +227,13 @@ class ReportsScreen extends StatefulWidget {
 class _ReportsScreenState extends State<ReportsScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+  Color get _bg => Theme.of(context).scaffoldBackgroundColor;
+  Color get _cardBg => Theme.of(context).colorScheme.surface;
+  Color get _border => AppTheme.borderOf(context);
+  Color get _textPrimary => AppTheme.textPrimaryOf(context);
+  Color get _textSecondary => AppTheme.textSecondaryOf(context);
+
   @override
   Widget build(BuildContext context) {
     final w = MediaQuery.of(context).size.width;
@@ -233,13 +241,53 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: RTheme.background,
+      backgroundColor: _bg,
       drawer: AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: (i) {
           widget.onItemSelected(i);
           Navigator.pop(context);
         },
+      ),
+      appBar: AppBar(
+        backgroundColor: _cardBg,
+        elevation: 0,
+        leading: isTablet
+            ? null
+            : IconButton(
+                icon: Icon(Icons.menu_rounded, color: _isDark ? Colors.white : const Color(0xFF374151)),
+                onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+              ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('ERP Reporting Center',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _textPrimary)),
+            Text('Centralized access to professional enterprise reports and operational data audits.',
+                style: TextStyle(fontSize: 10, color: _textSecondary)),
+          ],
+        ),
+        actions: [
+          BlocBuilder<ThemeBloc, ThemeState>(
+            builder: (context, themeState) {
+              final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+              return IconButton(
+                icon: Icon(
+                  isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  color: isDarkTheme ? Colors.white : const Color(0xFF374151),
+                ),
+                onPressed: () {
+                  context.read<ThemeBloc>().add(ToggleThemeEvent());
+                },
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: _border),
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: RTheme.primary,
@@ -272,41 +320,21 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   Widget _buildHeader(bool isTablet) {
     return Container(
-      color: RTheme.cardBg,
-      padding: EdgeInsets.symmetric(horizontal: isTablet ? 20 : 14, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            if (!isTablet) ...[
-              IconButton(
-                icon: const Icon(Icons.menu_rounded, color: RTheme.textSecondary),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-              ),
-              const SizedBox(width: 10),
-            ],
-            const Icon(Icons.grid_view_rounded, size: 13, color: RTheme.textSecondary),
-            const SizedBox(width: 4),
-            _crumb('Dashboard', false),
-            const Icon(Icons.chevron_right, size: 15, color: RTheme.textSecondary),
-            _crumb('Reports', true),
-          ]),
-          const SizedBox(height: 8),
-          const Text('ERP Reporting Center',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: RTheme.textPrimary)),
-          const SizedBox(height: 3),
-          Text('Centralized access to professional enterprise reports and operational data audits.',
-              style: TextStyle(fontSize: 12, color: RTheme.textSecondary)),
-        ],
-      ),
+      color: _cardBg,
+      padding: EdgeInsets.symmetric(horizontal: isTablet ? 20 : 14, vertical: 10),
+      child: Row(children: [
+        Icon(Icons.grid_view_rounded, size: 13, color: _textSecondary),
+        const SizedBox(width: 4),
+        _crumb('Dashboard', false),
+        Icon(Icons.chevron_right, size: 15, color: _textSecondary),
+        _crumb('Reports', true),
+      ]),
     );
   }
 
   Widget _crumb(String label, bool active) => Text(label,
       style: TextStyle(fontSize: 12,
-          color: active ? RTheme.primary : RTheme.textSecondary,
+          color: active ? RTheme.primary : _textSecondary,
           fontWeight: active ? FontWeight.w600 : FontWeight.normal));
 
   Widget _buildTabletGrid(BuildContext context) {
@@ -339,10 +367,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
   Widget _categoryCard(BuildContext context, ReportCategory cat) {
     return Container(
       decoration: BoxDecoration(
-        color: RTheme.cardBg,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: RTheme.border),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+        border: Border.all(color: _border),
+        boxShadow: _isDark ? null : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -352,7 +380,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             decoration: BoxDecoration(
               color: cat.color.withOpacity(0.05),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-              border: Border(bottom: BorderSide(color: RTheme.border)),
+              border: Border(bottom: BorderSide(color: _border)),
             ),
             child: Row(children: [
               Container(
@@ -365,7 +393,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(cat.title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800,
                     color: cat.color, letterSpacing: 0.3), overflow: TextOverflow.ellipsis, maxLines: 1),
-                Text(cat.subtitle, style: const TextStyle(fontSize: 11, color: RTheme.textSecondary), overflow: TextOverflow.ellipsis, maxLines: 1),
+                Text(cat.subtitle, style: TextStyle(fontSize: 11, color: _textSecondary), overflow: TextOverflow.ellipsis, maxLines: 1),
               ])),
             ]),
           ),
@@ -383,7 +411,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          border: isLast ? null : const Border(bottom: BorderSide(color: RTheme.border)),
+          border: isLast ? null : Border(bottom: BorderSide(color: _border)),
           borderRadius: isLast ? const BorderRadius.vertical(bottom: Radius.circular(12)) : null,
         ),
         child: Row(children: [
@@ -395,12 +423,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
           const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(item.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
-                color: RTheme.textPrimary), overflow: TextOverflow.ellipsis, maxLines: 1),
-            Text(item.type, style: const TextStyle(fontSize: 10, color: RTheme.textSecondary,
+            Text(item.title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                color: _textPrimary), overflow: TextOverflow.ellipsis, maxLines: 1),
+            Text(item.type, style: TextStyle(fontSize: 10, color: _textSecondary,
                 letterSpacing: 0.3), overflow: TextOverflow.ellipsis, maxLines: 1),
           ])),
-          const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: RTheme.textSecondary),
+          Icon(Icons.arrow_forward_ios_rounded, size: 12, color: _textSecondary),
         ]),
       ),
     );
@@ -424,7 +452,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           const SizedBox(height: 3),
           Text('All reports are generated in real-time and comply with organization-level access control policies. '
               'Exported documents contain encrypted audit signatures for institutional record verification.',
-              style: TextStyle(fontSize: 11, color: RTheme.textSecondary, height: 1.4)),
+              style: TextStyle(fontSize: 11, color: _textSecondary, height: 1.4)),
         ])),
       ]),
     );
@@ -624,13 +652,60 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     }
   }
 
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+  Color get _bg => Theme.of(context).scaffoldBackgroundColor;
+  Color get _cardBg => Theme.of(context).colorScheme.surface;
+  Color get _border => AppTheme.borderOf(context);
+  Color get _textPrimary => AppTheme.textPrimaryOf(context);
+  Color get _textSecondary => AppTheme.textSecondaryOf(context);
+
   @override
   Widget build(BuildContext context) {
     final w = MediaQuery.of(context).size.width;
     final isTablet = w >= 600;
 
     return Scaffold(
-      backgroundColor: RTheme.background,
+      backgroundColor: _bg,
+      appBar: AppBar(
+        backgroundColor: _cardBg,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: _textSecondary),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_reportTitle,
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _textPrimary)),
+            Text(_reportSubtitle,
+                style: TextStyle(fontSize: 10, color: _textSecondary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+          ],
+        ),
+        actions: [
+          BlocBuilder<ThemeBloc, ThemeState>(
+            builder: (context, themeState) {
+              final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+              return IconButton(
+                icon: Icon(
+                  isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  color: isDarkTheme ? Colors.white : const Color(0xFF374151),
+                ),
+                onPressed: () {
+                  context.read<ThemeBloc>().add(ToggleThemeEvent());
+                },
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: _border),
+        ),
+      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -659,29 +734,13 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
 
   Widget _buildDetailHeader(bool isTablet) {
     return Container(
-      color: RTheme.cardBg,
-      padding: EdgeInsets.symmetric(horizontal: isTablet ? 20 : 14, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      color: _cardBg,
+      padding: EdgeInsets.symmetric(horizontal: isTablet ? 20 : 14, vertical: 10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(children: [
-            GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(border: Border.all(color: RTheme.border), borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: RTheme.textSecondary),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(child: Text(_reportTitle,
-                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: RTheme.textPrimary),
-                overflow: TextOverflow.ellipsis)),
-          ]),
-          const SizedBox(height: 6),
-          Text(_reportSubtitle, style: const TextStyle(fontSize: 11, color: RTheme.textSecondary, height: 1.4)),
-          const SizedBox(height: 10),
-          Wrap(spacing: 8, runSpacing: 6, children: [
+          Text('EXPORT OPTIONS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _textSecondary)),
+          Wrap(spacing: 8, children: [
             _actionBtn(Icons.print_rounded, 'PRINT'),
             _actionBtn(Icons.grid_on_rounded, 'CSV'),
             _exportPdfBtn(),
@@ -696,11 +755,11 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       onTap: () {},
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(border: Border.all(color: RTheme.border), borderRadius: BorderRadius.circular(7)),
+        decoration: BoxDecoration(border: Border.all(color: _border), borderRadius: BorderRadius.circular(7)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 13, color: RTheme.textSecondary),
+          Icon(icon, size: 13, color: _textSecondary),
           const SizedBox(width: 4),
-          Text(label, style: const TextStyle(fontSize: 11, color: RTheme.textSecondary, fontWeight: FontWeight.w600)),
+          Text(label, style: TextStyle(fontSize: 11, color: _textSecondary, fontWeight: FontWeight.w600)),
         ]),
       ),
     );
@@ -714,7 +773,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         decoration: BoxDecoration(
           gradient: const LinearGradient(colors: [RTheme.primary, RTheme.primaryDark]),
           borderRadius: BorderRadius.circular(7),
-          boxShadow: [BoxShadow(color: RTheme.primary.withOpacity(0.3), blurRadius: 6, offset: const Offset(0, 2))],
+          boxShadow: _isDark ? null : [BoxShadow(color: RTheme.primary.withOpacity(0.3), blurRadius: 6, offset: const Offset(0, 2))],
         ),
         child: const Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.download_rounded, size: 13, color: Colors.white),
@@ -747,24 +806,24 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: RTheme.cardBg,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: RTheme.border),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6)],
+        border: Border.all(color: _border),
+        boxShadow: _isDark ? null : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Expanded(child: Text(c.label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
-                color: RTheme.textSecondary, letterSpacing: 0.3), overflow: TextOverflow.ellipsis)),
-            Icon(c.icon, size: 14, color: RTheme.textSecondary),
+            Expanded(child: Text(c.label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
+                color: _textSecondary, letterSpacing: 0.3), overflow: TextOverflow.ellipsis)),
+            Icon(c.icon, size: 14, color: _textSecondary),
           ]),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(c.value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: RTheme.textPrimary),
+            Text(c.value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _textPrimary),
                 overflow: TextOverflow.ellipsis),
-            Text(c.sublabel, style: const TextStyle(fontSize: 9, color: RTheme.textSecondary, letterSpacing: 0.2),
+            Text(c.sublabel, style: TextStyle(fontSize: 9, color: _textSecondary, letterSpacing: 0.2),
                 overflow: TextOverflow.ellipsis),
           ]),
         ],
@@ -777,16 +836,17 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       Expanded(
         child: Container(
           decoration: BoxDecoration(
-            color: RTheme.cardBg,
+            color: _cardBg,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: RTheme.border),
+            border: Border.all(color: _border),
           ),
           child: TextField(
             onChanged: (v) => setState(() { _search = v; _page = 1; }),
+            style: TextStyle(color: _textPrimary, fontSize: 13),
             decoration: InputDecoration(
               hintText: _searchHint,
-              hintStyle: const TextStyle(fontSize: 12, color: RTheme.textSecondary),
-              prefixIcon: const Icon(Icons.search_rounded, size: 16, color: RTheme.textSecondary),
+              hintStyle: TextStyle(fontSize: 12, color: _textSecondary),
+              prefixIcon: Icon(Icons.search_rounded, size: 16, color: _textSecondary),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             ),
@@ -831,16 +891,16 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
       decoration: BoxDecoration(
-        color: RTheme.cardBg,
-        border: Border.all(color: RTheme.border),
+        color: _cardBg,
+        border: Border.all(color: _border),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.filter_list_rounded, size: 13, color: RTheme.textSecondary),
+        Icon(Icons.filter_list_rounded, size: 13, color: _textSecondary),
         const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 11, color: RTheme.textSecondary, fontWeight: FontWeight.w500)),
+        Text(label, style: TextStyle(fontSize: 11, color: _textSecondary, fontWeight: FontWeight.w500)),
         const SizedBox(width: 3),
-        const Icon(Icons.keyboard_arrow_down_rounded, size: 13, color: RTheme.textSecondary),
+        Icon(Icons.keyboard_arrow_down_rounded, size: 13, color: _textSecondary),
       ]),
     );
   }
@@ -848,14 +908,14 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
   Widget _buildTable(bool isTablet) {
     return Container(
       decoration: BoxDecoration(
-        color: RTheme.cardBg,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: RTheme.border),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+        border: Border.all(color: _border),
+        boxShadow: _isDark ? null : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
       ),
       child: Column(children: [
         if (isTablet) _tableHeaderRow(),
-        if (isTablet) const Divider(height: 1, color: RTheme.border),
+        if (isTablet) Divider(height: 1, color: _border),
         _paged.isEmpty
             ? _emptyState()
             : Column(children: _paged.asMap().entries.map((e) =>
@@ -884,14 +944,14 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
   Widget _tableHeaderRow() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: const BoxDecoration(
-        color: Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+      decoration: BoxDecoration(
+        color: _isDark ? AppTheme.bgSidebarDark : const Color(0xFFF8FAFC),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
       ),
       child: Row(
         children: _columns.map((c) => Expanded(
-          child: Text(c, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
-              color: RTheme.textSecondary, letterSpacing: 0.4)),
+          child: Text(c, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
+              color: _textSecondary, letterSpacing: 0.4)),
         )).toList(),
       ),
     );
@@ -902,8 +962,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
-        color: index.isEven ? Colors.white : const Color(0xFFFAFAFF),
-        border: const Border(bottom: BorderSide(color: RTheme.border)),
+        color: index.isEven ? _cardBg : (_isDark ? const Color(0xFF132238) : const Color(0xFFFAFAFF)),
+        border: Border(bottom: BorderSide(color: _border)),
       ),
       child: Row(
         children: cells.asMap().entries.map((e) => Expanded(child: _cellWidget(e.value))).toList(),
@@ -915,8 +975,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: index.isEven ? Colors.white : const Color(0xFFFAFAFF),
-        border: const Border(bottom: BorderSide(color: RTheme.border)),
+        color: index.isEven ? _cardBg : (_isDark ? const Color(0xFF132238) : const Color(0xFFFAFAFF)),
+        border: Border(bottom: BorderSide(color: _border)),
       ),
       child: _buildMobileCardContent(row),
     );
@@ -929,13 +989,13 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           _initAvatar(row['initials'] ?? '', 36),
           const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(row['name'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: RTheme.textPrimary)),
-            Text(row['email'] ?? '', style: const TextStyle(fontSize: 10, color: RTheme.textSecondary), overflow: TextOverflow.ellipsis),
+            Text(row['name'] ?? '', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary)),
+            Text(row['email'] ?? '', style: TextStyle(fontSize: 10, color: _textSecondary), overflow: TextOverflow.ellipsis),
             const SizedBox(height: 4),
             Wrap(spacing: 6, children: [
               _statusChip(row['role'] ?? ''),
               _statusChip(row['status'] ?? ''),
-              Text('\$${row['rate']?.toStringAsFixed(2)}/hr', style: const TextStyle(fontSize: 11, color: RTheme.textSecondary)),
+              Text('\$${row['rate']?.toStringAsFixed(2)}/hr', style: TextStyle(fontSize: 11, color: _textSecondary)),
             ]),
           ])),
         ]);
@@ -944,13 +1004,13 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           _initAvatar((row['name'] ?? '').substring(0, (row['name'] ?? ' ').length > 1 ? 2 : 1).toUpperCase(), 36),
           const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(row['name'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: RTheme.textPrimary)),
-            Text(row['date'] ?? '', style: const TextStyle(fontSize: 10, color: RTheme.textSecondary)),
+            Text(row['name'] ?? '', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary)),
+            Text(row['date'] ?? '', style: TextStyle(fontSize: 10, color: _textSecondary)),
             const SizedBox(height: 4),
             Wrap(spacing: 8, children: [
               Text('IN: ${row['in']}', style: const TextStyle(fontSize: 11, color: RTheme.success, fontWeight: FontWeight.w600)),
               Text('OUT: ${row['out']}', style: TextStyle(fontSize: 11,
-                  color: row['out'] == '---' ? RTheme.textSecondary : RTheme.danger, fontWeight: FontWeight.w600)),
+                  color: row['out'] == '---' ? _textSecondary : RTheme.danger, fontWeight: FontWeight.w600)),
               _statusChip(row['status'] ?? ''),
             ]),
           ])),
@@ -958,24 +1018,24 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       case 'tasks':
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Expanded(child: Text(row['task'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: RTheme.textPrimary))),
+            Expanded(child: Text(row['task'] ?? '', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary))),
             _statusChip(row['status'] ?? ''),
           ]),
           const SizedBox(height: 2),
-          Text(row['project'] ?? '', style: const TextStyle(fontSize: 10, color: RTheme.textSecondary), overflow: TextOverflow.ellipsis),
+          Text(row['project'] ?? '', style: TextStyle(fontSize: 10, color: _textSecondary), overflow: TextOverflow.ellipsis),
           const SizedBox(height: 6),
           Wrap(spacing: 8, children: [
             Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.person_rounded, size: 11, color: RTheme.textSecondary),
+              Icon(Icons.person_rounded, size: 11, color: _textSecondary),
               const SizedBox(width: 3),
-              Text(row['assignee'] ?? '', style: const TextStyle(fontSize: 11, color: RTheme.textSecondary)),
+              Text(row['assignee'] ?? '', style: TextStyle(fontSize: 11, color: _textSecondary)),
             ]),
             Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.calendar_today_rounded, size: 11,
-                  color: (row['overdue'] == true) ? RTheme.danger : RTheme.textSecondary),
+                  color: (row['overdue'] == true) ? RTheme.danger : _textSecondary),
               const SizedBox(width: 3),
               Text(row['due'] ?? '', style: TextStyle(fontSize: 11,
-                  color: (row['overdue'] == true) ? RTheme.danger : RTheme.textSecondary,
+                  color: (row['overdue'] == true) ? RTheme.danger : _textSecondary,
                   fontWeight: (row['overdue'] == true) ? FontWeight.w700 : FontWeight.normal)),
             ]),
             _statusChip(row['priority'] ?? ''),
@@ -985,11 +1045,11 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         final keys = row.keys.toList();
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           if (keys.isNotEmpty) Text(row[keys[0]]?.toString() ?? '',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: RTheme.textPrimary),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary),
               overflow: TextOverflow.ellipsis),
           if (keys.length > 1) ...[
             const SizedBox(height: 3),
-            Text(row[keys[1]]?.toString() ?? '', style: const TextStyle(fontSize: 11, color: RTheme.textSecondary),
+            Text(row[keys[1]]?.toString() ?? '', style: TextStyle(fontSize: 11, color: _textSecondary),
                 overflow: TextOverflow.ellipsis),
           ],
           const SizedBox(height: 6),
@@ -998,7 +1058,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
               if (keys[i] == 'status' || keys[i] == 'stage' || keys[i] == 'priority' || keys[i] == 'role')
                 _statusChip(row[keys[i]]?.toString() ?? '')
               else
-                Text(row[keys[i]]?.toString() ?? '', style: const TextStyle(fontSize: 11, color: RTheme.textSecondary)),
+                Text(row[keys[i]]?.toString() ?? '', style: TextStyle(fontSize: 11, color: _textSecondary)),
           ]),
         ]);
     }
@@ -1011,7 +1071,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           _CellData.widget(Row(children: [
             _initAvatar(row['initials'] ?? '', 26),
             const SizedBox(width: 6),
-            Expanded(child: Text(row['name'] ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: RTheme.textPrimary), overflow: TextOverflow.ellipsis)),
+            Expanded(child: Text(row['name'] ?? '', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textPrimary), overflow: TextOverflow.ellipsis)),
           ])),
           _CellData.chip(row['role'] ?? ''),
           _CellData.text('\$${row['rate']?.toStringAsFixed(2)}/hr', color: RTheme.success, bold: true),
@@ -1020,11 +1080,11 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       case 'att_logs':
         return [
           _CellData.widget(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(row['name'] ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: RTheme.textPrimary), overflow: TextOverflow.ellipsis),
-            Text(row['date'] ?? '', style: const TextStyle(fontSize: 10, color: RTheme.textSecondary), overflow: TextOverflow.ellipsis),
+            Text(row['name'] ?? '', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textPrimary), overflow: TextOverflow.ellipsis),
+            Text(row['date'] ?? '', style: TextStyle(fontSize: 10, color: _textSecondary), overflow: TextOverflow.ellipsis),
           ])),
           _CellData.text(row['in'] ?? '', color: RTheme.success, bold: true),
-          _CellData.text(row['out'] ?? '', color: row['out'] == '---' ? RTheme.textSecondary : RTheme.danger, bold: true),
+          _CellData.text(row['out'] ?? '', color: row['out'] == '---' ? _textSecondary : RTheme.danger, bold: true),
           _CellData.text(row['duration'] ?? ''),
           _CellData.chip(row['status'] ?? ''),
         ];
@@ -1040,8 +1100,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         return [
           _CellData.text(row['inv'] ?? '', bold: true, color: RTheme.primary),
           _CellData.widget(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(row['client'] ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: RTheme.textPrimary), overflow: TextOverflow.ellipsis),
-            Text(row['id'] ?? '', style: const TextStyle(fontSize: 10, color: RTheme.textSecondary), overflow: TextOverflow.ellipsis),
+            Text(row['client'] ?? '', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textPrimary), overflow: TextOverflow.ellipsis),
+            Text(row['id'] ?? '', style: TextStyle(fontSize: 10, color: _textSecondary), overflow: TextOverflow.ellipsis),
           ])),
           _CellData.text(row['date'] ?? ''),
           _CellData.text(row['face'] ?? ''),
@@ -1052,8 +1112,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         return [
           _CellData.text(row['date'] ?? ''),
           _CellData.widget(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(row['desc'] ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: RTheme.textPrimary), overflow: TextOverflow.ellipsis),
-            Text(row['project'] ?? '', style: const TextStyle(fontSize: 10, color: RTheme.textSecondary), overflow: TextOverflow.ellipsis),
+            Text(row['desc'] ?? '', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textPrimary), overflow: TextOverflow.ellipsis),
+            Text(row['project'] ?? '', style: TextStyle(fontSize: 10, color: _textSecondary), overflow: TextOverflow.ellipsis),
           ])),
           _CellData.text(row['amount'] ?? '', color: RTheme.danger, bold: true),
           _CellData.chip(row['cat'] ?? ''),
@@ -1062,12 +1122,12 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       case 'clients':
         return [
           _CellData.widget(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(row['name'] ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: RTheme.textPrimary), overflow: TextOverflow.ellipsis),
-            Text(row['industry'] ?? '', style: const TextStyle(fontSize: 10, color: RTheme.textSecondary), overflow: TextOverflow.ellipsis),
+            Text(row['name'] ?? '', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _textPrimary), overflow: TextOverflow.ellipsis),
+            Text(row['industry'] ?? '', style: TextStyle(fontSize: 10, color: _textSecondary), overflow: TextOverflow.ellipsis),
           ])),
           _CellData.widget(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            if ((row['email'] ?? '').isNotEmpty) Text(row['email'] ?? '', style: const TextStyle(fontSize: 10, color: RTheme.textSecondary), overflow: TextOverflow.ellipsis),
-            if ((row['phone'] ?? '').isNotEmpty) Text(row['phone'] ?? '', style: const TextStyle(fontSize: 10, color: RTheme.textSecondary), overflow: TextOverflow.ellipsis),
+            if ((row['email'] ?? '').isNotEmpty) Text(row['email'] ?? '', style: TextStyle(fontSize: 10, color: _textSecondary), overflow: TextOverflow.ellipsis),
+            if ((row['phone'] ?? '').isNotEmpty) Text(row['phone'] ?? '', style: TextStyle(fontSize: 10, color: _textSecondary), overflow: TextOverflow.ellipsis),
           ])),
           _CellData.text(row['location'] ?? ''),
           _CellData.text(row['joined'] ?? ''),
@@ -1076,8 +1136,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       case 'projects':
         return [
           _CellData.widget(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(row['name'] ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: RTheme.textPrimary), overflow: TextOverflow.ellipsis),
-            Text(row['client'] ?? '', style: const TextStyle(fontSize: 10, color: RTheme.textSecondary), overflow: TextOverflow.ellipsis),
+            Text(row['name'] ?? '', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _textPrimary), overflow: TextOverflow.ellipsis),
+            Text(row['client'] ?? '', style: TextStyle(fontSize: 10, color: _textSecondary), overflow: TextOverflow.ellipsis),
           ])),
           _CellData.text(row['timeline'] ?? ''),
           _CellData.text(row['budget'] ?? '', bold: true, color: RTheme.success),
@@ -1086,8 +1146,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       case 'tasks':
         return [
           _CellData.widget(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(row['task'] ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: RTheme.textPrimary), overflow: TextOverflow.ellipsis),
-            Text(row['project'] ?? '', style: const TextStyle(fontSize: 9, color: RTheme.textSecondary), overflow: TextOverflow.ellipsis),
+            Text(row['task'] ?? '', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _textPrimary), overflow: TextOverflow.ellipsis),
+            Text(row['project'] ?? '', style: TextStyle(fontSize: 9, color: _textSecondary), overflow: TextOverflow.ellipsis),
           ])),
           _CellData.text(row['assignee'] ?? ''),
           _CellData.text(row['due'] ?? '', color: (row['overdue'] == true) ? RTheme.danger : null),
@@ -1097,8 +1157,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       case 'renewals':
         return [
           _CellData.widget(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(row['service'] ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: RTheme.textPrimary), overflow: TextOverflow.ellipsis),
-            Text(row['client'] ?? '', style: const TextStyle(fontSize: 10, color: RTheme.textSecondary), overflow: TextOverflow.ellipsis),
+            Text(row['service'] ?? '', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _textPrimary), overflow: TextOverflow.ellipsis),
+            Text(row['client'] ?? '', style: TextStyle(fontSize: 10, color: _textSecondary), overflow: TextOverflow.ellipsis),
           ])),
           _CellData.chip(row['category'] ?? ''),
           _CellData.text(row['expiry'] ?? ''),
@@ -1125,7 +1185,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         style: TextStyle(
           fontSize: 12,
           fontWeight: c.bold ? FontWeight.w700 : FontWeight.normal,
-          color: c.color ?? RTheme.textPrimary,
+          color: c.color ?? _textPrimary,
           fontStyle: c.italic ? FontStyle.italic : FontStyle.normal,
         ),
         overflow: TextOverflow.ellipsis);
@@ -1163,12 +1223,12 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       child: Column(children: [
         Container(
           width: 50, height: 50,
-          decoration: BoxDecoration(color: const Color(0xFFF1F5F9), shape: BoxShape.circle),
-          child: const Icon(Icons.search_off_rounded, size: 24, color: Color(0xFF94A3B8)),
+          decoration: BoxDecoration(color: _isDark ? const Color(0xFF1E2E42) : const Color(0xFFF1F5F9), shape: BoxShape.circle),
+          child: Icon(Icons.search_off_rounded, size: 24, color: _isDark ? const Color(0xFF596780) : const Color(0xFF94A3B8)),
         ),
         const SizedBox(height: 12),
-        const Text('No records found for this criteria.',
-            style: TextStyle(fontSize: 13, color: RTheme.textSecondary)),
+        Text('No records found for this criteria.',
+            style: TextStyle(fontSize: 13, color: _textSecondary)),
       ]),
     );
   }
@@ -1177,43 +1237,43 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: RTheme.cardBg,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: RTheme.border),
+        border: Border.all(color: _border),
       ),
       child: Row(children: [
         Expanded(child: Text(
           'SHOWING ${_filtered.isEmpty ? "1-0" : "${(_page - 1) * _perPage + 1}-${((_page * _perPage).clamp(0, _filtered.length))}"} OF ${_filtered.length} INSTITUTIONAL RECORDS',
-          style: const TextStyle(fontSize: 10, color: RTheme.textSecondary, letterSpacing: 0.3),
+          style: TextStyle(fontSize: 10, color: _textSecondary, letterSpacing: 0.3),
         )),
         GestureDetector(
           onTap: _page > 1 ? () => setState(() => _page--) : null,
           child: Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: _page > 1 ? RTheme.cardBg : const Color(0xFFF1F5F9),
-              border: Border.all(color: RTheme.border),
+              color: _page > 1 ? _cardBg : (_isDark ? const Color(0xFF1E2E42) : const Color(0xFFF1F5F9)),
+              border: Border.all(color: _border),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Icon(Icons.chevron_left, size: 16,
-                color: _page > 1 ? RTheme.textPrimary : RTheme.textSecondary),
+                color: _page > 1 ? _textPrimary : _textSecondary),
           ),
         ),
         const SizedBox(width: 8),
         Text('PAGE $_page / $_totalPages',
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: RTheme.textPrimary)),
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _textPrimary)),
         const SizedBox(width: 8),
         GestureDetector(
           onTap: _page < _totalPages ? () => setState(() => _page++) : null,
           child: Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: _page < _totalPages ? RTheme.cardBg : const Color(0xFFF1F5F9),
-              border: Border.all(color: RTheme.border),
+              color: _page < _totalPages ? _cardBg : (_isDark ? const Color(0xFF1E2E42) : const Color(0xFFF1F5F9)),
+              border: Border.all(color: _border),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Icon(Icons.chevron_right, size: 16,
-                color: _page < _totalPages ? RTheme.textPrimary : RTheme.textSecondary),
+                color: _page < _totalPages ? _textPrimary : _textSecondary),
           ),
         ),
       ]),

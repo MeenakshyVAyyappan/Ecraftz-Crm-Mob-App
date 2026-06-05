@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'signin.dart';
-import 'teams_screen.dart';
+import 'Super_Admin/teams_screen.dart';
 import '../blocs/auth/auth_bloc.dart';
+import '../theme/app_theme.dart';
+import '../blocs/theme/theme_bloc.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -45,6 +47,7 @@ class _RegisterPageState extends State<RegisterPage> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final isWide = size.width > 600;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
@@ -96,39 +99,61 @@ class _RegisterPageState extends State<RegisterPage> {
         }
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F7FA),
+        backgroundColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF5F7FA),
         body: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.symmetric(
-                horizontal: isWide ? size.width * 0.3 : 24,
-                vertical: 32,
+          child: Stack(
+            children: [
+              Positioned(
+                top: 10,
+                right: 10,
+                child: BlocBuilder<ThemeBloc, ThemeState>(
+                  builder: (context, themeState) {
+                    final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+                    return IconButton(
+                      icon: Icon(
+                        isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                        color: isDarkTheme ? Colors.white : const Color(0xFF374151),
+                      ),
+                      onPressed: () {
+                        context.read<ThemeBloc>().add(ToggleThemeEvent());
+                      },
+                    );
+                  },
+                ),
               ),
-              child: Column(
-                children: [
-                  _buildLogo(),
-                  const SizedBox(height: 32),
-                  if (_submitted)
-                    _buildSuccessCard()
-                  else
-                    _buildForm(),
-                ],
+              Center(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isWide ? size.width * 0.3 : 24,
+                    vertical: 32,
+                  ),
+                  child: Column(
+                    children: [
+                      _buildLogo(isDark),
+                      const SizedBox(height: 32),
+                      if (_submitted)
+                        _buildSuccessCard(isDark)
+                      else
+                        _buildForm(isDark),
+                    ],
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildSuccessCard() {
+  Widget _buildSuccessCard(bool isDark) {
     return Container(
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [
+        border: Border.all(color: isDark ? AppTheme.borderDark : const Color(0xFFE5E7EB)),
+        boxShadow: isDark ? [] : [
           BoxShadow(
               color: Colors.black.withOpacity(0.06),
               blurRadius: 20,
@@ -148,17 +173,17 @@ class _RegisterPageState extends State<RegisterPage> {
                 color: Color(0xFF10B981), size: 36),
           ),
           const SizedBox(height: 16),
-          const Text('Registration Submitted!',
+          Text('Registration Submitted!',
               style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF111827))),
+                  color: isDark ? Colors.white : const Color(0xFF111827))),
           const SizedBox(height: 8),
-          const Text(
+          Text(
               'Your account is pending admin approval.\nYou\'ll be notified once approved.',
               style: TextStyle(
                   fontSize: 13,
-                  color: Color(0xFF6B7280),
+                  color: isDark ? const Color(0xFF8E9CB8) : const Color(0xFF6B7280),
                   height: 1.5),
               textAlign: TextAlign.center),
           const SizedBox(height: 20),
@@ -166,22 +191,22 @@ class _RegisterPageState extends State<RegisterPage> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF7ED),
+              color: isDark ? const Color(0xFF2C1E0A) : const Color(0xFFFFF7ED),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                  color: const Color(0xFFF59E0B).withOpacity(0.3)),
+                  color: isDark ? const Color(0xFF633B00) : const Color(0xFFF59E0B).withOpacity(0.3)),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.access_time_rounded,
+                const Icon(Icons.access_time_rounded,
                     size: 16, color: Color(0xFFF59E0B)),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                       'Your registration will appear as PENDING in the Teams page until an admin approves it.',
                       style: TextStyle(
                           fontSize: 11,
-                          color: Color(0xFF92400E),
+                          color: isDark ? const Color(0xFFFFD18A) : const Color(0xFF92400E),
                           height: 1.4)),
                 ),
               ],
@@ -213,14 +238,14 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 
-  Widget _buildForm() {
+  Widget _buildForm(bool isDark) {
     return Container(
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [
+        border: Border.all(color: isDark ? AppTheme.borderDark : const Color(0xFFE5E7EB)),
+        boxShadow: isDark ? [] : [
           BoxShadow(
               color: Colors.black.withOpacity(0.06),
               blurRadius: 20,
@@ -232,57 +257,59 @@ class _RegisterPageState extends State<RegisterPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Create Account',
+            Text('Create Account',
                 style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
-                    color: Color(0xFF111827))),
+                    color: isDark ? Colors.white : const Color(0xFF111827))),
             const SizedBox(height: 4),
-            const Text('Register to access the ECRAFTZ CRM platform',
-                style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+            Text('Register to access the ECRAFTZ CRM platform',
+                style: TextStyle(fontSize: 13, color: isDark ? const Color(0xFF8E9CB8) : const Color(0xFF6B7280))),
             const SizedBox(height: 6),
             // Pending notice
             Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF7ED),
+                color: isDark ? const Color(0xFF2C1E0A) : const Color(0xFFFFF7ED),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                    color: const Color(0xFFF59E0B).withOpacity(0.3)),
+                    color: isDark ? const Color(0xFF633B00) : const Color(0xFFF59E0B).withOpacity(0.3)),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.info_outline,
+                  const Icon(Icons.info_outline,
                       size: 14, color: Color(0xFFF59E0B)),
-                  SizedBox(width: 6),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                         'New accounts require admin approval before access.',
                         style: TextStyle(
-                            fontSize: 11, color: Color(0xFF92400E))),
+                            fontSize: 11, color: isDark ? const Color(0xFFFFD18A) : const Color(0xFF92400E))),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 20),
-            _FieldLabel('Full Name'),
+            const _FieldLabel('Full Name'),
             const SizedBox(height: 6),
             TextFormField(
               controller: _nameCtrl,
               decoration:
-                  _inputDec('John Doe', Icons.person_outline_rounded),
+                  _inputDec(context, 'John Doe', Icons.person_outline_rounded),
+              style: TextStyle(color: isDark ? Colors.white : Colors.black),
               validator: (v) =>
                   (v == null || v.isEmpty) ? 'Name required' : null,
             ),
             const SizedBox(height: 14),
-            _FieldLabel('Email Address'),
+            const _FieldLabel('Email Address'),
             const SizedBox(height: 6),
             TextFormField(
               controller: _emailCtrl,
               keyboardType: TextInputType.emailAddress,
               decoration:
-                  _inputDec('you@company.com', Icons.email_outlined),
+                  _inputDec(context, 'you@company.com', Icons.email_outlined),
+              style: TextStyle(color: isDark ? Colors.white : Colors.black),
               validator: (v) {
                 if (v == null || v.isEmpty) return 'Email required';
                 if (!v.contains('@')) return 'Invalid email';
@@ -290,12 +317,12 @@ class _RegisterPageState extends State<RegisterPage> {
               },
             ),
             const SizedBox(height: 14),
-            _FieldLabel('Password'),
+            const _FieldLabel('Password'),
             const SizedBox(height: 6),
             TextFormField(
               controller: _passCtrl,
               obscureText: _obscurePass,
-              decoration: _inputDec('••••••••', Icons.lock_outline_rounded)
+              decoration: _inputDec(context, '••••••••', Icons.lock_outline_rounded)
                   .copyWith(
                 suffixIcon: IconButton(
                   icon: Icon(
@@ -303,12 +330,13 @@ class _RegisterPageState extends State<RegisterPage> {
                         ? Icons.visibility_off_outlined
                         : Icons.visibility_outlined,
                     size: 18,
-                    color: const Color(0xFF9CA3AF),
+                    color: isDark ? Colors.white54 : const Color(0xFF9CA3AF),
                   ),
                   onPressed: () =>
                       setState(() => _obscurePass = !_obscurePass),
                 ),
               ),
+              style: TextStyle(color: isDark ? Colors.white : Colors.black),
               validator: (v) {
                 if (v == null || v.isEmpty) return 'Password required';
                 if (v.length < 6) return 'Minimum 6 characters';
@@ -316,13 +344,13 @@ class _RegisterPageState extends State<RegisterPage> {
               },
             ),
             const SizedBox(height: 14),
-            _FieldLabel('Confirm Password'),
+            const _FieldLabel('Confirm Password'),
             const SizedBox(height: 6),
             TextFormField(
               controller: _confirmCtrl,
               obscureText: _obscureConfirm,
               decoration:
-                  _inputDec('••••••••', Icons.lock_outline_rounded)
+                  _inputDec(context, '••••••••', Icons.lock_outline_rounded)
                       .copyWith(
                 suffixIcon: IconButton(
                   icon: Icon(
@@ -330,12 +358,13 @@ class _RegisterPageState extends State<RegisterPage> {
                         ? Icons.visibility_off_outlined
                         : Icons.visibility_outlined,
                     size: 18,
-                    color: const Color(0xFF9CA3AF),
+                    color: isDark ? Colors.white54 : const Color(0xFF9CA3AF),
                   ),
                   onPressed: () =>
                       setState(() => _obscureConfirm = !_obscureConfirm),
                 ),
               ),
+              style: TextStyle(color: isDark ? Colors.white : Colors.black),
               validator: (v) {
                 if (v == null || v.isEmpty) return 'Please confirm password';
                 if (v != _passCtrl.text) return 'Passwords do not match';
@@ -375,9 +404,9 @@ class _RegisterPageState extends State<RegisterPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text('Already have an account? ',
+                Text('Already have an account? ',
                     style:
-                        TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+                        TextStyle(fontSize: 13, color: isDark ? const Color(0xFF8E9CB8) : const Color(0xFF6B7280))),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
                   child: const Text('Sign In',
@@ -397,30 +426,31 @@ class _RegisterPageState extends State<RegisterPage> {
 
 // ─── PRIVATE HELPERS ─────────────────────────────────────────────────────────
 
-Widget _buildLogo() {
+Widget _buildLogo(bool isDark) {
   return Image.asset(
-    'assets/ecraftzlogodark.png',
+    isDark ? 'assets/ecraftzlogolight.png' : 'assets/ecraftzlogodark.png',
     height: 55,
     fit: BoxFit.contain,
   );
 }
 
-InputDecoration _inputDec(String hint, IconData icon) {
+InputDecoration _inputDec(BuildContext context, String hint, IconData icon) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
   return InputDecoration(
     hintText: hint,
-    hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
-    prefixIcon: Icon(icon, size: 18, color: const Color(0xFF9CA3AF)),
+    hintStyle: TextStyle(color: isDark ? Colors.white38 : const Color(0xFF9CA3AF), fontSize: 13),
+    prefixIcon: Icon(icon, size: 18, color: isDark ? Colors.white38 : const Color(0xFF9CA3AF)),
     filled: true,
-    fillColor: const Color(0xFFF9FAFB),
+    fillColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
     border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+        borderSide: BorderSide(color: isDark ? AppTheme.borderDark : const Color(0xFFE5E7EB))),
     enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+        borderSide: BorderSide(color: isDark ? AppTheme.borderDark : const Color(0xFFE5E7EB))),
     focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
+        borderSide: BorderSide(color: isDark ? AppTheme.primary : const Color(0xFF00BCD4), width: 1.5)),
     errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: const BorderSide(color: Colors.red)),
@@ -437,10 +467,11 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Text(text,
-        style: const TextStyle(
+        style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF374151)));
+            color: isDark ? Colors.white70 : const Color(0xFF374151)));
   }
 }

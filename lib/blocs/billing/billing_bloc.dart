@@ -3,6 +3,8 @@ import 'package:equatable/equatable.dart';
 import '../../models/billing_model.dart';
 import '../../services/supabase_service.dart';
 
+// ─── EVENTS ───────────────────────────────────────────────────────────────────
+
 abstract class BillingEvent extends Equatable {
   const BillingEvent();
   @override
@@ -40,11 +42,16 @@ class SaveGstProfileEvent extends BillingEvent {
   List<Object?> get props => [profile];
 }
 
+// ─── STATE ────────────────────────────────────────────────────────────────────
+
 class BillingState extends Equatable {
   final List<Invoice> invoices;
   final GstProfile gstProfile;
 
-  const BillingState({this.invoices = const [], required this.gstProfile});
+  const BillingState({
+    this.invoices = const [],
+    required this.gstProfile,
+  });
 
   @override
   List<Object?> get props => [invoices, gstProfile];
@@ -57,37 +64,44 @@ class BillingState extends Equatable {
   }
 }
 
+// ─── BLOC ─────────────────────────────────────────────────────────────────────
+
 class BillingBloc extends Bloc<BillingEvent, BillingState> {
   final _client = SupabaseService.client;
 
   BillingBloc() : super(BillingState(gstProfile: GstProfile())) {
+
+    // ── Load invoices with full joins ──────────────────────────────────────────
     on<LoadInvoicesEvent>((event, emit) async {
       try {
+        // Join invoice_items and invoice_taxes for each invoice
         final invoicesRes = await _client
             .from('invoices')
-            .select('*, clients(name), projects(name)')
+            .select('*, invoice_items(*), invoice_taxes(*), clients(name, email, phone, address), projects(name)')
             .isFilter('deleted_at', null)
             .order('created_at', ascending: false);
-            
+
         final gstRes = await _client
             .from('gst_profiles')
             .select()
             .limit(1);
-            
+
         final invoicesList = (invoicesRes as List).map((x) => Invoice.fromJson(x)).toList();
         final gstProfile = (gstRes as List).isNotEmpty ? GstProfile.fromJson(gstRes.first) : GstProfile();
-        
+
         emit(BillingState(invoices: invoicesList, gstProfile: gstProfile));
       } catch (e) {
         emit(state.copyWith());
       }
     });
 
+    // ── Add invoice (insert to invoices + invoice_items + invoice_taxes) ───────
     on<AddInvoiceEvent>((event, emit) async {
       try {
         String? clientId;
         String? projectId;
-        
+
+        // Resolve client ID
         if (event.invoice.clientName.isNotEmpty) {
           final clientsRes = await _client
               .from('clients')
@@ -99,7 +113,8 @@ class BillingBloc extends Bloc<BillingEvent, BillingState> {
             clientId = clientsRes.first['id']?.toString();
           }
         }
-        
+
+        // Resolve project ID
         if (event.invoice.clientEntity.isNotEmpty) {
           final projectsRes = await _client
               .from('projects')
@@ -111,48 +126,111 @@ class BillingBloc extends Bloc<BillingEvent, BillingState> {
             projectId = projectsRes.first['id']?.toString();
           }
         }
-        
-        final Map<String, dynamic> data = event.invoice.toJson();
-        data.remove('id');
-        data['client_id'] = clientId;
-        data['project_id'] = projectId;
-        data['created_at'] = DateTime.now().toUtc().toIso8601String();
-        
-        await _client.from('invoices').insert(data);
+
+        // Build invoices row data
+        final Map<String, dynamic> invData = event.invoice.toInvoiceJson();
+        invData.remove('id');
+        invData['client_id'] = clientId;
+        invData['project_id'] = projectId;
+        invData['created_at'] = DateTime.now().toUtc().toIso8601String();
+
+        // Insert invoice and get back the ID
+        final insertedRes = await _client.from('invoices').insert(invData).select('id').single();
+        final newInvoiceId = insertedRes['id']?.toString();
+
+        if (newInvoiceId != null) {
+          // Insert invoice_items
+          if (event.invoice.items.isNotEmpty) {
+            final itemsData = event.invoice.items.map((item) => item.toJson(invoiceId: newInvoiceId)).toList();
+            await _client.from('invoice_items').insert(itemsData);
+          }
+
+          // Insert invoice_taxes if any
+          if (event.invoice.taxes.isNotEmpty) {
+            final taxesData = event.invoice.taxes.map((tax) => tax.toJson(invoiceId: newInvoiceId)).toList();
+            await _client.from('invoice_taxes').insert(taxesData);
+          }
+
+          // Log to invoice_audit_logs
+          try {
+            await _client.from('invoice_audit_logs').insert({
+              'invoice_id': newInvoiceId,
+              'action': 'created',
+              'new_status': event.invoice.status.name,
+              'created_at': DateTime.now().toUtc().toIso8601String(),
+            });
+          } catch (_) {
+            // Audit log is non-critical, ignore failures
+          }
+        }
+
         add(LoadInvoicesEvent());
       } catch (e) {
-        // handle error
+        // handle error silently
       }
     });
 
+    // ── Update invoice status ──────────────────────────────────────────────────
     on<UpdateInvoiceStatusEvent>((event, emit) async {
       try {
+        final oldStatus = state.invoices.firstWhere((inv) => inv.id == event.id).status;
+
         await _client.from('invoices').update({
           'status': event.status.name,
+          'amount_paid': event.status == InvoiceStatus.paid
+              ? state.invoices.firstWhere((inv) => inv.id == event.id).grossAmount
+              : 0.0,
+          'amount_due': event.status == InvoiceStatus.paid
+              ? 0.0
+              : state.invoices.firstWhere((inv) => inv.id == event.id).grossAmount,
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         }).eq('id', event.id);
+
+        // Log to audit log
+        try {
+          await _client.from('invoice_audit_logs').insert({
+            'invoice_id': event.id,
+            'action': 'status_changed',
+            'old_status': oldStatus.name,
+            'new_status': event.status.name,
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+          });
+        } catch (_) {}
+
         add(LoadInvoicesEvent());
       } catch (e) {
-        // handle error
+        // handle error silently
       }
     });
 
+    // ── Delete invoice (soft delete) ──────────────────────────────────────────
     on<DeleteInvoiceEvent>((event, emit) async {
       try {
         await _client.from('invoices').update({
           'deleted_at': DateTime.now().toUtc().toIso8601String(),
         }).eq('id', event.id);
+
+        // Log audit
+        try {
+          await _client.from('invoice_audit_logs').insert({
+            'invoice_id': event.id,
+            'action': 'deleted',
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+          });
+        } catch (_) {}
+
         add(LoadInvoicesEvent());
       } catch (e) {
-        // handle error
+        // handle error silently
       }
     });
 
+    // ── Save GST profile ──────────────────────────────────────────────────────
     on<SaveGstProfileEvent>((event, emit) async {
       try {
         final gstRes = await _client.from('gst_profiles').select('gstin').limit(1);
         final data = event.profile.toJson();
-        
+
         if ((gstRes as List).isNotEmpty) {
           final oldGstin = gstRes.first['gstin']?.toString();
           await _client.from('gst_profiles').update(data).eq('gstin', oldGstin!);
@@ -161,7 +239,7 @@ class BillingBloc extends Bloc<BillingEvent, BillingState> {
         }
         add(LoadInvoicesEvent());
       } catch (e) {
-        // handle error
+        // handle error silently
       }
     });
   }

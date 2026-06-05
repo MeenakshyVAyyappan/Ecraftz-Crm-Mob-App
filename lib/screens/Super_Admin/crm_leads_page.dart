@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../widgets/app_drawer.dart';
-import '../models/lead_model.dart';
-import '../blocs/lead/lead_bloc.dart';
+import '../../widgets/app_drawer.dart';
+import '../../models/lead_model.dart';
+import '../../blocs/lead/lead_bloc.dart';
+import '../../theme/app_theme.dart';
+import '../../blocs/theme/theme_bloc.dart';
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
@@ -94,6 +96,11 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
     return map;
   }
 
+  Color get _bg => Theme.of(context).scaffoldBackgroundColor;
+  Color get _border => AppTheme.borderOf(context);
+  Color get _textPrimary => AppTheme.textPrimaryOf(context);
+  Color get _textSecondary => AppTheme.textSecondaryOf(context);
+
   @override
   void initState() {
     super.initState();
@@ -153,10 +160,11 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width > 600;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: _bg,
       drawer: AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: (i) {
@@ -165,25 +173,25 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
         },
       ),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
         leading: isWide
             ? null
             : IconButton(
-                icon: const Icon(Icons.menu_rounded, color: Color(0xFF374151)),
+                icon: Icon(Icons.menu_rounded, color: isDark ? Colors.white : const Color(0xFF374151)),
                 onPressed: () => _scaffoldKey.currentState?.openDrawer(),
               ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Lead Management',
+            Text('Lead Management',
                 style: TextStyle(
-                    color: Color(0xFF111827),
+                    color: _textPrimary,
                     fontSize: 18,
                     fontWeight: FontWeight.w700)),
             if (!isWide)
-              const Text('Manage your pipeline',
-                  style: TextStyle(color: Color(0xFF6B7280), fontSize: 11)),
+              Text('Manage your pipeline',
+                  style: TextStyle(color: _textSecondary, fontSize: 11)),
           ],
         ),
         actions: [
@@ -194,6 +202,20 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
             ),
             onPressed: () => setState(() => _isKanban = !_isKanban),
             tooltip: _isKanban ? 'List View' : 'Kanban View',
+          ),
+          BlocBuilder<ThemeBloc, ThemeState>(
+            builder: (context, themeState) {
+              final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+              return IconButton(
+                icon: Icon(
+                  isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  color: isDarkTheme ? Colors.white : const Color(0xFF374151),
+                ),
+                onPressed: () {
+                  context.read<ThemeBloc>().add(ToggleThemeEvent());
+                },
+              );
+            },
           ),
           if (isWide)
             Padding(
@@ -221,7 +243,7 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: const Color(0xFFE5E7EB)),
+          child: Container(height: 1, color: _border),
         ),
       ),
       body: BlocBuilder<LeadBloc, LeadState>(
@@ -232,32 +254,33 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
             children: [
               // Search bar
               Container(
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.surface,
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
                 child: TextField(
                   controller: _searchController,
                   onChanged: (v) => setState(() => _searchQuery = v),
+                  style: TextStyle(color: _textPrimary, fontSize: 13),
                   decoration: InputDecoration(
                     hintText: 'Search leads by name, email or company…',
-                    hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
-                    prefixIcon: const Icon(Icons.search, color: Color(0xFF9CA3AF), size: 20),
+                    hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 13),
+                    prefixIcon: Icon(Icons.search, color: AppTheme.textMutedOf(context), size: 20),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(Icons.close, size: 18, color: Color(0xFF6B7280)),
+                            icon: Icon(Icons.close, size: 18, color: _textSecondary),
                             onPressed: () {
                               _searchController.clear();
                               setState(() => _searchQuery = '');
                             })
                         : null,
                     filled: true,
-                    fillColor: const Color(0xFFF9FAFB),
+                    fillColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                      borderSide: BorderSide(color: _border),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                      borderSide: BorderSide(color: _border),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
@@ -284,13 +307,14 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
     final total = filteredLeads.length;
     final totalValue = filteredLeads.fold<double>(0, (s, l) => s + l.value);
     final converted = filteredLeads.where((l) => l.status == LeadStatus.convertedClient).length;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: Row(
         children: [
-          _statChip('Total Leads', '$total', const Color(0xFF6B7280)),
+          _statChip('Total Leads', '$total', isDark ? Colors.white70 : const Color(0xFF6B7280)),
           const SizedBox(width: 12),
           _statChip('Pipeline Value', '₹${totalValue.toStringAsFixed(0)}', const Color(0xFF00BCD4)),
           const SizedBox(width: 12),
@@ -315,7 +339,7 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
               style: TextStyle(
                   color: color, fontSize: 14, fontWeight: FontWeight.w700)),
           Text(label,
-              style: const TextStyle(color: Color(0xFF6B7280), fontSize: 10)),
+              style: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 10)),
         ],
       ),
     );
@@ -352,8 +376,8 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
 
   Widget _buildList(List<Lead> leads) {
     if (leads.isEmpty) {
-      return const Center(
-        child: Text('No leads found', style: TextStyle(color: Color(0xFF6B7280))),
+      return Center(
+        child: Text('No leads found', style: TextStyle(color: AppTheme.textMutedOf(context))),
       );
     }
     return ListView.separated(
@@ -366,7 +390,7 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
             padding: const EdgeInsets.only(top: 8),
             child: Text(
               'Showing 1–${leads.length} of ${leads.length} leads',
-              style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 12),
+              style: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 12),
               textAlign: TextAlign.center,
             ),
           );
@@ -443,6 +467,7 @@ class _KanbanColumnState extends State<_KanbanColumn> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return DragTarget<Lead>(
       onWillAccept: (lead) {
         return lead != null && lead.status != widget.status;
@@ -490,9 +515,9 @@ class _KanbanColumnState extends State<_KanbanColumn> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: isDark ? AppTheme.bgCardDark : Colors.white,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                  border: Border.all(color: AppTheme.borderOf(context)),
                 ),
                 child: Row(
                   children: [
@@ -507,10 +532,10 @@ class _KanbanColumnState extends State<_KanbanColumn> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(widget.status.label,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF374151),
+                              color: AppTheme.textPrimaryOf(context),
                               letterSpacing: 0.3)),
                     ),
                     Container(
@@ -534,15 +559,15 @@ class _KanbanColumnState extends State<_KanbanColumn> {
                 child: widget.leads.isEmpty
                     ? Container(
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.5),
+                          color: (isDark ? AppTheme.bgCardDark : Colors.white).withOpacity(0.5),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
-                              color: const Color(0xFFE5E7EB), style: BorderStyle.solid),
+                              color: AppTheme.borderOf(context), style: BorderStyle.solid),
                         ),
-                        child: const Center(
+                        child: Center(
                           child: Text('No leads',
                               style: TextStyle(
-                                  color: Color(0xFFD1D5DB), fontSize: 12)),
+                                  color: AppTheme.textMutedOf(context), fontSize: 12)),
                         ),
                       )
                     : ListView.separated(
@@ -587,13 +612,14 @@ class _KanbanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardContent = Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [
+        border: Border.all(color: AppTheme.borderOf(context)),
+        boxShadow: isDark ? [] : [
           BoxShadow(
             color: Colors.black.withOpacity(0.04),
             blurRadius: 4,
@@ -613,16 +639,16 @@ class _KanbanCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(lead.fullName,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF111827)),
+                            color: AppTheme.textPrimaryOf(context)),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis),
                     if (lead.companyName.isNotEmpty)
                       Text('@ ${lead.companyName.toLowerCase()}',
-                          style: const TextStyle(
-                              fontSize: 11, color: Color(0xFF6B7280)),
+                          style: TextStyle(
+                              fontSize: 11, color: AppTheme.textSecondaryOf(context)),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
                   ],
@@ -647,14 +673,14 @@ class _KanbanCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
+                  color: isDark ? AppTheme.bgBaseDark : const Color(0xFFE5E7EB),
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: const Text('GENERAL',
+                child: Text('GENERAL',
                     style: TextStyle(
                         fontSize: 9,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF6B7280),
+                        color: AppTheme.textSecondaryOf(context),
                         letterSpacing: 0.5)),
               ),
               const SizedBox(width: 6),
@@ -663,14 +689,14 @@ class _KanbanCard extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFECFDF5),
+                    color: isDark ? const Color(0xFF064E3B) : const Color(0xFFECFDF5),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text('₹${lead.value.toStringAsFixed(0)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF059669))),
+                          color: isDark ? const Color(0xFFA7F3D0) : const Color(0xFF059669))),
                 ),
             ],
           ),
@@ -722,15 +748,16 @@ class _LeadListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? AppTheme.bgCardDark : Colors.white,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-          boxShadow: [
+          border: Border.all(color: AppTheme.borderOf(context)),
+          boxShadow: isDark ? [] : [
             BoxShadow(
               color: Colors.black.withOpacity(0.03),
               blurRadius: 3,
@@ -747,13 +774,13 @@ class _LeadListTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(lead.fullName,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF111827))),
+                          color: AppTheme.textPrimaryOf(context))),
                   Text(lead.email,
-                      style: const TextStyle(
-                          fontSize: 11, color: Color(0xFF6B7280)),
+                      style: TextStyle(
+                          fontSize: 11, color: AppTheme.textSecondaryOf(context)),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                 ],
@@ -766,11 +793,11 @@ class _LeadListTile extends StatelessWidget {
                 _StatusBadge(status: lead.status),
                 if (lead.value > 0) ...[
                   const SizedBox(height: 4),
-                  Text('\$${lead.value.toStringAsFixed(0)}',
-                      style: const TextStyle(
+                  Text('₹${lead.value.toStringAsFixed(0)}',
+                      style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF374151))),
+                          color: AppTheme.textPrimaryOf(context))),
                 ],
               ],
             ),
@@ -811,14 +838,21 @@ class _LeadDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppTheme.bgCardDark : Colors.white;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    final textMuted = AppTheme.textMutedOf(context);
+    final border = AppTheme.borderOf(context);
+
     return DraggableScrollableSheet(
       initialChildSize: 0.7,
       maxChildSize: 0.95,
       minChildSize: 0.5,
       builder: (_, controller) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(
           children: [
@@ -827,7 +861,7 @@ class _LeadDetailSheet extends StatelessWidget {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: const Color(0xFFE5E7EB),
+                color: border,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -844,17 +878,17 @@ class _LeadDetailSheet extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(lead.fullName,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 17,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF111827))),
+                                color: textPrimary)),
                         if (lead.jobTitle.isNotEmpty || lead.companyName.isNotEmpty)
                           Text(
                             [lead.jobTitle, lead.companyName]
                                 .where((s) => s.isNotEmpty)
                                 .join(' @ '),
-                            style: const TextStyle(
-                                fontSize: 12, color: Color(0xFF6B7280)),
+                            style: TextStyle(
+                                fontSize: 12, color: textSecondary),
                           ),
                       ],
                     ),
@@ -872,7 +906,7 @@ class _LeadDetailSheet extends StatelessWidget {
                 ],
               ),
             ),
-            const Divider(height: 24),
+            Divider(height: 24, color: border),
             Expanded(
               child: ListView(
                 controller: controller,
@@ -881,11 +915,11 @@ class _LeadDetailSheet extends StatelessWidget {
                   _StatusBadge(status: lead.status, large: true),
                   const SizedBox(height: 16),
                   // Change status
-                  const Text('Move to Stage',
+                  Text('Move to Stage',
                       style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF6B7280),
+                          color: textSecondary,
                           letterSpacing: 0.5)),
                   const SizedBox(height: 8),
                   Wrap(
@@ -970,12 +1004,13 @@ class _DetailSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
+        color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: AppTheme.borderOf(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -985,10 +1020,10 @@ class _DetailSection extends StatelessWidget {
               Icon(icon, size: 14, color: const Color(0xFF00BCD4)),
               const SizedBox(width: 6),
               Text(title,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF374151),
+                      color: AppTheme.textPrimaryOf(context),
                       letterSpacing: 0.3)),
             ],
           ),
@@ -1013,14 +1048,14 @@ class _DetailRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Icon(icon, size: 14, color: const Color(0xFF9CA3AF)),
+          Icon(icon, size: 14, color: AppTheme.textMutedOf(context)),
           const SizedBox(width: 8),
           Text('$label: ',
-              style: const TextStyle(
-                  fontSize: 12, color: Color(0xFF6B7280), fontWeight: FontWeight.w500)),
+              style: TextStyle(
+                  fontSize: 12, color: AppTheme.textSecondaryOf(context), fontWeight: FontWeight.w500)),
           Expanded(
             child: Text(value,
-                style: const TextStyle(fontSize: 12, color: Color(0xFF111827)),
+                style: TextStyle(fontSize: 12, color: AppTheme.textPrimaryOf(context)),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis),
           ),
@@ -1094,7 +1129,14 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppTheme.bgCardDark : Colors.white;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    final border = AppTheme.borderOf(context);
+
     return Dialog(
+      backgroundColor: bg,
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: SingleChildScrollView(
@@ -1111,13 +1153,13 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
                   children: [
                     Expanded(
                       child: Text(isEdit ? 'Edit Lead' : 'Add New Lead',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF111827))),
+                              color: textPrimary)),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close, size: 20),
+                      icon: Icon(Icons.close, size: 20, color: textSecondary),
                       onPressed: () => Navigator.pop(context),
                       padding: EdgeInsets.zero,
                     ),
@@ -1125,7 +1167,7 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
                 ),
                 Text(
                   isEdit ? 'Update lead details.' : 'Fill in the details to add a new lead to your CRM.',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                  style: TextStyle(fontSize: 12, color: textSecondary),
                 ),
                 const SizedBox(height: 20),
                 _sectionHeader(Icons.person_outline, 'CONTACT INFORMATION'),
@@ -1170,29 +1212,30 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Lead Status',
+                          Text('Lead Status',
                               style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
-                                  color: Color(0xFF374151))),
+                                  color: textPrimary)),
                           const SizedBox(height: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10),
                             decoration: BoxDecoration(
-                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                              border: Border.all(color: border),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<LeadStatus>(
                                 value: _status,
                                 isExpanded: true,
-                                style: const TextStyle(
-                                    fontSize: 13, color: Color(0xFF111827)),
+                                dropdownColor: bg,
+                                style: TextStyle(
+                                    fontSize: 13, color: textPrimary),
                                 items: LeadStatus.values.map((s) {
                                   return DropdownMenuItem(
                                     value: s,
                                     child: Text(s.label,
-                                        style: const TextStyle(fontSize: 12)),
+                                        style: TextStyle(fontSize: 12, color: textPrimary)),
                                   );
                                 }).toList(),
                                 onChanged: (v) =>
@@ -1208,30 +1251,31 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Acquisition Source',
+                          Text('Acquisition Source',
                               style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
-                                  color: Color(0xFF374151))),
+                                  color: textPrimary)),
                           const SizedBox(height: 6),
                           Container(
                             padding:
                                 const EdgeInsets.symmetric(horizontal: 10),
                             decoration: BoxDecoration(
-                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                              border: Border.all(color: border),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<AcquisitionSource>(
                                 value: _source,
                                 isExpanded: true,
-                                style: const TextStyle(
-                                    fontSize: 13, color: Color(0xFF111827)),
+                                dropdownColor: bg,
+                                style: TextStyle(
+                                    fontSize: 13, color: textPrimary),
                                 items: AcquisitionSource.values.map((s) {
                                   return DropdownMenuItem(
                                     value: s,
                                     child: Text(s.label,
-                                        style: const TextStyle(fontSize: 12)),
+                                        style: TextStyle(fontSize: 12, color: textPrimary)),
                                   );
                                 }).toList(),
                                 onChanged: (v) => setState(() => _source = v!),
@@ -1282,10 +1326,10 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
         Icon(icon, size: 14, color: const Color(0xFF00BCD4)),
         const SizedBox(width: 6),
         Text(text,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF374151),
+                color: AppTheme.textPrimaryOf(context),
                 letterSpacing: 0.5)),
       ],
     );
@@ -1299,29 +1343,31 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
     TextInputType keyboardType = TextInputType.text,
     String? Function(String?)? validator,
   }) {
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final border = AppTheme.borderOf(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF374151))),
+                color: textPrimary)),
         const SizedBox(height: 5),
         TextFormField(
           controller: controller,
           keyboardType: keyboardType,
-          style: const TextStyle(fontSize: 13),
+          style: TextStyle(fontSize: 13, color: textPrimary),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
+            hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 13),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+              borderSide: BorderSide(color: border),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+              borderSide: BorderSide(color: border),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),

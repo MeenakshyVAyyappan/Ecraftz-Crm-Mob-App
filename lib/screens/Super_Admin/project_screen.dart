@@ -1,9 +1,11 @@
 // projects_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../blocs/project/project_bloc.dart';
-import '../models/project_model.dart';
-import '../widgets/app_drawer.dart';
+import '../../blocs/project/project_bloc.dart';
+import '../../models/project_model.dart';
+import '../../widgets/app_drawer.dart';
+import '../../theme/app_theme.dart';
+import '../../blocs/theme/theme_bloc.dart';
 
 // ─── MAIN PROJECTS PAGE ───────────────────────────────────────────────────────
 
@@ -29,10 +31,11 @@ class _ProjectsPageState extends State<ProjectsPage>
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   static const Color _primary = Color(0xFF0EA5E9);
-  static const Color _bg = Color(0xFFF8FAFC);
-  static const Color _border = Color(0xFFE2E8F0);
-  static const Color _textPrimary = Color(0xFF0F172A);
-  static const Color _textSecondary = Color(0xFF64748B);
+
+  Color get _bg => Theme.of(context).scaffoldBackgroundColor;
+  Color get _border => AppTheme.borderOf(context);
+  Color get _textPrimary => AppTheme.textPrimaryOf(context);
+  Color get _textSecondary => AppTheme.textSecondaryOf(context);
 
   @override
   void initState() {
@@ -65,10 +68,14 @@ class _ProjectsPageState extends State<ProjectsPage>
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width > 600;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
 
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: _bg,
+      backgroundColor: bg,
       drawer: AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: (i) {
@@ -77,15 +84,15 @@ class _ProjectsPageState extends State<ProjectsPage>
         },
       ),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
         leading: isWide
             ? null
             : IconButton(
-                icon: const Icon(Icons.menu_rounded, color: Color(0xFF374151)),
+                icon: Icon(Icons.menu_rounded, color: isDark ? Colors.white : const Color(0xFF374151)),
                 onPressed: () => _scaffoldKey.currentState?.openDrawer(),
               ),
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -93,15 +100,31 @@ class _ProjectsPageState extends State<ProjectsPage>
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF0F172A),
+                color: textPrimary,
               ),
             ),
             Text(
               'Manage active projects and monitor growth.',
-              style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+              style: TextStyle(fontSize: 11, color: textSecondary),
             ),
           ],
         ),
+        actions: [
+          BlocBuilder<ThemeBloc, ThemeState>(
+            builder: (context, themeState) {
+              final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+              return IconButton(
+                icon: Icon(
+                  isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  color: isDarkTheme ? Colors.white : const Color(0xFF374151),
+                ),
+                onPressed: () {
+                  context.read<ThemeBloc>().add(ToggleThemeEvent());
+                },
+              );
+            },
+          ),
+        ],
       ),
       body: SafeArea(
         child: BlocBuilder<ProjectBloc, ProjectState>(
@@ -142,7 +165,7 @@ class _ProjectsPageState extends State<ProjectsPage>
       label: const Text('Bulk Import'),
       style: OutlinedButton.styleFrom(
         foregroundColor: _textPrimary,
-        side: const BorderSide(color: _border),
+        side: BorderSide(color: _border),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
       ),
@@ -226,8 +249,8 @@ class _ProjectsPageState extends State<ProjectsPage>
                   decoration: InputDecoration(
                     hintText: 'Search projects...',
                     hintStyle:
-                        const TextStyle(fontSize: 13, color: _textSecondary),
-                    prefixIcon: const Icon(Icons.search,
+                        TextStyle(fontSize: 13, color: _textSecondary),
+                    prefixIcon: Icon(Icons.search,
                         size: 18, color: _textSecondary),
                     border: InputBorder.none,
                     contentPadding:
@@ -266,8 +289,8 @@ class _ProjectsPageState extends State<ProjectsPage>
                 decoration: InputDecoration(
                   hintText: 'Search projects...',
                   hintStyle:
-                      const TextStyle(fontSize: 13, color: _textSecondary),
-                  prefixIcon: const Icon(Icons.search,
+                      TextStyle(fontSize: 13, color: _textSecondary),
+                  prefixIcon: Icon(Icons.search,
                       size: 18, color: _textSecondary),
                   border: InputBorder.none,
                   contentPadding:
@@ -443,17 +466,20 @@ class _TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.transparent,
+          color: selected 
+              ? (isDark ? AppTheme.bgCardDark : Colors.white) 
+              : Colors.transparent,
           border: selected
-              ? Border.all(color: const Color(0xFFE2E8F0))
+              ? Border.all(color: AppTheme.borderOf(context))
               : Border.all(color: Colors.transparent),
           borderRadius: BorderRadius.circular(8),
-          boxShadow: selected
+          boxShadow: selected && !isDark
               ? [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.06),
@@ -469,8 +495,8 @@ class _TabButton extends StatelessWidget {
             fontSize: 12,
             fontWeight: FontWeight.w600,
             color: selected
-                ? const Color(0xFF0F172A)
-                : const Color(0xFF64748B),
+                ? AppTheme.textPrimaryOf(context)
+                : AppTheme.textSecondaryOf(context),
             letterSpacing: 0.4,
           ),
         ),
@@ -489,33 +515,35 @@ class _StatusDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
+        border: Border.all(color: AppTheme.borderOf(context)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<ProjectStatus?>(
           value: selected,
           isExpanded: true,
-          hint: const Text('All Status',
-              style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+          dropdownColor: isDark ? AppTheme.bgCardDark : Colors.white,
+          hint: Text('All Status',
+              style: TextStyle(fontSize: 13, color: AppTheme.textSecondaryOf(context))),
           icon: const Icon(Icons.keyboard_arrow_down, size: 18),
           onChanged: onChanged,
           items: [
-            const DropdownMenuItem<ProjectStatus?>(
+            DropdownMenuItem<ProjectStatus?>(
               value: null,
-              child: Text('All Status', style: TextStyle(fontSize: 13)),
+              child: Text('All Status', style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context))),
             ),
             ...ProjectStatus.values.map(
               (s) => DropdownMenuItem(
                 value: s,
                 child: Text(
                   s.label[0].toUpperCase() + s.label.substring(1),
-                  style: const TextStyle(fontSize: 13),
+                  style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
                 ),
               ),
             ),
@@ -536,10 +564,11 @@ class _ViewToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
+        border: Border.all(color: AppTheme.borderOf(context)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -584,6 +613,7 @@ class _ToggleIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -603,7 +633,7 @@ class _ToggleIcon extends StatelessWidget {
           size: 18,
           color: selected
               ? const Color(0xFF0EA5E9)
-              : const Color(0xFF94A3B8),
+              : AppTheme.textMutedOf(context),
         ),
       ),
     );
@@ -619,12 +649,13 @@ class _ProjectCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
+        border: Border.all(color: AppTheme.borderOf(context)),
+        boxShadow: isDark ? [] : [
           BoxShadow(
             color: Colors.black.withOpacity(0.04),
             blurRadius: 8,
@@ -642,8 +673,9 @@ class _ProjectCard extends StatelessWidget {
                 _StatusBadge(status: project.status),
                 const Spacer(),
                 PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_horiz, size: 18, color: Color(0xFF94A3B8)),
+                  icon: Icon(Icons.more_horiz, size: 18, color: AppTheme.textMutedOf(context)),
                   padding: EdgeInsets.zero,
+                  color: isDark ? AppTheme.bgCardDark : Colors.white,
                   onSelected: (value) {
                     if (value == 'delete') {
                       context.read<ProjectBloc>().add(DeleteProjectEvent(project.id));
@@ -675,7 +707,7 @@ class _ProjectCard extends StatelessWidget {
                   itemBuilder: (context) => [
                     PopupMenuItem(
                       value: 'archive',
-                      child: Text(project.isArchived ? 'Unarchive' : 'Archive'),
+                      child: Text(project.isArchived ? 'Unarchive' : 'Archive', style: TextStyle(color: AppTheme.textPrimaryOf(context))),
                     ),
                     const PopupMenuItem(
                       value: 'delete',
@@ -688,10 +720,10 @@ class _ProjectCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               project.name,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF0F172A),
+                color: AppTheme.textPrimaryOf(context),
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -701,46 +733,46 @@ class _ProjectCard extends StatelessWidget {
               project.clientName.isEmpty
                   ? 'No Client Assigned'
                   : project.clientName,
-              style: const TextStyle(
-                  fontSize: 12, color: Color(0xFF94A3B8)),
+              style: TextStyle(
+                  fontSize: 12, color: AppTheme.textSecondaryOf(context)),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
             const Spacer(),
             Row(
               children: [
-                const Icon(Icons.calendar_today_outlined,
-                    size: 13, color: Color(0xFF94A3B8)),
+                Icon(Icons.calendar_today_outlined,
+                    size: 13, color: AppTheme.textSecondaryOf(context)),
                 const SizedBox(width: 4),
                 Text(
                   project.deadline ?? 'No deadline',
-                  style: const TextStyle(
-                      fontSize: 11, color: Color(0xFF94A3B8)),
+                  style: TextStyle(
+                      fontSize: 11, color: AppTheme.textSecondaryOf(context)),
                 ),
                 const Spacer(),
-                const Icon(Icons.check_box_outlined,
-                    size: 13, color: Color(0xFF94A3B8)),
+                Icon(Icons.check_box_outlined,
+                    size: 13, color: AppTheme.textSecondaryOf(context)),
                 const SizedBox(width: 4),
                 Text(
                   '${project.completedTasks}/${project.totalTasks} Tasks',
-                  style: const TextStyle(
-                      fontSize: 11, color: Color(0xFF94A3B8)),
+                  style: TextStyle(
+                      fontSize: 11, color: AppTheme.textSecondaryOf(context)),
                 ),
               ],
             ),
             const SizedBox(height: 6),
             Row(
               children: [
-                const Text('Progress',
+                Text('Progress',
                     style: TextStyle(
-                        fontSize: 11, color: Color(0xFF64748B))),
+                        fontSize: 11, color: AppTheme.textSecondaryOf(context))),
                 const Spacer(),
                 Text(
                   '${project.progress.toInt()}%',
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF64748B)),
+                      color: AppTheme.textSecondaryOf(context)),
                 ),
               ],
             ),
@@ -749,7 +781,7 @@ class _ProjectCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
                 value: project.progress / 100,
-                backgroundColor: const Color(0xFFE2E8F0),
+                backgroundColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFE2E8F0),
                 valueColor: const AlwaysStoppedAnimation<Color>(
                     Color(0xFF0EA5E9)),
                 minHeight: 5,
@@ -762,30 +794,30 @@ class _ProjectCard extends StatelessWidget {
                   width: 26,
                   height: 26,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0),
+                    color: isDark ? AppTheme.bgBaseDark : const Color(0xFFE2E8F0),
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 1.5),
+                    border: Border.all(color: isDark ? AppTheme.borderDark : Colors.white, width: 1.5),
                   ),
-                  child: const Icon(Icons.person_outline,
-                      size: 14, color: Color(0xFF94A3B8)),
+                  child: Icon(Icons.person_outline,
+                      size: 14, color: AppTheme.textSecondaryOf(context)),
                 ),
                 const Spacer(),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    const Text(
+                    Text(
                       'TEAM LEAD',
                       style: TextStyle(
                           fontSize: 9,
-                          color: Color(0xFF94A3B8),
+                          color: AppTheme.textMutedOf(context),
                           letterSpacing: 0.5),
                     ),
                     Text(
                       project.teamLead?.toUpperCase() ?? 'UNASSIGNED',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF64748B),
+                        color: AppTheme.textSecondaryOf(context),
                         letterSpacing: 0.3,
                       ),
                       maxLines: 1,
@@ -811,12 +843,13 @@ class _ProjectListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: AppTheme.borderOf(context)),
       ),
       child: Row(
         children: [
@@ -845,10 +878,10 @@ class _ProjectListTile extends StatelessWidget {
               children: [
                 Text(
                   project.name,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
-                    color: Color(0xFF0F172A),
+                    color: AppTheme.textPrimaryOf(context),
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -857,8 +890,8 @@ class _ProjectListTile extends StatelessWidget {
                   project.clientName.isEmpty
                       ? 'No Client Assigned'
                       : project.clientName,
-                  style: const TextStyle(
-                      fontSize: 12, color: Color(0xFF94A3B8)),
+                  style: TextStyle(
+                      fontSize: 12, color: AppTheme.textSecondaryOf(context)),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -872,8 +905,8 @@ class _ProjectListTile extends StatelessWidget {
             children: [
               Text(
                 '${project.completedTasks}/${project.totalTasks} Tasks',
-                style: const TextStyle(
-                    fontSize: 11, color: Color(0xFF94A3B8)),
+                style: TextStyle(
+                    fontSize: 11, color: AppTheme.textSecondaryOf(context)),
               ),
               Text(
                 '${project.progress.toInt()}%',
@@ -886,8 +919,9 @@ class _ProjectListTile extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, size: 18, color: Color(0xFF94A3B8)),
+            icon: Icon(Icons.more_vert, size: 18, color: AppTheme.textMutedOf(context)),
             padding: EdgeInsets.zero,
+            color: isDark ? AppTheme.bgCardDark : Colors.white,
             onSelected: (value) {
               if (value == 'delete') {
                 context.read<ProjectBloc>().add(DeleteProjectEvent(project.id));
@@ -919,7 +953,7 @@ class _ProjectListTile extends StatelessWidget {
             itemBuilder: (context) => [
               PopupMenuItem(
                 value: 'archive',
-                child: Text(project.isArchived ? 'Unarchive' : 'Archive'),
+                child: Text(project.isArchived ? 'Unarchive' : 'Archive', style: TextStyle(color: AppTheme.textPrimaryOf(context))),
               ),
               const PopupMenuItem(
                 value: 'delete',
@@ -983,9 +1017,9 @@ class _CreateProjectModalState extends State<_CreateProjectModal> {
   DateTime? _deadline;
 
   static const Color _primary = Color(0xFF0EA5E9);
-  static const Color _border = Color(0xFFE2E8F0);
-  static const Color _textPrimary = Color(0xFF0F172A);
-  static const Color _textSecondary = Color(0xFF64748B);
+  Color get _border => AppTheme.borderOf(context);
+  Color get _textPrimary => AppTheme.textPrimaryOf(context);
+  Color get _textSecondary => AppTheme.textSecondaryOf(context);
 
   final List<String> _categories = [
     'Software', 'Design', 'Marketing', 'Finance', 'HR', 'Operations'
@@ -1004,11 +1038,13 @@ class _CreateProjectModalState extends State<_CreateProjectModal> {
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final isWide = MediaQuery.of(context).size.width > 600;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final projectNameField = _FormField(
       label: 'PROJECT NAME',
       child: TextField(
         controller: _nameController,
+        style: TextStyle(color: _textPrimary),
         decoration: _inputDecoration('e.g. Website Redesign'),
       ),
     );
@@ -1018,9 +1054,11 @@ class _CreateProjectModalState extends State<_CreateProjectModal> {
       child: DropdownButtonFormField<String>(
         value: _category,
         isExpanded: true,
+        dropdownColor: isDark ? AppTheme.bgCardDark : Colors.white,
+        style: TextStyle(color: _textPrimary),
         decoration: _inputDecoration(''),
         items: _categories
-            .map((c) => DropdownMenuItem(value: c, child: Text(c, overflow: TextOverflow.ellipsis)))
+            .map((c) => DropdownMenuItem(value: c, child: Text(c, overflow: TextOverflow.ellipsis, style: TextStyle(color: _textPrimary))))
             .toList(),
         onChanged: (v) => setState(() => _category = v!),
       ),
@@ -1031,10 +1069,12 @@ class _CreateProjectModalState extends State<_CreateProjectModal> {
       child: DropdownButtonFormField<String?>(
         value: _client,
         isExpanded: true,
+        dropdownColor: isDark ? AppTheme.bgCardDark : Colors.white,
+        style: TextStyle(color: _textPrimary),
         decoration: _inputDecoration('Select a client'),
         items: [
-          const DropdownMenuItem(value: null, child: Text('Select a client', overflow: TextOverflow.ellipsis)),
-          ..._clients.map((c) => DropdownMenuItem(value: c, child: Text(c, overflow: TextOverflow.ellipsis))),
+          DropdownMenuItem(value: null, child: Text('Select a client', overflow: TextOverflow.ellipsis, style: TextStyle(color: _textSecondary))),
+          ..._clients.map((c) => DropdownMenuItem(value: c, child: Text(c, overflow: TextOverflow.ellipsis, style: TextStyle(color: _textPrimary)))),
         ],
         onChanged: (v) => setState(() => _client = v),
       ),
@@ -1045,10 +1085,12 @@ class _CreateProjectModalState extends State<_CreateProjectModal> {
       child: DropdownButtonFormField<String?>(
         value: _department,
         isExpanded: true,
+        dropdownColor: isDark ? AppTheme.bgCardDark : Colors.white,
+        style: TextStyle(color: _textPrimary),
         decoration: _inputDecoration('Select a department'),
         items: [
-          const DropdownMenuItem(value: null, child: Text('Select a department', overflow: TextOverflow.ellipsis)),
-          ..._departments.map((d) => DropdownMenuItem(value: d, child: Text(d, overflow: TextOverflow.ellipsis))),
+          DropdownMenuItem(value: null, child: Text('Select a department', overflow: TextOverflow.ellipsis, style: TextStyle(color: _textSecondary))),
+          ..._departments.map((d) => DropdownMenuItem(value: d, child: Text(d, overflow: TextOverflow.ellipsis, style: TextStyle(color: _textPrimary)))),
         ],
         onChanged: (v) => setState(() => _department = v),
       ),
@@ -1059,6 +1101,7 @@ class _CreateProjectModalState extends State<_CreateProjectModal> {
       child: TextField(
         controller: _descController,
         maxLines: 3,
+        style: TextStyle(color: _textPrimary),
         decoration: _inputDecoration(''),
       ),
     );
@@ -1068,6 +1111,8 @@ class _CreateProjectModalState extends State<_CreateProjectModal> {
       child: DropdownButtonFormField<ProjectStatus>(
         value: _phase,
         isExpanded: true,
+        dropdownColor: isDark ? AppTheme.bgCardDark : Colors.white,
+        style: TextStyle(color: _textPrimary),
         decoration: _inputDecoration(''),
         items: ProjectStatus.values
             .map((s) => DropdownMenuItem(
@@ -1075,6 +1120,7 @@ class _CreateProjectModalState extends State<_CreateProjectModal> {
                 child: Text(
                   s.label[0].toUpperCase() + s.label.substring(1),
                   overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: _textPrimary),
                 )))
             .toList(),
         onChanged: (v) => setState(() => _phase = v!),
@@ -1101,6 +1147,7 @@ class _CreateProjectModalState extends State<_CreateProjectModal> {
           decoration: BoxDecoration(
             border: Border.all(color: _border),
             borderRadius: BorderRadius.circular(8),
+            color: isDark ? AppTheme.bgBaseDark : Colors.white,
           ),
           child: Row(
             children: [
@@ -1142,6 +1189,7 @@ class _CreateProjectModalState extends State<_CreateProjectModal> {
           decoration: BoxDecoration(
             border: Border.all(color: _border),
             borderRadius: BorderRadius.circular(8),
+            color: isDark ? AppTheme.bgBaseDark : Colors.white,
           ),
           child: Row(
             children: [
@@ -1168,10 +1216,12 @@ class _CreateProjectModalState extends State<_CreateProjectModal> {
       child: DropdownButtonFormField<String?>(
         value: _teamLead,
         isExpanded: true,
+        dropdownColor: isDark ? AppTheme.bgCardDark : Colors.white,
+        style: TextStyle(color: _textPrimary),
         decoration: _inputDecoration('Select Team lead'),
         items: [
-          const DropdownMenuItem(value: null, child: Text('Select Team lead', overflow: TextOverflow.ellipsis)),
-          ..._teamLeads.map((t) => DropdownMenuItem(value: t, child: Text(t, overflow: TextOverflow.ellipsis))),
+          DropdownMenuItem(value: null, child: Text('Select Team lead', overflow: TextOverflow.ellipsis, style: TextStyle(color: _textSecondary))),
+          ..._teamLeads.map((t) => DropdownMenuItem(value: t, child: Text(t, overflow: TextOverflow.ellipsis, style: TextStyle(color: _textPrimary)))),
         ],
         onChanged: (v) => setState(() => _teamLead = v),
       ),
@@ -1229,131 +1279,150 @@ class _CreateProjectModalState extends State<_CreateProjectModal> {
             ],
           );
 
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: screenHeight * 0.90 - MediaQuery.of(context).viewInsets.bottom,
-      ),
+    return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        children: [
-          // Handle
-          Center(
-            child: Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE2E8F0),
-                borderRadius: BorderRadius.circular(2),
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: screenHeight * 0.90 - MediaQuery.of(context).viewInsets.bottom,
+        ),
+        decoration: BoxDecoration(
+          color: isDark ? AppTheme.bgCardDark : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: _border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
-          // Header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Create New Project',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: _textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Add a new project to your workspace to start tracking tasks and milestones.',
-                        style: TextStyle(fontSize: 11, color: _textSecondary),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close, size: 22),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 24),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Row(
                 children: [
-                  _SectionHeader(
-                    icon: Icons.business_center_outlined,
-                    label: 'PROJECT OVERVIEW',
-                    color: _primary,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Create New Project',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: _textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Add a new project to your workspace to start tracking tasks and milestones.',
+                          style: TextStyle(fontSize: 11, color: _textSecondary),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 14),
-                  overviewSection,
-                  const SizedBox(height: 12),
-                  descriptionField,
-                  const SizedBox(height: 20),
-                  _SectionHeader(
-                    icon: Icons.calendar_month_outlined,
-                    label: 'TIMELINE & STATUS',
-                    color: const Color(0xFFF59E0B),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(Icons.close, size: 22, color: _textPrimary),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                   ),
-                  const SizedBox(height: 14),
-                  timelineSection,
-                  const SizedBox(height: 20),
-                  _SectionHeader(
-                    icon: Icons.group_outlined,
-                    label: 'TEAM ASSIGNMENT',
-                    color: const Color(0xFF6366F1),
-                  ),
-                  const SizedBox(height: 14),
-                  projectLeadField,
-                  const SizedBox(height: 32),
                 ],
               ),
             ),
-          ),
-          // Submit Button
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-            child: SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: const Text(
-                  'INITIALIZE PROJECT',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
-                  ),
-                ),
+            const Divider(height: 24),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: IntrinsicHeight(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _SectionHeader(
+                                    icon: Icons.business_center_outlined,
+                                    label: 'PROJECT OVERVIEW',
+                                    color: _primary,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  overviewSection,
+                                  const SizedBox(height: 12),
+                                  descriptionField,
+                                  const SizedBox(height: 20),
+                                  _SectionHeader(
+                                    icon: Icons.calendar_month_outlined,
+                                    label: 'TIMELINE & STATUS',
+                                    color: const Color(0xFFF59E0B),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  timelineSection,
+                                  const SizedBox(height: 20),
+                                  _SectionHeader(
+                                    icon: Icons.group_outlined,
+                                    label: 'TEAM ASSIGNMENT',
+                                    color: const Color(0xFF6366F1),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  projectLeadField,
+                                ],
+                              ),
+                            ),
+                            const Spacer(),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+                              child: SizedBox(
+                                width: double.infinity,
+                                height: 50,
+                                child: ElevatedButton(
+                                  onPressed: _submit,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _primary,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'INITIALIZE PROJECT',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.8,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1388,25 +1457,30 @@ class _CreateProjectModalState extends State<_CreateProjectModal> {
     );
   }
 
-  InputDecoration _inputDecoration(String hint) => InputDecoration(
+  InputDecoration _inputDecoration(String hint) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(
-            fontSize: 13, color: Color(0xFF94A3B8)),
+        hintStyle: TextStyle(
+            fontSize: 13, color: AppTheme.textMutedOf(context)),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+        filled: true,
+        fillColor: isDark ? AppTheme.bgBaseDark : Colors.white,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+          borderSide: BorderSide(color: _border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+          borderSide: BorderSide(color: _border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: Color(0xFF0EA5E9), width: 1.5),
         ),
       );
+  }
 }
 
 // ─── HELPER WIDGETS ───────────────────────────────────────────────────────────
@@ -1455,10 +1529,10 @@ class _FormField extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF64748B),
+            color: AppTheme.textSecondaryOf(context),
             letterSpacing: 0.5,
           ),
         ),

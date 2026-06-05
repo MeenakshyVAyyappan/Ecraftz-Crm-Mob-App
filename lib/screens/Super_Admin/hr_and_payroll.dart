@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../widgets/app_drawer.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../theme/app_theme.dart';
+import '../../blocs/theme/theme_bloc.dart';
+import '../../widgets/app_drawer.dart';
 
 // ─── MODELS ───────────────────────────────────────────────────────────────────
 
@@ -136,6 +139,21 @@ class HRTheme {
   static const Color danger = Color(0xFFEF4444);
   static const Color purple = Color(0xFF8B5CF6);
 
+  static Color backgroundOf(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC);
+
+  static Color cardBgOf(BuildContext context) =>
+      Theme.of(context).colorScheme.surface;
+
+  static Color textPrimaryOf(BuildContext context) =>
+      AppTheme.textPrimaryOf(context);
+
+  static Color textSecondaryOf(BuildContext context) =>
+      AppTheme.textSecondaryOf(context);
+
+  static Color borderOf(BuildContext context) =>
+      AppTheme.borderOf(context);
+
   static Color statusColor(String s) {
     switch (s.toLowerCase()) {
       case 'present': return success;
@@ -143,7 +161,7 @@ class HRTheme {
       case 'approved': return success;
       case 'rejected': return danger;
       case 'pending': return warning;
-      default: return textSecondary;
+      default: return purple;
     }
   }
 
@@ -219,7 +237,7 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
         selectedIndex: widget.selectedIndex,
         onItemSelected: widget.onItemSelected,
       ),
-      backgroundColor: HRTheme.background,
+      backgroundColor: HRTheme.backgroundOf(context),
       floatingActionButton: FloatingActionButton(
         backgroundColor: HRTheme.primary,
         onPressed: () {
@@ -274,8 +292,12 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
   // ── HEADER ──────────────────────────────────────────────────────────────────
 
   Widget _buildHeader(bool isTablet) {
+    final _cardBg = HRTheme.cardBgOf(context);
+    final _textPrimary = HRTheme.textPrimaryOf(context);
+    final _textSecondary = HRTheme.textSecondaryOf(context);
+
     return Container(
-      color: HRTheme.cardBg,
+      color: _cardBg,
       padding: EdgeInsets.symmetric(horizontal: isTablet ? 20 : 14, vertical: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -285,43 +307,68 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
-                icon: const Icon(Icons.menu, size: 18, color: HRTheme.textSecondary),
+                icon: Icon(Icons.menu, size: 18, color: _textSecondary),
                 onPressed: () => _scaffoldKey.currentState?.openDrawer(),
               ),
               const SizedBox(width: 10),
             ],
-            const Icon(Icons.grid_view_rounded, size: 13, color: HRTheme.textSecondary),
+            Icon(Icons.grid_view_rounded, size: 13, color: _textSecondary),
             const SizedBox(width: 4),
             _crumb('Dashboard', false),
-            const Icon(Icons.chevron_right, size: 15, color: HRTheme.textSecondary),
+            Icon(Icons.chevron_right, size: 15, color: _textSecondary),
             _crumb('HR', true),
+            const Spacer(),
+            BlocBuilder<ThemeBloc, ThemeState>(
+              builder: (context, state) {
+                final isDark = state.themeMode == ThemeMode.dark;
+                return IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: Icon(
+                    isDark ? Icons.light_mode : Icons.dark_mode,
+                    size: 18,
+                    color: isDark ? Colors.amber : Colors.blueGrey,
+                  ),
+                  onPressed: () {
+                    context.read<ThemeBloc>().add(ToggleThemeEvent());
+                  },
+                );
+              },
+            ),
           ]),
           const SizedBox(height: 8),
-          const Text('HR & Employee Management',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: HRTheme.textPrimary)),
+          Text('HR & Employee Management',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _textPrimary)),
           const SizedBox(height: 3),
           Text('Manage your team, track attendance, approve leaves, and generate payroll.',
-              style: TextStyle(fontSize: 12, color: HRTheme.textSecondary)),
+              style: TextStyle(fontSize: 12, color: _textSecondary)),
         ],
       ),
     );
   }
 
-  Widget _crumb(String label, bool active) => Text(label,
+  Widget _crumb(String label, bool active) {
+    final _textSecondary = HRTheme.textSecondaryOf(context);
+    return Text(label,
       style: TextStyle(fontSize: 12,
-          color: active ? HRTheme.primary : HRTheme.textSecondary,
+          color: active ? HRTheme.primary : _textSecondary,
           fontWeight: active ? FontWeight.w600 : FontWeight.normal));
+  }
 
   // ── TAB BAR ─────────────────────────────────────────────────────────────────
 
   Widget _buildTabBar(bool isTablet) {
+    final _cardBg = HRTheme.cardBgOf(context);
+    final _textSecondary = HRTheme.textSecondaryOf(context);
+    final _border = HRTheme.borderOf(context);
+
     final tabs = [
       _TabItem(Icons.people_alt_rounded, 'Directory'),
       _TabItem(Icons.access_time_rounded, 'Time & Leave'),
       _TabItem(Icons.attach_money_rounded, 'Payroll'),
     ];
     return Container(
-      color: HRTheme.cardBg,
+      color: _cardBg,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -341,16 +388,16 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
                 color: selected ? HRTheme.primary.withOpacity(0.1) : Colors.transparent,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                    color: selected ? HRTheme.primary : HRTheme.border,
+                    color: selected ? HRTheme.primary : _border,
                     width: selected ? 1.5 : 1),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(e.value.icon, size: 14,
-                    color: selected ? HRTheme.primary : HRTheme.textSecondary),
+                    color: selected ? HRTheme.primary : _textSecondary),
                 const SizedBox(width: 5),
                 Text(e.value.label,
                     style: TextStyle(fontSize: 12,
-                        color: selected ? HRTheme.primary : HRTheme.textSecondary,
+                        color: selected ? HRTheme.primary : _textSecondary,
                         fontWeight: selected ? FontWeight.w700 : FontWeight.normal)),
               ]),
             ),
@@ -383,110 +430,129 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => StatefulBuilder(
-        builder: (ctx, setModalState) => Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-          child: Container(
-            decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-            padding: const EdgeInsets.all(20),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _sheetHandle(),
-                  const Text('Submit Leave Request',
-                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: HRTheme.textPrimary)),
-                  const SizedBox(height: 4),
-                  Text('Request time off for approval by HR.',
-                      style: TextStyle(fontSize: 12, color: HRTheme.textSecondary)),
-                  const SizedBox(height: 18),
-                  _fieldLabel('Leave Type'),
-                  Container(
-                    decoration: BoxDecoration(
-                        border: Border.all(color: HRTheme.primary, width: 1.5),
-                        borderRadius: BorderRadius.circular(10)),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: leaveType,
-                        isExpanded: true,
-                        style: const TextStyle(fontSize: 14, color: HRTheme.textPrimary),
-                        items: leaveTypes.map((t) => DropdownMenuItem(value: t,
-                            child: Text(t))).toList(),
-                        onChanged: (v) => setModalState(() => leaveType = v!),
+        builder: (ctx, setModalState) {
+          final _cardBgModal = HRTheme.cardBgOf(ctx);
+          final _textPrimaryModal = HRTheme.textPrimaryOf(ctx);
+          final _textSecondaryModal = HRTheme.textSecondaryOf(ctx);
+          final _borderModal = HRTheme.borderOf(ctx);
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: Container(
+              decoration: BoxDecoration(
+                  color: _cardBgModal,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20))),
+              padding: const EdgeInsets.all(20),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sheetHandle(ctx),
+                    Text('Submit Leave Request',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _textPrimaryModal)),
+                    const SizedBox(height: 4),
+                    Text('Request time off for approval by HR.',
+                        style: TextStyle(fontSize: 12, color: _textSecondaryModal)),
+                    const SizedBox(height: 18),
+                    _fieldLabel(ctx, 'Leave Type'),
+                    Container(
+                      decoration: BoxDecoration(
+                          border: Border.all(color: HRTheme.primary, width: 1.5),
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: leaveType,
+                          isExpanded: true,
+                          dropdownColor: _cardBgModal,
+                          style: TextStyle(fontSize: 14, color: _textPrimaryModal),
+                          items: leaveTypes.map((t) => DropdownMenuItem(value: t,
+                              child: Text(t, style: TextStyle(color: _textPrimaryModal)))).toList(),
+                          onChanged: (v) => setModalState(() => leaveType = v!),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(children: [
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      _fieldLabel('Start Date'),
-                      _datePicker(ctx, startDate, (d) => setModalState(() => startDate = d)),
-                    ])),
-                    const SizedBox(width: 10),
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      _fieldLabel('End Date'),
-                      _datePicker(ctx, endDate, (d) => setModalState(() => endDate = d)),
-                    ])),
-                  ]),
-                  const SizedBox(height: 14),
-                  _fieldLabel('Reason'),
-                  TextField(
-                    controller: reasonCtrl,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      hintText: 'Explain your reason for leave...',
-                      hintStyle: TextStyle(color: HRTheme.textSecondary, fontSize: 13),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: HRTheme.border)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: HRTheme.primary, width: 1.5)),
-                      contentPadding: const EdgeInsets.all(12),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: HRTheme.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    const SizedBox(height: 14),
+                    Row(children: [
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        _fieldLabel(ctx, 'Start Date'),
+                        _datePicker(ctx, startDate, (d) => setModalState(() => startDate = d)),
+                      ])),
+                      const SizedBox(width: 10),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        _fieldLabel(ctx, 'End Date'),
+                        _datePicker(ctx, endDate, (d) => setModalState(() => endDate = d)),
+                      ])),
+                    ]),
+                    const SizedBox(height: 14),
+                    _fieldLabel(ctx, 'Reason'),
+                    TextField(
+                      controller: reasonCtrl,
+                      maxLines: 3,
+                      style: TextStyle(color: _textPrimaryModal),
+                      decoration: InputDecoration(
+                        hintText: 'Explain your reason for leave...',
+                        hintStyle: TextStyle(color: _textSecondaryModal, fontSize: 13),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: _borderModal),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: HRTheme.primary, width: 1.5),
+                        ),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: _borderModal)),
+                        contentPadding: const EdgeInsets.all(12),
                       ),
-                      onPressed: () {
-                        setState(() {
-                          sampleLeaves.add(LeaveRequest(
-                            id: 'lr${sampleLeaves.length + 1}',
-                            employeeName: 'Current User',
-                            leaveType: leaveType,
-                            startDate: startDate,
-                            endDate: endDate,
-                            reason: reasonCtrl.text,
-                            status: 'pending',
-                          ));
-                        });
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Leave request submitted!'),
-                              backgroundColor: HRTheme.success),
-                        );
-                      },
-                      child: const Text('Submit Leave Request',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: HRTheme.primary,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            sampleLeaves.add(LeaveRequest(
+                              id: 'lr${sampleLeaves.length + 1}',
+                              employeeName: 'Current User',
+                              leaveType: leaveType,
+                              startDate: startDate,
+                              endDate: endDate,
+                              reason: reasonCtrl.text,
+                              status: 'pending',
+                            ));
+                          });
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Leave request submitted!'),
+                                backgroundColor: HRTheme.success),
+                          );
+                        },
+                        child: const Text('Submit Leave Request',
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        }
       ),
     );
   }
 
   Widget _datePicker(BuildContext ctx, DateTime date, Function(DateTime) onPicked) {
+    final _textPrimary = HRTheme.textPrimaryOf(ctx);
+    final _textSecondary = HRTheme.textSecondaryOf(ctx);
+    final _border = HRTheme.borderOf(ctx);
+
     return GestureDetector(
       onTap: () async {
         final picked = await showDatePicker(
@@ -495,8 +561,19 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
           firstDate: DateTime(2024),
           lastDate: DateTime(2028),
           builder: (_, child) => Theme(
-            data: ThemeData.light().copyWith(
-                colorScheme: const ColorScheme.light(primary: HRTheme.primary)),
+            data: Theme.of(ctx).brightness == Brightness.dark
+                ? ThemeData.dark().copyWith(
+                    colorScheme: const ColorScheme.dark(
+                        primary: HRTheme.primary,
+                        onPrimary: Colors.white,
+                        surface: AppTheme.bgCardDark,
+                        onSurface: Colors.white))
+                : ThemeData.light().copyWith(
+                    colorScheme: const ColorScheme.light(
+                        primary: HRTheme.primary,
+                        onPrimary: Colors.white,
+                        surface: Colors.white,
+                        onSurface: HRTheme.textPrimary)),
             child: child!,
           ),
         );
@@ -505,13 +582,13 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
-            border: Border.all(color: HRTheme.border),
+            border: Border.all(color: _border),
             borderRadius: BorderRadius.circular(10)),
         child: Row(children: [
-          const Icon(Icons.calendar_today_rounded, size: 14, color: HRTheme.textSecondary),
+          Icon(Icons.calendar_today_rounded, size: 14, color: _textSecondary),
           const SizedBox(width: 8),
           Text(DateFormat('dd-MM-yyyy').format(date),
-              style: const TextStyle(fontSize: 13, color: HRTheme.textPrimary)),
+              style: TextStyle(fontSize: 13, color: _textPrimary)),
         ]),
       ),
     );
@@ -527,57 +604,67 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: Container(
-          decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-          padding: const EdgeInsets.all(20),
-          child: SingleChildScrollView(
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              _sheetHandle(),
-              const Text('Add Employee',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: HRTheme.textPrimary)),
-              const SizedBox(height: 16),
-              _inputField(nameCtrl, 'Full Name', Icons.person_rounded),
-              const SizedBox(height: 10),
-              _inputField(deptCtrl, 'Department', Icons.business_rounded),
-              const SizedBox(height: 10),
-              _inputField(roleCtrl, 'Role / Designation', Icons.work_rounded),
-              const SizedBox(height: 10),
-              _inputField(salaryCtrl, 'Base Salary (₹)', Icons.currency_rupee, isNumber: true),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: HRTheme.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      builder: (ctx) {
+        final _cardBgModal = HRTheme.cardBgOf(ctx);
+        final _textPrimaryModal = HRTheme.textPrimaryOf(ctx);
+
+        return Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: Container(
+            decoration: BoxDecoration(
+                color: _cardBgModal,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20))),
+            padding: const EdgeInsets.all(20),
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _sheetHandle(ctx),
+                Text('Add Employee',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _textPrimaryModal)),
+                const SizedBox(height: 16),
+                _inputField(ctx, nameCtrl, 'Full Name', Icons.person_rounded),
+                const SizedBox(height: 10),
+                _inputField(ctx, deptCtrl, 'Department', Icons.business_rounded),
+                const SizedBox(height: 10),
+                _inputField(ctx, roleCtrl, 'Role / Designation', Icons.work_rounded),
+                const SizedBox(height: 10),
+                _inputField(ctx, salaryCtrl, 'Base Salary (₹)', Icons.currency_rupee, isNumber: true),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: HRTheme.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Employee added successfully!'),
+                            backgroundColor: HRTheme.success),
+                      );
+                    },
+                    child: const Text('Add Employee',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
                   ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Employee added successfully!'),
-                          backgroundColor: HRTheme.success),
-                    );
-                  },
-                  child: const Text('Add Employee',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
                 ),
-              ),
-            ]),
+              ]),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
   void _showRunPayrollDialog() {
+    final _cardBg = HRTheme.cardBgOf(context);
+    final _textPrimary = HRTheme.textPrimaryOf(context);
+    final _textSecondary = HRTheme.textSecondaryOf(context);
+
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
+        backgroundColor: _cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(children: [
           Container(
@@ -586,15 +673,15 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
             child: const Icon(Icons.attach_money_rounded, color: HRTheme.primary, size: 18),
           ),
           const SizedBox(width: 10),
-          const Text('Run May Payroll', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          Text('Run May Payroll', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _textPrimary)),
         ]),
-        content: const Text(
+        content: Text(
             'This will generate payroll records for all active employees for May 2026. Continue?',
-            style: TextStyle(fontSize: 13, color: HRTheme.textSecondary)),
+            style: TextStyle(fontSize: 13, color: _textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: HRTheme.textSecondary)),
+            child: Text('Cancel', style: TextStyle(color: _textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -623,32 +710,49 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
 
   // ── HELPERS ─────────────────────────────────────────────────────────────────
 
-  Widget _sheetHandle() => Center(
-    child: Container(
-      width: 36, height: 4, margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(color: HRTheme.border, borderRadius: BorderRadius.circular(2)),
-    ),
-  );
+  Widget _sheetHandle(BuildContext ctx) {
+    final _border = HRTheme.borderOf(ctx);
+    return Center(
+      child: Container(
+        width: 36, height: 4, margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(color: _border, borderRadius: BorderRadius.circular(2)),
+      ),
+    );
+  }
 
-  Widget _fieldLabel(String label) => Padding(
-    padding: const EdgeInsets.only(bottom: 6),
-    child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-        color: HRTheme.textSecondary, letterSpacing: 0.3)),
-  );
+  Widget _fieldLabel(BuildContext ctx, String label) {
+    final _textSecondary = HRTheme.textSecondaryOf(ctx);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+          color: _textSecondary, letterSpacing: 0.3)),
+    );
+  }
 
-  Widget _inputField(TextEditingController ctrl, String hint, IconData icon,
+  Widget _inputField(BuildContext ctx, TextEditingController ctrl, String hint, IconData icon,
       {bool isNumber = false}) {
+    final _textPrimary = HRTheme.textPrimaryOf(ctx);
+    final _textSecondary = HRTheme.textSecondaryOf(ctx);
+    final _border = HRTheme.borderOf(ctx);
+
     return TextField(
       controller: ctrl,
       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+      style: TextStyle(color: _textPrimary, fontSize: 14),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: TextStyle(fontSize: 13, color: HRTheme.textSecondary),
-        prefixIcon: Icon(icon, size: 16, color: HRTheme.textSecondary),
+        hintStyle: TextStyle(fontSize: 13, color: _textSecondary),
+        prefixIcon: Icon(icon, size: 16, color: _textSecondary),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: _border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: HRTheme.primary, width: 1.5),
+        ),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: HRTheme.border)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: HRTheme.primary, width: 1.5)),
+            borderSide: BorderSide(color: _border)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
       ),
     );
@@ -681,6 +785,11 @@ class _DirectoryTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final _cardBg = HRTheme.cardBgOf(context);
+    final _textPrimary = HRTheme.textPrimaryOf(context);
+    final _textSecondary = HRTheme.textSecondaryOf(context);
+    final _border = HRTheme.borderOf(context);
+
     return Column(
       children: [
         Padding(
@@ -690,19 +799,20 @@ class _DirectoryTab extends StatelessWidget {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: HRTheme.cardBg,
+                    color: _cardBg,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: HRTheme.border),
+                    border: Border.all(color: _border),
                     boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6)],
                   ),
                   child: TextField(
                     onChanged: onSearchChanged,
-                    decoration: const InputDecoration(
+                    style: TextStyle(color: _textPrimary, fontSize: 13),
+                    decoration: InputDecoration(
                       hintText: 'Search employees by name, department, or designation...',
-                      hintStyle: TextStyle(fontSize: 12, color: HRTheme.textSecondary),
-                      prefixIcon: Icon(Icons.search_rounded, size: 18, color: HRTheme.textSecondary),
+                      hintStyle: TextStyle(fontSize: 12, color: _textSecondary),
+                      prefixIcon: Icon(Icons.search_rounded, size: 18, color: _textSecondary),
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     ),
                   ),
                 ),
@@ -713,17 +823,17 @@ class _DirectoryTab extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                   decoration: BoxDecoration(
-                    color: HRTheme.cardBg,
-                    border: Border.all(color: HRTheme.border),
+                    color: _cardBg,
+                    border: Border.all(color: _border),
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6)],
                   ),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.refresh_rounded, size: 15, color: HRTheme.textSecondary),
+                    Icon(Icons.refresh_rounded, size: 15, color: _textSecondary),
                     if (isTablet) ...[
                       const SizedBox(width: 5),
-                      const Text('Refresh Directory',
-                          style: TextStyle(fontSize: 12, color: HRTheme.textSecondary)),
+                      Text('Refresh Directory',
+                          style: TextStyle(fontSize: 12, color: _textSecondary)),
                     ],
                   ]),
                 ),
@@ -739,45 +849,49 @@ class _DirectoryTab extends StatelessWidget {
   Widget _buildTable(BuildContext context) {
     final cols = ['EMPLOYEE', 'DEPARTMENT & ROLE', 'JOIN DATE', 'KPI SCORE', 'BASE SALARY', 'ACTIONS'];
     final flexes = [3, 3, 2, 2, 2, 2];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = HRTheme.cardBgOf(context);
+    final _textSecondary = HRTheme.textSecondaryOf(context);
+    final _border = HRTheme.borderOf(context);
 
     return Expanded(
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
-          color: HRTheme.cardBg,
+          color: _cardBg,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: HRTheme.border),
+          border: Border.all(color: _border),
         ),
         child: Column(
           children: [
             // Table Header
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: const BoxDecoration(
-                color: Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+              decoration: BoxDecoration(
+                color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
               ),
               child: Row(
                 children: cols.asMap().entries.map((e) => Expanded(
                   flex: flexes[e.key],
                   child: Text(e.value,
-                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
-                          color: HRTheme.textSecondary, letterSpacing: 0.5)),
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
+                          color: _textSecondary, letterSpacing: 0.5)),
                 )).toList(),
               ),
             ),
-            const Divider(height: 1, color: HRTheme.border),
+            Divider(height: 1, color: _border),
             if (filtered.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40),
                 child: Text('No employees found matching your search.',
-                    style: TextStyle(fontSize: 13, color: HRTheme.textSecondary)),
+                    style: TextStyle(fontSize: 13, color: _textSecondary)),
               )
             else
               Expanded(
                 child: ListView.separated(
                   itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1, color: HRTheme.border),
+                  separatorBuilder: (_, __) => Divider(height: 1, color: _border),
                   itemBuilder: (ctx, i) => _tableRow(ctx, filtered[i], flexes),
                 ),
               ),
@@ -788,26 +902,28 @@ class _DirectoryTab extends StatelessWidget {
   }
 
   Widget _tableRow(BuildContext ctx, Employee emp, List<int> flexes) {
+    final _textPrimary = HRTheme.textPrimaryOf(ctx);
+    final _textSecondary = HRTheme.textSecondaryOf(ctx);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
           Expanded(flex: flexes[0], child: Row(children: [
-            _empAvatar(emp.name, 32),
+            _empAvatar(ctx, emp.name, 32),
             const SizedBox(width: 8),
             Expanded(child: Text(emp.name,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: HRTheme.textPrimary),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _textPrimary),
                 overflow: TextOverflow.ellipsis)),
           ])),
           Expanded(flex: flexes[1], child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(emp.department, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: HRTheme.textPrimary), overflow: TextOverflow.ellipsis),
-            Text(emp.role, style: const TextStyle(fontSize: 11, color: HRTheme.textSecondary), overflow: TextOverflow.ellipsis),
+            Text(emp.department, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textPrimary), overflow: TextOverflow.ellipsis),
+            Text(emp.role, style: TextStyle(fontSize: 11, color: _textSecondary), overflow: TextOverflow.ellipsis),
           ])),
           Expanded(flex: flexes[2], child: Text(DateFormat('dd MMM yyyy').format(emp.joinDate),
-              style: const TextStyle(fontSize: 12, color: HRTheme.textSecondary))),
+              style: TextStyle(fontSize: 12, color: _textSecondary))),
           Expanded(flex: flexes[3], child: _kpiChip(emp.kpiScore)),
           Expanded(flex: flexes[4], child: Text(fmtSalary(emp.baseSalary),
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: HRTheme.textPrimary))),
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _textPrimary))),
           Expanded(flex: flexes[5], child: Row(children: [
             _iconBtn(Icons.edit_rounded, HRTheme.primary, () {}),
             const SizedBox(width: 6),
@@ -819,6 +935,8 @@ class _DirectoryTab extends StatelessWidget {
   }
 
   Widget _buildCards(BuildContext context) {
+    final _textSecondary = HRTheme.textSecondaryOf(context);
+
     if (filtered.isEmpty) {
       return Expanded(
         child: Center(
@@ -826,7 +944,7 @@ class _DirectoryTab extends StatelessWidget {
             padding: const EdgeInsets.all(32),
             child: Text('No employees found matching your search.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: HRTheme.textSecondary)),
+                style: TextStyle(fontSize: 13, color: _textSecondary)),
           ),
         ),
       );
@@ -842,32 +960,37 @@ class _DirectoryTab extends StatelessWidget {
   }
 
   Widget _employeeCard(BuildContext ctx, Employee emp) {
+    final _cardBg = HRTheme.cardBgOf(ctx);
+    final _textPrimary = HRTheme.textPrimaryOf(ctx);
+    final _textSecondary = HRTheme.textSecondaryOf(ctx);
+    final _border = HRTheme.borderOf(ctx);
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: HRTheme.cardBg,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: HRTheme.border),
+        border: Border.all(color: _border),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6)],
       ),
       child: Row(
         children: [
-          _empAvatar(emp.name, 40),
+          _empAvatar(ctx, emp.name, 40),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(emp.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: HRTheme.textPrimary)),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _textPrimary)),
               const SizedBox(height: 2),
               Text('${emp.department} • ${emp.role}',
-                  style: const TextStyle(fontSize: 11, color: HRTheme.textSecondary), overflow: TextOverflow.ellipsis),
+                  style: TextStyle(fontSize: 11, color: _textSecondary), overflow: TextOverflow.ellipsis),
               const SizedBox(height: 6),
               Wrap(spacing: 8, runSpacing: 4, children: [
                 _kpiChip(emp.kpiScore),
-                _infoChip(DateFormat('dd MMM yyyy').format(emp.joinDate), Icons.calendar_today_rounded),
-                _infoChip(fmtSalary(emp.baseSalary), Icons.currency_rupee),
+                _infoChip(ctx, DateFormat('dd MMM yyyy').format(emp.joinDate), Icons.calendar_today_rounded),
+                _infoChip(ctx, fmtSalary(emp.baseSalary), Icons.currency_rupee),
               ]),
             ]),
           ),
@@ -881,7 +1004,7 @@ class _DirectoryTab extends StatelessWidget {
     );
   }
 
-  Widget _empAvatar(String name, double size) {
+  Widget _empAvatar(BuildContext ctx, String name, double size) {
     final initials = name.trim().split(' ').take(2).map((w) => w[0].toUpperCase()).join();
     final colors = [HRTheme.primary, HRTheme.purple, HRTheme.success, HRTheme.warning];
     final color = colors[name.codeUnitAt(0) % colors.length];
@@ -903,11 +1026,12 @@ class _DirectoryTab extends StatelessWidget {
     );
   }
 
-  Widget _infoChip(String label, IconData icon) {
+  Widget _infoChip(BuildContext ctx, String label, IconData icon) {
+    final _textSecondary = HRTheme.textSecondaryOf(ctx);
     return Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 10, color: HRTheme.textSecondary),
+      Icon(icon, size: 10, color: _textSecondary),
       const SizedBox(width: 3),
-      Text(label, style: const TextStyle(fontSize: 10, color: HRTheme.textSecondary)),
+      Text(label, style: TextStyle(fontSize: 10, color: _textSecondary)),
     ]);
   }
 
@@ -959,11 +1083,16 @@ class _TimeLeaveTab extends StatelessWidget {
   }
 
   Widget _attendanceSection(BuildContext ctx) {
+    final _cardBg = HRTheme.cardBgOf(ctx);
+    final _textPrimary = HRTheme.textPrimaryOf(ctx);
+    final _textSecondary = HRTheme.textSecondaryOf(ctx);
+    final _border = HRTheme.borderOf(ctx);
+
     return Container(
       decoration: BoxDecoration(
-        color: HRTheme.cardBg,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: HRTheme.border),
+        border: Border.all(color: _border),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
       ),
       child: Column(
@@ -977,8 +1106,8 @@ class _TimeLeaveTab extends StatelessWidget {
                 child: const Icon(Icons.access_time_rounded, color: HRTheme.primary, size: 16),
               ),
               const SizedBox(width: 8),
-              const Expanded(child: Text('Daily Attendance',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: HRTheme.textPrimary))),
+              Expanded(child: Text('Daily Attendance',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _textPrimary))),
               GestureDetector(
                 onTap: () {},
                 child: Container(
@@ -994,28 +1123,31 @@ class _TimeLeaveTab extends StatelessWidget {
               ),
             ]),
           ),
-          const Divider(height: 1, color: HRTheme.border),
+          Divider(height: 1, color: _border),
           if (attendance.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 32),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
               child: Text('No attendance records today.',
-                  style: TextStyle(fontSize: 13, color: HRTheme.textSecondary)),
+                  style: TextStyle(fontSize: 13, color: _textSecondary)),
             )
           else
-            ...attendance.map((rec) => _attendanceRow(rec)),
+            ...attendance.map((rec) => _attendanceRow(ctx, rec)),
         ],
       ),
     );
   }
 
-  Widget _attendanceRow(AttendanceRecord rec) {
+  Widget _attendanceRow(BuildContext ctx, AttendanceRecord rec) {
     final initials = rec.employeeName.trim().split(' ').take(2).map((w) => w[0].toUpperCase()).join();
     final hasClockOut = rec.clockOut != null;
+    final _textPrimary = HRTheme.textPrimaryOf(ctx);
+    final _textSecondary = HRTheme.textSecondaryOf(ctx);
+    final _border = HRTheme.borderOf(ctx);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: HRTheme.border))),
+      decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: _border))),
       child: Row(
         children: [
           Container(
@@ -1029,16 +1161,16 @@ class _TimeLeaveTab extends StatelessWidget {
             Text(rec.employeeName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: HRTheme.textPrimary)),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _textPrimary)),
             Text(DateFormat('MMM d, yyyy').format(rec.date),
-                style: const TextStyle(fontSize: 11, color: HRTheme.textSecondary)),
+                style: TextStyle(fontSize: 11, color: _textSecondary)),
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text('IN: ${rec.clockIn ?? '----'}',
                 style: const TextStyle(fontSize: 11, color: HRTheme.success, fontWeight: FontWeight.w600)),
             Text('OUT: ${rec.clockOut ?? '----'}',
                 style: TextStyle(fontSize: 11,
-                    color: hasClockOut ? HRTheme.danger : HRTheme.textSecondary,
+                    color: hasClockOut ? HRTheme.danger : _textSecondary,
                     fontWeight: FontWeight.w600)),
           ]),
           const SizedBox(width: 8),
@@ -1048,10 +1180,10 @@ class _TimeLeaveTab extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                 decoration: BoxDecoration(
-                    border: Border.all(color: HRTheme.border),
+                    border: Border.all(color: _border),
                     borderRadius: BorderRadius.circular(6)),
-                child: const Text('Clock Out',
-                    style: TextStyle(fontSize: 10, color: HRTheme.textSecondary, fontWeight: FontWeight.w600)),
+                child: Text('Clock Out',
+                    style: TextStyle(fontSize: 10, color: _textSecondary, fontWeight: FontWeight.w600)),
               ),
             )
           else
@@ -1068,11 +1200,16 @@ class _TimeLeaveTab extends StatelessWidget {
   }
 
   Widget _leaveSection(BuildContext ctx) {
+    final _cardBg = HRTheme.cardBgOf(ctx);
+    final _textPrimary = HRTheme.textPrimaryOf(ctx);
+    final _textSecondary = HRTheme.textSecondaryOf(ctx);
+    final _border = HRTheme.borderOf(ctx);
+
     return Container(
       decoration: BoxDecoration(
-        color: HRTheme.cardBg,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: HRTheme.border),
+        border: Border.all(color: _border),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
       ),
       child: Column(
@@ -1086,8 +1223,8 @@ class _TimeLeaveTab extends StatelessWidget {
                 child: const Icon(Icons.calendar_month_rounded, color: HRTheme.purple, size: 16),
               ),
               const SizedBox(width: 8),
-              const Expanded(child: Text('Leave Requests',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: HRTheme.textPrimary))),
+              Expanded(child: Text('Leave Requests',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _textPrimary))),
               GestureDetector(
                 onTap: onRequestLeave,
                 child: Container(
@@ -1101,34 +1238,38 @@ class _TimeLeaveTab extends StatelessWidget {
               ),
             ]),
           ),
-          const Divider(height: 1, color: HRTheme.border),
+          Divider(height: 1, color: _border),
           if (leaves.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
               child: Column(children: [
-                Icon(Icons.event_busy_rounded, size: 28, color: Color(0xFF94A3B8)),
-                SizedBox(height: 8),
+                const Icon(Icons.event_busy_rounded, size: 28, color: Color(0xFF94A3B8)),
+                const SizedBox(height: 8),
                 Text('No leave requests found.',
-                    style: TextStyle(fontSize: 13, color: HRTheme.textSecondary)),
+                    style: TextStyle(fontSize: 13, color: _textSecondary)),
               ]),
             )
           else
-            ...leaves.map((lr) => _leaveRow(lr)),
+            ...leaves.map((lr) => _leaveRow(ctx, lr)),
         ],
       ),
     );
   }
 
-  Widget _leaveRow(LeaveRequest lr) {
+  Widget _leaveRow(BuildContext ctx, LeaveRequest lr) {
     final statusColor = HRTheme.statusColor(lr.status);
+    final _textPrimary = HRTheme.textPrimaryOf(ctx);
+    final _textSecondary = HRTheme.textSecondaryOf(ctx);
+    final _border = HRTheme.borderOf(ctx);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: HRTheme.border))),
+      decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: _border))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Expanded(child: Text(lr.employeeName,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: HRTheme.textPrimary))),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _textPrimary))),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
@@ -1139,10 +1280,10 @@ class _TimeLeaveTab extends StatelessWidget {
         ]),
         const SizedBox(height: 4),
         Text('${lr.leaveType} • ${DateFormat('dd MMM').format(lr.startDate)} – ${DateFormat('dd MMM yyyy').format(lr.endDate)}',
-            style: const TextStyle(fontSize: 11, color: HRTheme.textSecondary)),
+            style: TextStyle(fontSize: 11, color: _textSecondary)),
         if (lr.reason.isNotEmpty) ...[
           const SizedBox(height: 2),
-          Text(lr.reason, style: const TextStyle(fontSize: 11, color: HRTheme.textSecondary),
+          Text(lr.reason, style: TextStyle(fontSize: 11, color: _textSecondary),
               maxLines: 2, overflow: TextOverflow.ellipsis),
         ],
       ]),
@@ -1177,6 +1318,11 @@ class _PayrollTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final _cardBg = HRTheme.cardBgOf(context);
+    final _textPrimary = HRTheme.textPrimaryOf(context);
+    final _textSecondary = HRTheme.textSecondaryOf(context);
+    final _border = HRTheme.borderOf(context);
+
     return Column(
       children: [
         Padding(
@@ -1185,19 +1331,20 @@ class _PayrollTab extends StatelessWidget {
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: HRTheme.cardBg,
+                  color: _cardBg,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: HRTheme.border),
+                  border: Border.all(color: _border),
                   boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6)],
                 ),
                 child: TextField(
                   onChanged: onSearchChanged,
-                  decoration: const InputDecoration(
+                  style: TextStyle(color: _textPrimary, fontSize: 13),
+                  decoration: InputDecoration(
                     hintText: 'Search payroll records...',
-                    hintStyle: TextStyle(fontSize: 12, color: HRTheme.textSecondary),
-                    prefixIcon: Icon(Icons.search_rounded, size: 18, color: HRTheme.textSecondary),
+                    hintStyle: TextStyle(fontSize: 12, color: _textSecondary),
+                    prefixIcon: Icon(Icons.search_rounded, size: 18, color: _textSecondary),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   ),
                 ),
               ),
@@ -1209,10 +1356,10 @@ class _PayrollTab extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(11),
                   decoration: BoxDecoration(
-                      color: HRTheme.cardBg,
-                      border: Border.all(color: HRTheme.border),
+                      color: _cardBg,
+                      border: Border.all(color: _border),
                       borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.filter_list_rounded, size: 16, color: HRTheme.textSecondary),
+                  child: Icon(Icons.filter_list_rounded, size: 16, color: _textSecondary),
                 ),
               ),
               const SizedBox(width: 6),
@@ -1244,41 +1391,45 @@ class _PayrollTab extends StatelessWidget {
   Widget _buildTable(BuildContext context) {
     final cols = ['EMPLOYEE', 'PERIOD', 'BASIC + ALLOWANCES', 'DEDUCTIONS', 'NET PAY', 'STATUS', 'PAYSLIP'];
     final flexes = [3, 2, 3, 2, 2, 2, 1];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = HRTheme.cardBgOf(context);
+    final _textSecondary = HRTheme.textSecondaryOf(context);
+    final _border = HRTheme.borderOf(context);
 
     return Expanded(
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
-          color: HRTheme.cardBg,
+          color: _cardBg,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: HRTheme.border),
+          border: Border.all(color: _border),
         ),
         child: Column(
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: const BoxDecoration(
-                color: Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+              decoration: BoxDecoration(
+                color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
               ),
               child: Row(
                 children: cols.asMap().entries.map((e) => Expanded(
                   flex: flexes[e.key],
                   child: Text(e.value,
-                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
-                          color: HRTheme.textSecondary, letterSpacing: 0.5)),
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
+                          color: _textSecondary, letterSpacing: 0.5)),
                 )).toList(),
               ),
             ),
-            const Divider(height: 1, color: HRTheme.border),
+            Divider(height: 1, color: _border),
             Expanded(
               child: filtered.isEmpty
-                  ? const Center(child: Text('No payroll records found.',
-                      style: TextStyle(fontSize: 13, color: HRTheme.textSecondary)))
+                  ? Center(child: Text('No payroll records found.',
+                      style: TextStyle(fontSize: 13, color: _textSecondary)))
                   : ListView.separated(
                       itemCount: filtered.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1, color: HRTheme.border),
-                      itemBuilder: (_, i) => _tableRow(filtered[i], flexes),
+                      separatorBuilder: (_, __) => Divider(height: 1, color: _border),
+                      itemBuilder: (ctx, i) => _tableRow(ctx, filtered[i], flexes),
                     ),
             ),
           ],
@@ -1287,9 +1438,11 @@ class _PayrollTab extends StatelessWidget {
     );
   }
 
-  Widget _tableRow(PayrollRecord r, List<int> flexes) {
+  Widget _tableRow(BuildContext ctx, PayrollRecord r, List<int> flexes) {
     final statusColor = HRTheme.payrollStatusColor(r.status);
     final initials = r.employeeName.trim().split(' ').take(2).map((w) => w[0].toUpperCase()).join();
+    final _textPrimary = HRTheme.textPrimaryOf(ctx);
+    final _textSecondary = HRTheme.textSecondaryOf(ctx);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1304,21 +1457,21 @@ class _PayrollTab extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Expanded(child: Text(r.employeeName,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: HRTheme.textPrimary),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textPrimary),
                 overflow: TextOverflow.ellipsis)),
           ])),
           Expanded(flex: flexes[1], child: Text(r.period,
-              style: const TextStyle(fontSize: 12, color: HRTheme.textSecondary))),
+              style: TextStyle(fontSize: 12, color: _textSecondary))),
           Expanded(flex: flexes[2], child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(fmtSalary(r.basicSalary + r.allowances),
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: HRTheme.textPrimary)),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _textPrimary)),
             Text('+${fmtSalary(r.allowances)}',
                 style: const TextStyle(fontSize: 10, color: HRTheme.success)),
           ])),
           Expanded(flex: flexes[3], child: Text('-${fmtSalary(r.deductions)}',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: HRTheme.danger))),
           Expanded(flex: flexes[4], child: Text(fmtSalary(r.netPay),
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: HRTheme.textPrimary))),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _textPrimary))),
           Expanded(flex: flexes[5], child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
@@ -1342,29 +1495,34 @@ class _PayrollTab extends StatelessWidget {
   }
 
   Widget _buildCards(BuildContext context) {
+    final _textSecondary = HRTheme.textSecondaryOf(context);
     return Expanded(
       child: filtered.isEmpty
-          ? const Center(child: Text('No payroll records found.',
-              style: TextStyle(fontSize: 13, color: HRTheme.textSecondary)))
+          ? Center(child: Text('No payroll records found.',
+              style: TextStyle(fontSize: 13, color: _textSecondary)))
           : ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               itemCount: filtered.length,
               separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (_, i) => _payrollCard(filtered[i]),
+              itemBuilder: (ctx, i) => _payrollCard(ctx, filtered[i]),
             ),
     );
   }
 
-  Widget _payrollCard(PayrollRecord r) {
+  Widget _payrollCard(BuildContext ctx, PayrollRecord r) {
     final statusColor = HRTheme.payrollStatusColor(r.status);
     final initials = r.employeeName.trim().split(' ').take(2).map((w) => w[0].toUpperCase()).join();
+    final _cardBg = HRTheme.cardBgOf(ctx);
+    final _textPrimary = HRTheme.textPrimaryOf(ctx);
+    final _textSecondary = HRTheme.textSecondaryOf(ctx);
+    final _border = HRTheme.borderOf(ctx);
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: HRTheme.cardBg,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: HRTheme.border),
+        border: Border.all(color: _border),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6)],
       ),
       child: Column(
@@ -1381,8 +1539,8 @@ class _PayrollTab extends StatelessWidget {
               Text(r.employeeName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: HRTheme.textPrimary)),
-              Text(r.period, style: const TextStyle(fontSize: 11, color: HRTheme.textSecondary)),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _textPrimary)),
+              Text(r.period, style: TextStyle(fontSize: 11, color: _textSecondary)),
             ])),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1392,12 +1550,12 @@ class _PayrollTab extends StatelessWidget {
             ),
           ]),
           const SizedBox(height: 12),
-          const Divider(height: 1, color: HRTheme.border),
+          Divider(height: 1, color: _border),
           const SizedBox(height: 10),
           Row(children: [
-            Expanded(child: _payrollStat('Basic + Allow.', fmtSalary(r.basicSalary + r.allowances), HRTheme.textPrimary)),
-            Expanded(child: _payrollStat('Deductions', '-${fmtSalary(r.deductions)}', HRTheme.danger)),
-            Expanded(child: _payrollStat('Net Pay', fmtSalary(r.netPay), HRTheme.success)),
+            Expanded(child: _payrollStat(ctx, 'Basic + Allow.', fmtSalary(r.basicSalary + r.allowances), _textPrimary)),
+            Expanded(child: _payrollStat(ctx, 'Deductions', '-${fmtSalary(r.deductions)}', HRTheme.danger)),
+            Expanded(child: _payrollStat(ctx, 'Net Pay', fmtSalary(r.netPay), HRTheme.success)),
           ]),
           const SizedBox(height: 10),
           SizedBox(
@@ -1423,11 +1581,12 @@ class _PayrollTab extends StatelessWidget {
     );
   }
 
-  Widget _payrollStat(String label, String value, Color valueColor) {
+  Widget _payrollStat(BuildContext ctx, String label, String value, Color valueColor) {
+    final _textSecondary = HRTheme.textSecondaryOf(ctx);
     return Column(children: [
       Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: valueColor)),
       const SizedBox(height: 2),
-      Text(label, style: const TextStyle(fontSize: 10, color: HRTheme.textSecondary)),
+      Text(label, style: TextStyle(fontSize: 10, color: _textSecondary)),
     ]);
   }
 }

@@ -1,6 +1,9 @@
 // teams_page.dart
 import 'package:flutter/material.dart';
-import '../widgets/app_drawer.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../theme/app_theme.dart';
+import '../../blocs/theme/theme_bloc.dart';
+import '../../widgets/app_drawer.dart';
 
 // ─── DATA MODELS ─────────────────────────────────────────────────────────────
 
@@ -184,10 +187,17 @@ class _TeamsPageState extends State<TeamsPage> {
   Widget build(BuildContext context) {
     final members = _filtered;
     final isWide = MediaQuery.of(context).size.width > 600;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _bg = Theme.of(context).scaffoldBackgroundColor;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+    final _textMuted = AppTheme.textMutedOf(context);
 
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: _bg,
       drawer: AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: (i) {
@@ -196,68 +206,84 @@ class _TeamsPageState extends State<TeamsPage> {
         },
       ),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: _cardBg,
         elevation: 0,
         leading: isWide
             ? null
             : IconButton(
-                icon: const Icon(Icons.menu_rounded, color: Color(0xFF374151)),
+                icon: Icon(Icons.menu_rounded, color: _textPrimary),
                 onPressed: () => _scaffoldKey.currentState?.openDrawer(),
               ),
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Team Members',
                 style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
-                    color: Color(0xFF111827))),
+                    color: _textPrimary)),
             Text('View and manage all registered users within the CRM platform.',
-                style: TextStyle(fontSize: 10, color: Color(0xFF6B7280))),
+                style: TextStyle(fontSize: 10, color: _textSecondary)),
           ],
         ),
+        actions: [
+          BlocBuilder<ThemeBloc, ThemeState>(
+            builder: (context, themeState) {
+              final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+              return IconButton(
+                icon: Icon(
+                  isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  color: isDarkTheme ? Colors.white : const Color(0xFF374151),
+                ),
+                onPressed: () {
+                  context.read<ThemeBloc>().add(ToggleThemeEvent());
+                },
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: const Color(0xFFE5E7EB)),
+          child: Container(height: 1, color: _border),
         ),
       ),
       body: Column(
         children: [
           // Pending banner
-          if (_pendingCount > 0) _buildPendingBanner(),
+          if (_pendingCount > 0) _buildPendingBanner(isDark),
           // Tabs
-          _buildTabs(),
+          _buildTabs(isDark, _cardBg, _border, _textSecondary),
           // Search
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
             child: TextField(
               controller: _searchCtrl,
               onChanged: (v) => setState(() => _search = v),
+              style: TextStyle(color: _textPrimary, fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'Search members...',
                 hintStyle:
-                    const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
-                prefixIcon: const Icon(Icons.search,
-                    color: Color(0xFF9CA3AF), size: 18),
+                    TextStyle(color: _textMuted, fontSize: 13),
+                prefixIcon: Icon(Icons.search,
+                    color: _textSecondary, size: 18),
                 suffixIcon: _search.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.close,
-                            size: 16, color: Color(0xFF6B7280)),
+                        icon: Icon(Icons.close,
+                            size: 16, color: _textSecondary),
                         onPressed: () {
                           _searchCtrl.clear();
                           setState(() => _search = '');
                         })
                     : null,
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: _cardBg,
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide:
-                        const BorderSide(color: Color(0xFFE5E7EB))),
+                    borderSide: BorderSide(color: _border)),
                 enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide:
-                        const BorderSide(color: Color(0xFFE5E7EB))),
+                    borderSide: BorderSide(color: _border)),
                 focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(
@@ -267,11 +293,11 @@ class _TeamsPageState extends State<TeamsPage> {
             ),
           ),
           // Table header
-          _buildTableHeader(isWide),
+          _buildTableHeader(isWide, _border),
           // List
           Expanded(
             child: members.isEmpty
-                ? _buildEmpty()
+                ? _buildEmpty(_textSecondary)
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                     itemCount: members.length,
@@ -303,18 +329,18 @@ class _TeamsPageState extends State<TeamsPage> {
                   ),
           ),
           // Dynamic role info
-          _buildRoleInfo(),
+          _buildRoleInfo(isDark),
         ],
       ),
     );
   }
 
-  Widget _buildPendingBanner() {
+  Widget _buildPendingBanner(bool isDark) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFBEB),
+        color: isDark ? const Color(0xFF452B09) : const Color(0xFFFFFBEB),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4)),
       ),
@@ -327,14 +353,14 @@ class _TeamsPageState extends State<TeamsPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('$_pendingCount Pending Approval${_pendingCount > 1 ? 's' : ''}',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF92400E))),
-                const Text(
+                        color: isDark ? Colors.amber : const Color(0xFF92400E))),
+                Text(
                     'New users are waiting for admin approval to access the system.',
                     style:
-                        TextStyle(fontSize: 11, color: Color(0xFF78350F))),
+                        TextStyle(fontSize: 11, color: isDark ? Colors.amber[200]! : const Color(0xFF78350F))),
               ],
             ),
           ),
@@ -351,7 +377,7 @@ class _TeamsPageState extends State<TeamsPage> {
     );
   }
 
-  Widget _buildTabs() {
+  Widget _buildTabs(bool isDark, Color cardBg, Color border, Color textSecondary) {
     final tabs = [
       (MemberStatus.active, 'ACTIVE'),
       (MemberStatus.pending, 'PENDING'),
@@ -360,7 +386,7 @@ class _TeamsPageState extends State<TeamsPage> {
     ];
 
     return Container(
-      color: Colors.white,
+      color: cardBg,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -391,7 +417,7 @@ class _TeamsPageState extends State<TeamsPage> {
                     border: Border.all(
                       color: isSelected
                           ? const Color(0xFF00BCD4)
-                          : const Color(0xFFE5E7EB),
+                          : border,
                     ),
                   ),
                   child: Row(
@@ -403,7 +429,7 @@ class _TeamsPageState extends State<TeamsPage> {
                               fontWeight: FontWeight.w700,
                               color: isSelected
                                   ? Colors.white
-                                  : const Color(0xFF6B7280))),
+                                  : textSecondary)),
                       const SizedBox(width: 5),
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -411,7 +437,7 @@ class _TeamsPageState extends State<TeamsPage> {
                         decoration: BoxDecoration(
                           color: isSelected
                               ? Colors.white.withOpacity(0.25)
-                              : const Color(0xFFE5E7EB),
+                              : (isDark ? AppTheme.bgBaseDark : const Color(0xFFE5E7EB)),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text('$count',
@@ -420,7 +446,7 @@ class _TeamsPageState extends State<TeamsPage> {
                                 fontWeight: FontWeight.w700,
                                 color: isSelected
                                     ? Colors.white
-                                    : const Color(0xFF6B7280))),
+                                    : textSecondary)),
                       ),
                     ],
                   ),
@@ -433,14 +459,14 @@ class _TeamsPageState extends State<TeamsPage> {
     );
   }
 
-  Widget _buildTableHeader(bool isWide) {
+  Widget _buildTableHeader(bool isWide, Color border) {
     if (!isWide) return const SizedBox.shrink();
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 0),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        color: Theme.of(context).brightness == Brightness.dark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
+        border: Border.all(color: border),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
       ),
       child: Row(
@@ -456,7 +482,7 @@ class _TeamsPageState extends State<TeamsPage> {
     );
   }
 
-  Widget _buildEmpty() {
+  Widget _buildEmpty(Color textSecondary) {
     const msgs = {
       MemberStatus.active: 'No active members',
       MemberStatus.pending: 'No pending approvals',
@@ -467,25 +493,25 @@ class _TeamsPageState extends State<TeamsPage> {
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Text(msgs[_tab] ?? 'No members found',
-            style: const TextStyle(color: Color(0xFF6B7280), fontSize: 14)),
+            style: TextStyle(color: textSecondary, fontSize: 14)),
       ),
     );
   }
 
-  Widget _buildRoleInfo() {
+  Widget _buildRoleInfo(bool isDark) {
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F9FF),
+        color: isDark ? const Color(0xFF0C2C3E) : const Color(0xFFF0F9FF),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFF00BCD4).withOpacity(0.2)),
       ),
-      child: const Row(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.shield_outlined, size: 16, color: Color(0xFF00BCD4)),
-          SizedBox(width: 8),
+          const Icon(Icons.shield_outlined, size: 16, color: Color(0xFF00BCD4)),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -494,16 +520,16 @@ class _TeamsPageState extends State<TeamsPage> {
                     style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF0369A1),
+                        color: isDark ? const Color(0xFF00BCD4) : const Color(0xFF0369A1),
                         letterSpacing: 0.4)),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
                     '• Roles are fully dynamic — create custom roles in Roles & Access Control.\n'
                     '• Assigning a role here instantly updates the user\'s permissions.\n'
                     '• Super Admin has permanent full access and cannot be reassigned.',
                     style: TextStyle(
                         fontSize: 11,
-                        color: Color(0xFF0369A1),
+                        color: isDark ? Colors.cyan[200] : const Color(0xFF0369A1),
                         height: 1.5)),
               ],
             ),
@@ -522,11 +548,12 @@ class _TH extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final _textSecondary = AppTheme.textSecondaryOf(context);
     return Text(text,
-        style: const TextStyle(
+        style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF6B7280),
+            color: _textSecondary,
             letterSpacing: 0.5));
   }
 }
@@ -558,14 +585,19 @@ class _MemberRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: _cardBg,
         border: Border(
-          left: BorderSide(color: Color(0xFFE5E7EB)),
-          right: BorderSide(color: Color(0xFFE5E7EB)),
-          bottom: BorderSide(color: Color(0xFFE5E7EB)),
+          left: BorderSide(color: _border),
+          right: BorderSide(color: _border),
+          bottom: BorderSide(color: _border),
         ),
       ),
       child: Row(
@@ -582,22 +614,22 @@ class _MemberRow extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(member.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF111827)),
+                              color: _textPrimary),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
                       Row(
                         children: [
-                          const Icon(Icons.email_outlined,
-                              size: 10, color: Color(0xFF9CA3AF)),
+                          Icon(Icons.email_outlined,
+                              size: 10, color: _textSecondary),
                           const SizedBox(width: 3),
                           Expanded(
                             child: Text(member.email,
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 10,
-                                    color: Color(0xFF6B7280)),
+                                    color: _textSecondary),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis),
                           ),
@@ -640,8 +672,8 @@ class _MemberRow extends StatelessWidget {
               flex: 2,
               child: Text(
                 _fmt(member.registeredAt),
-                style: const TextStyle(
-                    fontSize: 11, color: Color(0xFF6B7280)),
+                style: TextStyle(
+                    fontSize: 11, color: _textSecondary),
               ),
             ),
           // Status
@@ -811,6 +843,7 @@ class _DropdownBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
@@ -820,6 +853,7 @@ class _DropdownBadge extends StatelessWidget {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
+          dropdownColor: Theme.of(context).colorScheme.surface,
           value: items.contains(value) ? value : items.first,
           isDense: true,
           icon: Icon(Icons.keyboard_arrow_down_rounded,
@@ -830,7 +864,7 @@ class _DropdownBadge extends StatelessWidget {
               .map((i) => DropdownMenuItem(
                   value: i,
                   child: Text(i,
-                      style: const TextStyle(fontSize: 11))))
+                      style: TextStyle(fontSize: 11, color: isDark ? Colors.white : Colors.black87))))
               .toList(),
           onChanged: (v) {
             if (v != null) onChanged(v);
@@ -907,15 +941,22 @@ class _MemberCardMobile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+    final _textMuted = AppTheme.textMutedOf(context);
     final statusColor = member.status.color;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [
+        border: Border.all(color: _border),
+        boxShadow: isDark ? null : [
           BoxShadow(
             color: Colors.black.withOpacity(0.03),
             blurRadius: 10,
@@ -935,20 +976,20 @@ class _MemberCardMobile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(member.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF111827))),
+                            color: _textPrimary)),
                     const SizedBox(height: 2),
                     Row(
                       children: [
-                        const Icon(Icons.email_outlined, size: 12, color: Color(0xFF9CA3AF)),
+                        Icon(Icons.email_outlined, size: 12, color: _textSecondary),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(member.email,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 11,
-                                  color: Color(0xFF6B7280)),
+                                  color: _textSecondary),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis),
                         ),
@@ -959,14 +1000,14 @@ class _MemberCardMobile extends StatelessWidget {
               ),
             ],
           ),
-          const Divider(height: 20),
+          Divider(height: 20, color: _border),
           Row(
             children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('ROLE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5)),
+                    Text('ROLE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _textMuted, letterSpacing: 0.5)),
                     const SizedBox(height: 4),
                     member.isSuperAdmin
                         ? _RoleBadge(role: member.role)
@@ -984,7 +1025,7 @@ class _MemberCardMobile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('DEPARTMENT', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5)),
+                    Text('DEPARTMENT', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _textMuted, letterSpacing: 0.5)),
                     const SizedBox(height: 4),
                     member.isSuperAdmin
                         ? _DeptBadge(dept: member.department)
@@ -1006,18 +1047,18 @@ class _MemberCardMobile extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('REGISTERED', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5)),
+                  Text('REGISTERED', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _textMuted, letterSpacing: 0.5)),
                   const SizedBox(height: 4),
                   Text(
                     _fmt(member.registeredAt),
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF4B5563), fontWeight: FontWeight.w500),
+                    style: TextStyle(fontSize: 11, color: _textSecondary, fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const Text('STATUS', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFF9CA3AF), letterSpacing: 0.5)),
+                  Text('STATUS', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _textMuted, letterSpacing: 0.5)),
                   const SizedBox(height: 4),
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1040,7 +1081,7 @@ class _MemberCardMobile extends StatelessWidget {
             ],
           ),
           if (!member.isSuperAdmin) ...[
-            const Divider(height: 24),
+            Divider(height: 24, color: _border),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [

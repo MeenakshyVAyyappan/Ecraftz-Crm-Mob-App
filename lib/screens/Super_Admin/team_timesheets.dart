@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import '../widgets/app_drawer.dart';
+import '../../widgets/app_drawer.dart';
+import '../../theme/app_theme.dart';
+import '../../blocs/theme/theme_bloc.dart';
 
 
 // ─── Data Models ────────────────────────────────────────────────────────────
@@ -200,6 +203,14 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
   DateTimeRange? _selectedDateRange;
   String _searchQuery = '';
 
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+  Color get _bg => Theme.of(context).scaffoldBackgroundColor;
+  Color get _cardBg => Theme.of(context).colorScheme.surface;
+  Color get _border => AppTheme.borderOf(context);
+  Color get _textPrimary => AppTheme.textPrimaryOf(context);
+  Color get _textSecondary => AppTheme.textSecondaryOf(context);
+  Color get _textMuted => AppTheme.textMutedOf(context);
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -311,7 +322,7 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
 
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: _bg,
       drawer: AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: (i) {
@@ -320,33 +331,47 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
         },
       ),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: _cardBg,
         elevation: 0,
         leading: isTablet
             ? null
             : IconButton(
-                icon: const Icon(Icons.menu_rounded, color: Color(0xFF1E293B)),
+                icon: Icon(Icons.menu_rounded, color: _isDark ? Colors.white : const Color(0xFF1E293B)),
                 onPressed: () => _scaffoldKey.currentState?.openDrawer(),
               ),
-        title: const Text(
+        title: Text(
           'Team Timesheets',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF1E293B),
+            color: _textPrimary,
           ),
         ),
         actions: [
+          BlocBuilder<ThemeBloc, ThemeState>(
+            builder: (context, themeState) {
+              final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+              return IconButton(
+                icon: Icon(
+                  isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  color: isDarkTheme ? Colors.white : const Color(0xFF374151),
+                ),
+                onPressed: () {
+                  context.read<ThemeBloc>().add(ToggleThemeEvent());
+                },
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.notifications_none_rounded, size: 24),
-            color: const Color(0xFF64748B),
+            color: _textSecondary,
             onPressed: () {},
           ),
           const SizedBox(width: 4),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(color: const Color(0xFFE2E8F0), height: 1),
+          child: Container(color: _border, height: 1),
         ),
       ),
       body: Column(
@@ -354,33 +379,34 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
         children: [
           // ── Header description ──
           Container(
-            color: Colors.white,
+            color: _cardBg,
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Evaluate and audit organization-wide daily sign-ins, breaks, and tasks.',
-                  style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                  style: TextStyle(fontSize: 13, color: _textSecondary),
                 ),
                 const SizedBox(height: 12),
                 // Search
                 TextField(
                   controller: _searchController,
                   onChanged: (v) => setState(() => _searchQuery = v),
+                  style: TextStyle(color: _textPrimary, fontSize: 13),
                   decoration: InputDecoration(
                     hintText: 'Search by employee name...',
-                    hintStyle: const TextStyle(
+                    hintStyle: TextStyle(
                       fontSize: 13,
-                      color: Color(0xFF94A3B8),
+                      color: _textMuted,
                     ),
-                    prefixIcon: const Icon(
+                    prefixIcon: Icon(
                       Icons.search,
                       size: 18,
-                      color: Color(0xFF94A3B8),
+                      color: _textMuted,
                     ),
                     filled: true,
-                    fillColor: const Color(0xFFF1F5F9),
+                    fillColor: _isDark ? const Color(0xFF132238) : const Color(0xFFF1F5F9),
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 10,
@@ -462,20 +488,20 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
           // ── List ──
           Expanded(
             child: filtered.isEmpty
-                ? const Center(
+                ? Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
                           Icons.inbox_outlined,
                           size: 48,
-                          color: Color(0xFFCBD5E1),
+                          color: _isDark ? const Color(0xFF1E2E42) : const Color(0xFFCBD5E1),
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         Text(
                           'No timesheets found',
                           style: TextStyle(
-                            color: Color(0xFF94A3B8),
+                            color: _textSecondary,
                             fontSize: 14,
                           ),
                         ),
@@ -542,9 +568,11 @@ class _SummaryBar extends StatelessWidget {
     final totalHours = entries.fold<int>(0, (s, e) => s + e.duration.inHours);
     final withTasks = entries.where((e) => e.tasksDone > 0).length;
     final w = MediaQuery.of(context).size.width;
+    final cardBg = Theme.of(context).colorScheme.surface;
+    final border = AppTheme.borderOf(context);
 
     return Container(
-      color: Colors.white,
+      color: cardBg,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       margin: const EdgeInsets.only(bottom: 2),
       child: Row(
@@ -554,19 +582,19 @@ class _SummaryBar extends StatelessWidget {
             value: '${entries.length}',
             color: const Color(0xFF0EA5E9),
           ),
-          _divider(w < 360 ? 4 : 8),
+          _divider(context, w < 360 ? 4 : 8),
           _SummaryStat(
             label: 'Completed',
             value: '$completed',
             color: const Color(0xFF10B981),
           ),
-          _divider(w < 360 ? 4 : 8),
+          _divider(context, w < 360 ? 4 : 8),
           _SummaryStat(
             label: 'Total Hours',
             value: '${totalHours}h',
             color: const Color(0xFF8B5CF6),
           ),
-          _divider(w < 360 ? 4 : 8),
+          _divider(context, w < 360 ? 4 : 8),
           _SummaryStat(
             label: 'With Tasks',
             value: '$withTasks',
@@ -577,10 +605,10 @@ class _SummaryBar extends StatelessWidget {
     );
   }
 
-  Widget _divider(double horizontalMargin) => Container(
+  Widget _divider(BuildContext context, double horizontalMargin) => Container(
     width: 1,
     height: 28,
-    color: const Color(0xFFE2E8F0),
+    color: AppTheme.borderOf(context),
     margin: EdgeInsets.symmetric(horizontal: horizontalMargin),
   );
 }
@@ -614,7 +642,7 @@ class _SummaryStat extends StatelessWidget {
           ),
           Text(
             label,
-            style: TextStyle(fontSize: isCompact ? 9 : 11, color: const Color(0xFF94A3B8)),
+            style: TextStyle(fontSize: isCompact ? 9 : 11, color: AppTheme.textSecondaryOf(context)),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
@@ -641,12 +669,17 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textSecondary = AppTheme.textSecondaryOf(context);
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
-          color: active ? const Color(0xFFE0F2FE) : const Color(0xFFF1F5F9),
+          color: active
+              ? (isDark ? const Color(0xFF0F2547) : const Color(0xFFE0F2FE))
+              : (isDark ? const Color(0xFF1E2E42) : const Color(0xFFF1F5F9)),
           borderRadius: BorderRadius.circular(8),
           border: active
               ? Border.all(color: const Color(0xFF0EA5E9), width: 1)
@@ -660,7 +693,7 @@ class _FilterChip extends StatelessWidget {
               size: 14,
               color: active
                   ? const Color(0xFF0EA5E9)
-                  : const Color(0xFF64748B),
+                  : (isDark ? textSecondary : const Color(0xFF64748B)),
             ),
             const SizedBox(width: 5),
             Text(
@@ -669,8 +702,8 @@ class _FilterChip extends StatelessWidget {
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: active
-                    ? const Color(0xFF0369A1)
-                    : const Color(0xFF475569),
+                    ? (isDark ? Colors.white : const Color(0xFF0369A1))
+                    : (isDark ? textSecondary : const Color(0xFF475569)),
               ),
             ),
             const SizedBox(width: 4),
@@ -679,7 +712,7 @@ class _FilterChip extends StatelessWidget {
               size: 14,
               color: active
                   ? const Color(0xFF0EA5E9)
-                  : const Color(0xFF94A3B8),
+                  : (isDark ? textSecondary : const Color(0xFF94A3B8)),
             ),
           ],
         ),
@@ -703,25 +736,27 @@ class _TimesheetCard extends StatelessWidget {
     required this.onEvaluate,
   });
 
-  Color get _statusColor {
+  Color _statusColor(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     switch (entry.status) {
       case TimesheetStatus.completed:
-        return const Color(0xFF10B981);
+        return isDark ? const Color(0xFF34D399) : const Color(0xFF10B981);
       case TimesheetStatus.inProgress:
-        return const Color(0xFFF59E0B);
+        return isDark ? const Color(0xFFFBBF24) : const Color(0xFFF59E0B);
       case TimesheetStatus.absent:
-        return const Color(0xFFEF4444);
+        return isDark ? const Color(0xFFF87171) : const Color(0xFFEF4444);
     }
   }
 
-  Color get _statusBg {
+  Color _statusBg(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     switch (entry.status) {
       case TimesheetStatus.completed:
-        return const Color(0xFFD1FAE5);
+        return isDark ? const Color(0xFF064E3B) : const Color(0xFFD1FAE5);
       case TimesheetStatus.inProgress:
-        return const Color(0xFFFEF3C7);
+        return isDark ? const Color(0xFF78350F) : const Color(0xFFFEF3C7);
       case TimesheetStatus.absent:
-        return const Color(0xFFFEE2E2);
+        return isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFEE2E2);
     }
   }
 
@@ -739,12 +774,18 @@ class _TimesheetCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dateStr = DateFormat('MMM d, yyyy').format(entry.date);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = Theme.of(context).colorScheme.surface;
+    final border = AppTheme.borderOf(context);
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [
+        border: isDark ? Border.all(color: border) : null,
+        boxShadow: isDark ? null : [
           BoxShadow(
             color: Colors.black.withOpacity(0.04),
             blurRadius: 8,
@@ -785,17 +826,17 @@ class _TimesheetCard extends StatelessWidget {
                     children: [
                       Text(
                         entry.employeeName,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF1E293B),
+                          color: textPrimary,
                         ),
                       ),
                       Text(
                         entry.role,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: Color(0xFF94A3B8),
+                          color: textSecondary,
                           letterSpacing: 0.4,
                         ),
                       ),
@@ -809,7 +850,7 @@ class _TimesheetCard extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: _statusBg,
+                    color: _statusBg(context),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -817,7 +858,7 @@ class _TimesheetCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
-                      color: _statusColor,
+                      color: _statusColor(context),
                       letterSpacing: 0.3,
                     ),
                   ),
@@ -826,7 +867,7 @@ class _TimesheetCard extends StatelessWidget {
             ),
           ),
           // ── Divider ──
-          Container(height: 1, color: const Color(0xFFF1F5F9)),
+          Container(height: 1, color: border),
           // ── Stats Grid ──
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -884,7 +925,7 @@ class _TimesheetCard extends StatelessWidget {
           // ── Footer / Evaluate Button ──
           Container(
             height: 1,
-            color: const Color(0xFFF1F5F9),
+            color: border,
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -893,17 +934,17 @@ class _TimesheetCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.business_center_outlined,
                       size: 13,
-                      color: Color(0xFF94A3B8),
+                      color: textSecondary,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       entry.department,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: Color(0xFF94A3B8),
+                        color: textSecondary,
                       ),
                     ),
                   ],
@@ -916,29 +957,29 @@ class _TimesheetCard extends StatelessWidget {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
+                      color: isDark ? const Color(0xFF0F2547) : const Color(0xFFEFF6FF),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: const Color(0xFFBFDBFE),
+                        color: isDark ? const Color(0xFF1E3A8A) : const Color(0xFFBFDBFE),
                         width: 1,
                       ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
+                      children: [
                         Text(
                           'Evaluate',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF1D4ED8),
+                            color: isDark ? Colors.white : const Color(0xFF1D4ED8),
                           ),
                         ),
-                        SizedBox(width: 4),
+                        const SizedBox(width: 4),
                         Icon(
                           Icons.keyboard_arrow_down_rounded,
                           size: 14,
-                          color: Color(0xFF1D4ED8),
+                          color: isDark ? Colors.white : const Color(0xFF1D4ED8),
                         ),
                       ],
                     ),
@@ -973,14 +1014,14 @@ class _StatItem extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, size: 12, color: const Color(0xFFCBD5E1)),
+              Icon(icon, size: 12, color: AppTheme.textMutedOf(context)),
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 10,
-                    color: Color(0xFF94A3B8),
+                    color: AppTheme.textSecondaryOf(context),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -994,7 +1035,7 @@ class _StatItem extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: valueColor ?? const Color(0xFF334155),
+              color: valueColor ?? AppTheme.textPrimaryOf(context),
             ),
             overflow: TextOverflow.ellipsis,
           ),
@@ -1018,10 +1059,14 @@ class _DepartmentPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final border = AppTheme.borderOf(context);
+    final cardBg = Theme.of(context).colorScheme.surface;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1031,13 +1076,13 @@ class _DepartmentPicker extends StatelessWidget {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: const Color(0xFFE2E8F0),
+              color: border,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           const SizedBox(height: 16),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -1045,7 +1090,7 @@ class _DepartmentPicker extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1E293B),
+                  color: textPrimary,
                 ),
               ),
             ),
@@ -1058,7 +1103,7 @@ class _DepartmentPicker extends StatelessWidget {
                 d,
                 style: TextStyle(
                   fontSize: 14,
-                  color: const Color(0xFF1E293B),
+                  color: textPrimary,
                   fontWeight: d == selected ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
@@ -1087,11 +1132,15 @@ class _StatusPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final border = AppTheme.borderOf(context);
+    final cardBg = Theme.of(context).colorScheme.surface;
+    final textPrimary = AppTheme.textPrimaryOf(context);
     const statuses = ['Completed', 'In Progress', 'Absent'];
+
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1101,13 +1150,13 @@ class _StatusPicker extends StatelessWidget {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: const Color(0xFFE2E8F0),
+              color: border,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           const SizedBox(height: 16),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -1115,7 +1164,7 @@ class _StatusPicker extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1E293B),
+                  color: textPrimary,
                 ),
               ),
             ),
@@ -1123,9 +1172,9 @@ class _StatusPicker extends StatelessWidget {
           const SizedBox(height: 8),
           ListTile(
             onTap: () => onSelect(null),
-            title: const Text(
+            title: Text(
               'All',
-              style: TextStyle(fontSize: 14, color: Color(0xFF1E293B)),
+              style: TextStyle(fontSize: 14, color: textPrimary),
             ),
             trailing: selected == null
                 ? const Icon(
@@ -1142,7 +1191,7 @@ class _StatusPicker extends StatelessWidget {
                 s,
                 style: TextStyle(
                   fontSize: 14,
-                  color: const Color(0xFF1E293B),
+                  color: textPrimary,
                   fontWeight: s == selected ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
@@ -1170,10 +1219,14 @@ class _EvaluateMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final border = AppTheme.borderOf(context);
+    final cardBg = Theme.of(context).colorScheme.surface;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1183,7 +1236,7 @@ class _EvaluateMenu extends StatelessWidget {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: const Color(0xFFE2E8F0),
+              color: border,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -1194,10 +1247,10 @@ class _EvaluateMenu extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Text(
                 entry.employeeName,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1E293B),
+                  color: textPrimary,
                 ),
               ),
             ),
@@ -1275,25 +1328,29 @@ class _MenuOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    final border = AppTheme.borderOf(context);
+
     return ListTile(
       onTap: onTap,
       leading: Icon(
         icon,
         size: 20,
-        color: iconColor ?? const Color(0xFF475569),
+        color: iconColor ?? textSecondary,
       ),
       title: Text(
         label,
         style: TextStyle(
           fontSize: 14,
-          color: labelColor ?? const Color(0xFF1E293B),
+          color: labelColor ?? textPrimary,
           fontWeight: FontWeight.w500,
         ),
       ),
-      trailing: const Icon(
+      trailing: Icon(
         Icons.chevron_right_rounded,
         size: 18,
-        color: Color(0xFFCBD5E1),
+        color: border,
       ),
     );
   }
@@ -1304,6 +1361,48 @@ class _MenuOption extends StatelessWidget {
 class _DetailedLogScreen extends StatelessWidget {
   final TimesheetEntry entry;
   const _DetailedLogScreen({required this.entry});
+
+  bool _isDark(BuildContext context) => Theme.of(context).brightness == Brightness.dark;
+  Color _bg(BuildContext context) => Theme.of(context).scaffoldBackgroundColor;
+  Color _cardBg(BuildContext context) => Theme.of(context).colorScheme.surface;
+  Color _border(BuildContext context) => AppTheme.borderOf(context);
+  Color _textPrimary(BuildContext context) => AppTheme.textPrimaryOf(context);
+  Color _textSecondary(BuildContext context) => AppTheme.textSecondaryOf(context);
+
+  Color _statusColor(BuildContext context) {
+    final isDark = _isDark(context);
+    switch (entry.status) {
+      case TimesheetStatus.completed:
+        return isDark ? const Color(0xFF34D399) : const Color(0xFF059669);
+      case TimesheetStatus.inProgress:
+        return isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
+      case TimesheetStatus.absent:
+        return isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626);
+    }
+  }
+
+  Color _statusBg(BuildContext context) {
+    final isDark = _isDark(context);
+    switch (entry.status) {
+      case TimesheetStatus.completed:
+        return isDark ? const Color(0xFF064E3B) : const Color(0xFFD1FAE5);
+      case TimesheetStatus.inProgress:
+        return isDark ? const Color(0xFF78350F) : const Color(0xFFFEF3C7);
+      case TimesheetStatus.absent:
+        return isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFEE2E2);
+    }
+  }
+
+  String get _statusLabel {
+    switch (entry.status) {
+      case TimesheetStatus.completed:
+        return 'COMPLETED';
+      case TimesheetStatus.inProgress:
+        return 'IN PROGRESS';
+      case TimesheetStatus.absent:
+        return 'ABSENT';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1317,27 +1416,49 @@ class _DetailedLogScreen extends StatelessWidget {
     final duration =
         '${entry.duration.inHours}h ${entry.duration.inMinutes.remainder(60)}m';
 
+    final textPrimaryColor = _textPrimary(context);
+    final textSecondaryColor = _textSecondary(context);
+    final cardBgColor = _cardBg(context);
+    final isDarkTheme = _isDark(context);
+    final borderColor = _border(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: _bg(context),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: cardBgColor,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-          color: const Color(0xFF1E293B),
+          icon: Icon(Icons.arrow_back_ios_new, size: 20, color: textPrimaryColor),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Detailed Log',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF1E293B),
+            color: textPrimaryColor,
           ),
         ),
+        actions: [
+          BlocBuilder<ThemeBloc, ThemeState>(
+            builder: (context, themeState) {
+              final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+              return IconButton(
+                icon: Icon(
+                  isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  color: isDarkTheme ? Colors.white : const Color(0xFF374151),
+                ),
+                onPressed: () {
+                  context.read<ThemeBloc>().add(ToggleThemeEvent());
+                },
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(color: const Color(0xFFE2E8F0), height: 1),
+          child: Container(color: borderColor, height: 1),
         ),
       ),
       body: SingleChildScrollView(
@@ -1349,9 +1470,10 @@ class _DetailedLogScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: cardBgColor,
                 borderRadius: BorderRadius.circular(14),
-                boxShadow: [
+                border: isDarkTheme ? Border.all(color: borderColor) : null,
+                boxShadow: isDarkTheme ? null : [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.04),
                     blurRadius: 8,
@@ -1386,17 +1508,17 @@ class _DetailedLogScreen extends StatelessWidget {
                       children: [
                         Text(
                           entry.employeeName,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF1E293B),
+                            color: textPrimaryColor,
                           ),
                         ),
                         Text(
                           '${entry.role} • ${entry.department}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
-                            color: Color(0xFF94A3B8),
+                            color: textSecondaryColor,
                           ),
                         ),
                       ],
@@ -1406,12 +1528,12 @@ class _DetailedLogScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Shift Details',
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF1E293B),
+                color: textPrimaryColor,
               ),
             ),
             const SizedBox(height: 10),
@@ -1429,14 +1551,20 @@ class _DetailedLogScreen extends StatelessWidget {
               label: 'Tasks',
               value: '${entry.tasksDone} / ${entry.tasksTotal} completed',
             ),
-            _DetailRow(label: 'Status', value: 'Completed', isStatus: true),
+            _DetailRow(
+              label: 'Status',
+              value: _statusLabel,
+              isStatus: true,
+              statusBg: _statusBg(context),
+              statusColor: _statusColor(context),
+            ),
             const SizedBox(height: 20),
-            const Text(
+            Text(
               'Activity Timeline',
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF1E293B),
+                color: textPrimaryColor,
               ),
             ),
             const SizedBox(height: 12),
@@ -1475,20 +1603,31 @@ class _DetailRow extends StatelessWidget {
   final String label;
   final String value;
   final bool isStatus;
+  final Color? statusBg;
+  final Color? statusColor;
   const _DetailRow({
     required this.label,
     required this.value,
     this.isStatus = false,
+    this.statusBg,
+    this.statusColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    final cardBg = Theme.of(context).colorScheme.surface;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final border = AppTheme.borderOf(context);
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(10),
+        border: isDark ? Border.all(color: border) : null,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1496,7 +1635,7 @@ class _DetailRow extends StatelessWidget {
           Flexible(
             child: Text(
               label,
-              style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+              style: TextStyle(fontSize: 13, color: textSecondary),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -1508,25 +1647,25 @@ class _DetailRow extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFD1FAE5),
+                    color: statusBg ?? const Color(0xFFD1FAE5),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Text(
-                    'COMPLETED',
+                  child: Text(
+                    value,
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF059669),
+                      color: statusColor ?? const Color(0xFF059669),
                     ),
                   ),
                 )
               : Flexible(
                   child: Text(
                     value,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF1E293B),
+                      color: textPrimary,
                     ),
                     textAlign: TextAlign.end,
                     overflow: TextOverflow.ellipsis,
@@ -1552,6 +1691,10 @@ class _TimelineItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    final border = AppTheme.borderOf(context);
+
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1568,7 +1711,7 @@ class _TimelineItem extends StatelessWidget {
                 Expanded(
                   child: Container(
                     width: 2,
-                    color: const Color(0xFFE2E8F0),
+                    color: border,
                   ),
                 ),
             ],
@@ -1582,17 +1725,17 @@ class _TimelineItem extends StatelessWidget {
                   Expanded(
                     child: Text(
                       label,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
-                        color: Color(0xFF334155),
+                        color: textPrimary,
                       ),
                     ),
                   ),
                   Text(
                     time,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: Color(0xFF94A3B8),
+                      color: textSecondary,
                     ),
                   ),
                 ],
@@ -1647,14 +1790,21 @@ class _AdjustTimeSheetState extends State<_AdjustTimeSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final border = AppTheme.borderOf(context);
+    final cardBg = Theme.of(context).colorScheme.surface;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    final textMuted = AppTheme.textMutedOf(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
       child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -1667,24 +1817,24 @@ class _AdjustTimeSheetState extends State<_AdjustTimeSheet> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0),
+                    color: border,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'Adjust Time',
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1E293B),
+                  color: textPrimary,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 widget.entry.employeeName,
-                style: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                style: TextStyle(fontSize: 13, color: textSecondary),
               ),
               const SizedBox(height: 20),
               _FormLabel('Sign In Time'),
@@ -1700,21 +1850,22 @@ class _AdjustTimeSheetState extends State<_AdjustTimeSheet> {
               TextField(
                 controller: _reasonCtrl,
                 maxLines: 3,
+                style: TextStyle(color: textPrimary, fontSize: 13),
                 decoration: InputDecoration(
                   hintText: 'Enter reason...',
-                  hintStyle: const TextStyle(
-                    color: Color(0xFF94A3B8),
+                  hintStyle: TextStyle(
+                    color: textMuted,
                     fontSize: 13,
                   ),
                   filled: true,
-                  fillColor: const Color(0xFFF8FAFC),
+                  fillColor: isDark ? const Color(0xFF132238) : const Color(0xFFF8FAFC),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    borderSide: BorderSide(color: border),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    borderSide: BorderSide(color: border),
                   ),
                 ),
               ),
@@ -1765,10 +1916,10 @@ class _FormLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w600,
-        color: Color(0xFF475569),
+        color: AppTheme.textSecondaryOf(context),
       ),
     );
   }
@@ -1780,30 +1931,36 @@ class _TimeField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final border = AppTheme.borderOf(context);
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textMuted = AppTheme.textMutedOf(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return TextField(
       controller: controller,
       keyboardType: TextInputType.datetime,
+      style: TextStyle(color: textPrimary, fontSize: 13),
       decoration: InputDecoration(
         hintText: 'HH:MM',
-        hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-        prefixIcon: const Icon(
+        hintStyle: TextStyle(color: textMuted, fontSize: 13),
+        prefixIcon: Icon(
           Icons.access_time_rounded,
           size: 18,
-          color: Color(0xFF94A3B8),
+          color: textMuted,
         ),
         filled: true,
-        fillColor: const Color(0xFFF8FAFC),
+        fillColor: isDark ? const Color(0xFF132238) : const Color(0xFFF8FAFC),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 12,
           vertical: 12,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+          borderSide: BorderSide(color: border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+          borderSide: BorderSide(color: border),
         ),
       ),
     );
@@ -1817,6 +1974,11 @@ class _QuickCreateSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final border = AppTheme.borderOf(context);
+    final cardBg = Theme.of(context).colorScheme.surface;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+
     const options = [
       (Icons.person_add_outlined, 'New Lead', Color(0xFF0EA5E9)),
       (Icons.folder_open_outlined, 'New Project', Color(0xFF8B5CF6)),
@@ -1825,9 +1987,9 @@ class _QuickCreateSheet extends StatelessWidget {
     ];
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1837,13 +1999,13 @@ class _QuickCreateSheet extends StatelessWidget {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: const Color(0xFFE2E8F0),
+              color: border,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           const SizedBox(height: 16),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -1851,7 +2013,7 @@ class _QuickCreateSheet extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1E293B),
+                  color: textPrimary,
                 ),
               ),
             ),
@@ -1871,16 +2033,16 @@ class _QuickCreateSheet extends StatelessWidget {
               ),
               title: Text(
                 o.$2,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xFF1E293B),
+                  color: textPrimary,
                 ),
               ),
-              trailing: const Icon(
+              trailing: Icon(
                 Icons.chevron_right_rounded,
                 size: 18,
-                color: Color(0xFFCBD5E1),
+                color: textSecondary,
               ),
             ),
           ),

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../widgets/app_drawer.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../theme/app_theme.dart';
+import '../../blocs/theme/theme_bloc.dart';
+import '../../widgets/app_drawer.dart';
 
 
 // ─── Data Models ─────────────────────────────────────────────────────────────
@@ -305,10 +308,16 @@ class _LeaveApprovalsScreenState extends State<LeaveApprovalsScreen>
   Widget build(BuildContext context) {
     final w = MediaQuery.of(context).size.width;
     final isTablet = w >= 600;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _bg = Theme.of(context).scaffoldBackgroundColor;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
 
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: _bg,
       drawer: AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: (i) {
@@ -317,33 +326,47 @@ class _LeaveApprovalsScreenState extends State<LeaveApprovalsScreen>
         },
       ),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: _cardBg,
         elevation: 0,
         leading: isTablet
             ? null
             : IconButton(
-                icon: const Icon(Icons.menu_rounded, color: Color(0xFF1E293B)),
+                icon: Icon(Icons.menu_rounded, color: _textPrimary),
                 onPressed: () => _scaffoldKey.currentState?.openDrawer(),
               ),
-        title: const Text(
+        title: Text(
           'Leave Approvals',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF1E293B),
+            color: _textPrimary,
           ),
         ),
         actions: [
+          BlocBuilder<ThemeBloc, ThemeState>(
+            builder: (context, themeState) {
+              final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+              return IconButton(
+                icon: Icon(
+                  isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  color: isDarkTheme ? Colors.white : const Color(0xFF374151),
+                ),
+                onPressed: () {
+                  context.read<ThemeBloc>().add(ToggleThemeEvent());
+                },
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.notifications_none_rounded, size: 24),
-            color: const Color(0xFF64748B),
+            color: _textSecondary,
             onPressed: () {},
           ),
           const SizedBox(width: 4),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(color: const Color(0xFFE2E8F0), height: 1),
+          child: Container(color: _border, height: 1),
         ),
       ),
       body: Column(
@@ -351,14 +374,14 @@ class _LeaveApprovalsScreenState extends State<LeaveApprovalsScreen>
         children: [
           // ── Header ──
           Container(
-            color: Colors.white,
+            color: _cardBg,
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Review and process team leave requests with full audit trail.',
-                  style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                  style: TextStyle(fontSize: 13, color: _textSecondary),
                 ),
                 const SizedBox(height: 14),
                 // Summary stat cards
@@ -423,34 +446,34 @@ class _LeaveApprovalsScreenState extends State<LeaveApprovalsScreen>
                   onChanged: (v) => setState(() => _searchQuery = v),
                   decoration: InputDecoration(
                     hintText: 'Search by employee or leave type...',
-                    hintStyle: const TextStyle(
+                    hintStyle: TextStyle(
                       fontSize: 13,
-                      color: Color(0xFF94A3B8),
+                      color: _textSecondary,
                     ),
-                    prefixIcon: const Icon(
+                    prefixIcon: Icon(
                       Icons.search,
                       size: 18,
-                      color: Color(0xFF94A3B8),
+                      color: _textSecondary,
                     ),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(
+                            icon: Icon(
                               Icons.close,
                               size: 16,
-                              color: Color(0xFF94A3B8),
+                              color: _textSecondary,
                             ),
                             onPressed: () {
                               _searchController.clear();
                               setState(() => _searchQuery = '');
                             },
                           )
-                        : const Icon(
+                        : Icon(
                             Icons.filter_list_rounded,
                             size: 18,
-                            color: Color(0xFF94A3B8),
+                            color: _textSecondary,
                           ),
                     filled: true,
-                    fillColor: const Color(0xFFF1F5F9),
+                    fillColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF1F5F9),
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 10,
@@ -466,11 +489,11 @@ class _LeaveApprovalsScreenState extends State<LeaveApprovalsScreen>
           ),
           // ── Tabs ──
           Container(
-            color: Colors.white,
+            color: _cardBg,
             child: TabBar(
               controller: _tabController,
               labelColor: const Color(0xFF0EA5E9),
-              unselectedLabelColor: const Color(0xFF94A3B8),
+              unselectedLabelColor: _textSecondary,
               indicatorColor: const Color(0xFF0EA5E9),
               indicatorWeight: 2.5,
               labelStyle: const TextStyle(
@@ -495,15 +518,15 @@ class _LeaveApprovalsScreenState extends State<LeaveApprovalsScreen>
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFEF3C7),
+                            color: isDark ? const Color(0xFFCA8A04).withOpacity(0.2) : const Color(0xFFFEF3C7),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
                             '${_pendingRequests.length}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFFD97706),
+                              color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
                             ),
                           ),
                         ),
@@ -523,15 +546,15 @@ class _LeaveApprovalsScreenState extends State<LeaveApprovalsScreen>
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF1F5F9),
+                            color: isDark ? const Color(0xFF1E2E42) : const Color(0xFFF1F5F9),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
                             '${_processedRequests.length}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF64748B),
+                              color: _textSecondary,
                             ),
                           ),
                         ),
@@ -541,7 +564,7 @@ class _LeaveApprovalsScreenState extends State<LeaveApprovalsScreen>
               ],
             ),
           ),
-          Container(height: 1, color: const Color(0xFFE2E8F0)),
+          Container(height: 1, color: _border),
           // ── Tab Views ──
           Expanded(
             child: TabBarView(
@@ -641,12 +664,18 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+        border: Border.all(color: _border, width: 1),
       ),
       child: Row(
         children: [
@@ -654,7 +683,7 @@ class _StatCard extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: iconBg,
+              color: isDark ? iconColor.withOpacity(0.15) : iconBg,
               shape: BoxShape.circle,
             ),
             child: Icon(icon, size: 18, color: iconColor),
@@ -666,19 +695,19 @@ class _StatCard extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF94A3B8),
+                    color: _textSecondary,
                     letterSpacing: 0.4,
                   ),
                 ),
                 Text(
                   value,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF1E293B),
+                    color: _textPrimary,
                     height: 1.1,
                   ),
                 ),
@@ -712,24 +741,33 @@ class _LeaveCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+    final _textMuted = AppTheme.textMutedOf(context);
+
     final isEmergency = request.status == LeaveStatus.emergency;
     final dateRange =
         '${DateFormat('MMM d').format(request.fromDate)} – ${DateFormat('MMM d, yyyy').format(request.toDate)}';
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(14),
         border: isEmergency
             ? Border.all(color: const Color(0xFFEF4444), width: 1.5)
-            : null,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+            : (isDark ? Border.all(color: _border, width: 1) : null),
+        boxShadow: isDark
+            ? []
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
       ),
       child: Column(
         children: [
@@ -767,10 +805,10 @@ class _LeaveCard extends StatelessWidget {
                           Expanded(
                             child: Text(
                               request.employeeName,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF1E293B),
+                                color: _textPrimary,
                               ),
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
@@ -783,15 +821,15 @@ class _LeaveCard extends StatelessWidget {
                                 vertical: 3,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFEE2E2),
+                                color: isDark ? const Color(0xFFEF4444).withOpacity(0.2) : const Color(0xFFFEE2E2),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: const Text(
+                              child: Text(
                                 'EMERGENCY',
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,
-                                  color: Color(0xFFDC2626),
+                                  color: isDark ? const Color(0xFFFCA5A5) : const Color(0xFFDC2626),
                                   letterSpacing: 0.3,
                                 ),
                               ),
@@ -803,15 +841,15 @@ class _LeaveCard extends StatelessWidget {
                                 vertical: 3,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFEF9C3),
+                                color: isDark ? const Color(0xFFCA8A04).withOpacity(0.2) : const Color(0xFFFEF9C3),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: const Text(
+                              child: Text(
                                 'PENDING',
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,
-                                  color: Color(0xFFCA8A04),
+                                  color: isDark ? const Color(0xFFFDE047) : const Color(0xFFCA8A04),
                                   letterSpacing: 0.3,
                                 ),
                               ),
@@ -821,9 +859,9 @@ class _LeaveCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         '${request.leaveTypeLabel} • ${request.department}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
-                          color: Color(0xFF94A3B8),
+                          color: _textSecondary,
                         ),
                       ),
                     ],
@@ -832,7 +870,7 @@ class _LeaveCard extends StatelessWidget {
               ],
             ),
           ),
-          Container(height: 1, color: const Color(0xFFF1F5F9)),
+          Container(height: 1, color: _border),
           // Details
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -860,24 +898,24 @@ class _LeaveCard extends StatelessWidget {
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
+                      color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.format_quote_rounded,
                           size: 14,
-                          color: Color(0xFF94A3B8),
+                          color: _textMuted,
                         ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             request.reason!,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
-                              color: Color(0xFF475569),
+                              color: _textSecondary,
                               fontStyle: FontStyle.italic,
                             ),
                           ),
@@ -889,15 +927,15 @@ class _LeaveCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   'Requested: ${DateFormat('MMM d, yyyy • hh:mm a').format(request.requestedOn)}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
-                    color: Color(0xFFCBD5E1),
+                    color: _textMuted,
                   ),
                 ),
               ],
             ),
           ),
-          Container(height: 1, color: const Color(0xFFF1F5F9)),
+          Container(height: 1, color: _border),
           // Action buttons
           Padding(
             padding: const EdgeInsets.all(12),
@@ -908,8 +946,8 @@ class _LeaveCard extends StatelessWidget {
                     onPressed: onReject,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFFEF4444),
-                      side: const BorderSide(color: Color(0xFFFECACA)),
-                      backgroundColor: const Color(0xFFFFF5F5),
+                      side: BorderSide(color: isDark ? const Color(0xFFEF4444).withOpacity(0.4) : const Color(0xFFFECACA)),
+                      backgroundColor: isDark ? const Color(0xFFEF4444).withOpacity(0.08) : const Color(0xFFFFF5F5),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -932,8 +970,8 @@ class _LeaveCard extends StatelessWidget {
                     onPressed: onRequestInfo,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFF0EA5E9),
-                      side: const BorderSide(color: Color(0xFFBAE6FD)),
-                      backgroundColor: const Color(0xFFF0F9FF),
+                      side: BorderSide(color: isDark ? const Color(0xFF0EA5E9).withOpacity(0.4) : const Color(0xFFBAE6FD)),
+                      backgroundColor: isDark ? const Color(0xFF0EA5E9).withOpacity(0.08) : const Color(0xFFF0F9FF),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -983,9 +1021,9 @@ class _LeaveCard extends StatelessWidget {
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: const BoxDecoration(
-                color: Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.vertical(
+              decoration: BoxDecoration(
+                color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
+                borderRadius: const BorderRadius.vertical(
                   bottom: Radius.circular(14),
                 ),
               ),
@@ -1025,22 +1063,25 @@ class _InfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
+        color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: const Color(0xFF64748B)),
+          Icon(icon, size: 12, color: _textSecondary),
           const SizedBox(width: 4),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
-              color: Color(0xFF475569),
+              color: _textSecondary,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -1057,47 +1098,54 @@ class _LeaveHistoryTile extends StatelessWidget {
   final VoidCallback onViewDetail;
   const _LeaveHistoryTile({required this.request, required this.onViewDetail});
 
-  Color get _statusColor {
-    switch (request.status) {
-      case LeaveStatus.approved:
-        return const Color(0xFF10B981);
-      case LeaveStatus.rejected:
-        return const Color(0xFFEF4444);
-      case LeaveStatus.needsInfo:
-        return const Color(0xFF0EA5E9);
-      default:
-        return const Color(0xFFF59E0B);
-    }
-  }
-
-  Color get _statusBg {
-    switch (request.status) {
-      case LeaveStatus.approved:
-        return const Color(0xFFD1FAE5);
-      case LeaveStatus.rejected:
-        return const Color(0xFFFEE2E2);
-      case LeaveStatus.needsInfo:
-        return const Color(0xFFE0F2FE);
-      default:
-        return const Color(0xFFFEF3C7);
-    }
-  }
-
-  String get _statusLabel {
-    switch (request.status) {
-      case LeaveStatus.approved:
-        return 'APPROVED';
-      case LeaveStatus.rejected:
-        return 'REJECTED';
-      case LeaveStatus.needsInfo:
-        return 'NEEDS INFO';
-      default:
-        return 'PENDING';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+    final _textMuted = AppTheme.textMutedOf(context);
+
+    Color getStatusColor() {
+      switch (request.status) {
+        case LeaveStatus.approved:
+          return isDark ? const Color(0xFF34D399) : const Color(0xFF10B981);
+        case LeaveStatus.rejected:
+          return isDark ? const Color(0xFFF87171) : const Color(0xFFEF4444);
+        case LeaveStatus.needsInfo:
+          return isDark ? const Color(0xFF38BDF8) : const Color(0xFF0EA5E9);
+        default:
+          return isDark ? const Color(0xFFFBBF24) : const Color(0xFFF59E0B);
+      }
+    }
+
+    Color getStatusBg() {
+      switch (request.status) {
+        case LeaveStatus.approved:
+          return isDark ? const Color(0xFF10B981).withOpacity(0.15) : const Color(0xFFD1FAE5);
+        case LeaveStatus.rejected:
+          return isDark ? const Color(0xFFEF4444).withOpacity(0.15) : const Color(0xFFFEE2E2);
+        case LeaveStatus.needsInfo:
+          return isDark ? const Color(0xFF0EA5E9).withOpacity(0.15) : const Color(0xFFE0F2FE);
+        default:
+          return isDark ? const Color(0xFFF59E0B).withOpacity(0.15) : const Color(0xFFFEF3C7);
+      }
+    }
+
+    String getStatusLabel() {
+      switch (request.status) {
+        case LeaveStatus.approved:
+          return 'APPROVED';
+        case LeaveStatus.rejected:
+          return 'REJECTED';
+        case LeaveStatus.needsInfo:
+          return 'NEEDS INFO';
+        default:
+          return 'PENDING';
+      }
+    }
+
     final requestedStr =
         DateFormat('MMM d, hh:mm a').format(request.requestedOn);
 
@@ -1106,15 +1154,18 @@ class _LeaveHistoryTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: _cardBg,
           borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 6,
-              offset: const Offset(0, 1),
-            ),
-          ],
+          border: isDark ? Border.all(color: _border, width: 1) : null,
+          boxShadow: isDark
+              ? []
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 6,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
         ),
         child: Row(
           children: [
@@ -1143,19 +1194,19 @@ class _LeaveHistoryTile extends StatelessWidget {
                 children: [
                   Text(
                     request.employeeName,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF1E293B),
+                      color: _textPrimary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
                     '${request.leaveTypeLabel} • ${DateFormat('MMM d').format(request.fromDate)}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11,
-                      color: Color(0xFF94A3B8),
+                      color: _textSecondary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1168,9 +1219,9 @@ class _LeaveHistoryTile extends StatelessWidget {
               children: [
                 Text(
                   requestedStr,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 10,
-                    color: Color(0xFFCBD5E1),
+                    color: _textMuted,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -1180,15 +1231,15 @@ class _LeaveHistoryTile extends StatelessWidget {
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: _statusBg,
+                    color: getStatusBg(),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    _statusLabel,
+                    getStatusLabel(),
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
-                      color: _statusColor,
+                      color: getStatusColor(),
                       letterSpacing: 0.3,
                     ),
                   ),
@@ -1218,6 +1269,10 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+    final _textMuted = AppTheme.textMutedOf(context);
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -1228,7 +1283,7 @@ class _EmptyState extends StatelessWidget {
               width: 64,
               height: 64,
               decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.1),
+                color: iconColor.withOpacity(isDark ? 0.2 : 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, size: 32, color: iconColor),
@@ -1236,10 +1291,10 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF94A3B8),
+                color: _textSecondary,
                 letterSpacing: 0.3,
               ),
               textAlign: TextAlign.center,
@@ -1247,7 +1302,7 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               subtitle,
-              style: const TextStyle(fontSize: 12, color: Color(0xFFCBD5E1)),
+              style: TextStyle(fontSize: 12, color: _textMuted),
               textAlign: TextAlign.center,
             ),
           ],
@@ -1263,74 +1318,97 @@ class _LeaveDetailScreen extends StatelessWidget {
   final LeaveRequest request;
   const _LeaveDetailScreen({required this.request});
 
-  Color get _statusColor {
-    switch (request.status) {
-      case LeaveStatus.approved:
-        return const Color(0xFF10B981);
-      case LeaveStatus.rejected:
-        return const Color(0xFFEF4444);
-      case LeaveStatus.needsInfo:
-        return const Color(0xFF0EA5E9);
-      case LeaveStatus.emergency:
-        return const Color(0xFFEF4444);
-      default:
-        return const Color(0xFFF59E0B);
-    }
-  }
-
-  Color get _statusBg {
-    switch (request.status) {
-      case LeaveStatus.approved:
-        return const Color(0xFFD1FAE5);
-      case LeaveStatus.rejected:
-        return const Color(0xFFFEE2E2);
-      case LeaveStatus.needsInfo:
-        return const Color(0xFFE0F2FE);
-      case LeaveStatus.emergency:
-        return const Color(0xFFFEE2E2);
-      default:
-        return const Color(0xFFFEF3C7);
-    }
-  }
-
-  String get _statusLabel {
-    switch (request.status) {
-      case LeaveStatus.approved:
-        return 'APPROVED';
-      case LeaveStatus.rejected:
-        return 'REJECTED';
-      case LeaveStatus.needsInfo:
-        return 'NEEDS INFO';
-      case LeaveStatus.emergency:
-        return 'EMERGENCY';
-      default:
-        return 'PENDING';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _bg = Theme.of(context).scaffoldBackgroundColor;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
+    Color getStatusColor() {
+      switch (request.status) {
+        case LeaveStatus.approved:
+          return isDark ? const Color(0xFF34D399) : const Color(0xFF10B981);
+        case LeaveStatus.rejected:
+          return isDark ? const Color(0xFFF87171) : const Color(0xFFEF4444);
+        case LeaveStatus.needsInfo:
+          return isDark ? const Color(0xFF38BDF8) : const Color(0xFF0EA5E9);
+        case LeaveStatus.emergency:
+          return isDark ? const Color(0xFFF87171) : const Color(0xFFEF4444);
+        default:
+          return isDark ? const Color(0xFFFBBF24) : const Color(0xFFF59E0B);
+      }
+    }
+
+    Color getStatusBg() {
+      switch (request.status) {
+        case LeaveStatus.approved:
+          return isDark ? const Color(0xFF10B981).withOpacity(0.15) : const Color(0xFFD1FAE5);
+        case LeaveStatus.rejected:
+          return isDark ? const Color(0xFFEF4444).withOpacity(0.15) : const Color(0xFFFEE2E2);
+        case LeaveStatus.needsInfo:
+          return isDark ? const Color(0xFF0EA5E9).withOpacity(0.15) : const Color(0xFFE0F2FE);
+        case LeaveStatus.emergency:
+          return isDark ? const Color(0xFFEF4444).withOpacity(0.15) : const Color(0xFFFEE2E2);
+        default:
+          return isDark ? const Color(0xFFF59E0B).withOpacity(0.15) : const Color(0xFFFEF3C7);
+      }
+    }
+
+    String getStatusLabel() {
+      switch (request.status) {
+        case LeaveStatus.approved:
+          return 'APPROVED';
+        case LeaveStatus.rejected:
+          return 'REJECTED';
+        case LeaveStatus.needsInfo:
+          return 'NEEDS INFO';
+        case LeaveStatus.emergency:
+          return 'EMERGENCY';
+        default:
+          return 'PENDING';
+      }
+    }
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: _cardBg,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-          color: const Color(0xFF1E293B),
+          icon: Icon(Icons.arrow_back_ios_new, size: 20, color: _textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Leave Details',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF1E293B),
+            color: _textPrimary,
           ),
         ),
+        actions: [
+          BlocBuilder<ThemeBloc, ThemeState>(
+            builder: (context, themeState) {
+              final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+              return IconButton(
+                icon: Icon(
+                  isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  color: isDarkTheme ? Colors.white : const Color(0xFF374151),
+                ),
+                onPressed: () {
+                  context.read<ThemeBloc>().add(ToggleThemeEvent());
+                },
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(color: const Color(0xFFE2E8F0), height: 1),
+          child: Container(color: _border, height: 1),
         ),
       ),
       body: SingleChildScrollView(
@@ -1341,15 +1419,18 @@ class _LeaveDetailScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: _cardBg,
                 borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+                border: isDark ? Border.all(color: _border, width: 1) : null,
+                boxShadow: isDark
+                    ? []
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
               ),
               child: Row(
                 children: [
@@ -1378,17 +1459,17 @@ class _LeaveDetailScreen extends StatelessWidget {
                       children: [
                         Text(
                           request.employeeName,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF1E293B),
+                            color: _textPrimary,
                           ),
                         ),
                         Text(
                           request.department,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
-                            color: Color(0xFF94A3B8),
+                            color: _textSecondary,
                           ),
                         ),
                       ],
@@ -1400,15 +1481,15 @@ class _LeaveDetailScreen extends StatelessWidget {
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: _statusBg,
+                      color: getStatusBg(),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      _statusLabel,
+                      getStatusLabel(),
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: _statusColor,
+                        color: getStatusColor(),
                         letterSpacing: 0.3,
                       ),
                     ),
@@ -1448,15 +1529,15 @@ class _LeaveDetailScreen extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: _cardBg,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  border: Border.all(color: _border),
                 ),
                 child: Text(
                   request.reason!,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
-                    color: Color(0xFF334155),
+                    color: _textPrimary,
                     height: 1.5,
                   ),
                 ),
@@ -1522,10 +1603,10 @@ class _SectionHeader extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w700,
-          color: Color(0xFF475569),
+          color: AppTheme.textSecondaryOf(context),
         ),
       ),
     );
@@ -1539,11 +1620,15 @@ class _DetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 14),
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -1551,15 +1636,15 @@ class _DetailRow extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+            style: TextStyle(fontSize: 13, color: _textSecondary),
           ),
           Flexible(
             child: Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF1E293B),
+                color: _textPrimary,
               ),
               textAlign: TextAlign.right,
             ),
@@ -1584,6 +1669,10 @@ class _AuditTrailItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1603,7 +1692,7 @@ class _AuditTrailItem extends StatelessWidget {
                 Expanded(
                   child: Container(
                     width: 2,
-                    color: const Color(0xFFE2E8F0),
+                    color: _border,
                   ),
                 ),
             ],
@@ -1617,18 +1706,18 @@ class _AuditTrailItem extends StatelessWidget {
                   Expanded(
                     child: Text(
                       label,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
-                        color: Color(0xFF334155),
+                        color: _textPrimary,
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     time,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11,
-                      color: Color(0xFF94A3B8),
+                      color: _textSecondary,
                     ),
                   ),
                 ],
@@ -1703,14 +1792,22 @@ class _NewLeaveSheetState extends State<_NewLeaveSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+    final _textMuted = AppTheme.textMutedOf(context);
+
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
       child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: _cardBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          border: isDark ? Border.all(color: _border, width: 1) : null,
         ),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -1723,40 +1820,43 @@ class _NewLeaveSheetState extends State<_NewLeaveSheet> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0),
+                    color: _border,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'New Leave Request',
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1E293B),
+                  color: _textPrimary,
                 ),
               ),
               const SizedBox(height: 18),
-              _FieldLabel('Employee Name'),
+              _FieldLabel(context, 'Employee Name'),
               const SizedBox(height: 6),
               TextField(
                 controller: _employeeCtrl,
-                decoration: _inputDecoration('Enter employee name'),
+                style: TextStyle(color: _textPrimary, fontSize: 13),
+                decoration: _inputDecoration(context, 'Enter employee name'),
               ),
               const SizedBox(height: 14),
-              _FieldLabel('Leave Type'),
+              _FieldLabel(context, 'Leave Type'),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
                 value: _selectedType,
-                decoration: _inputDecoration(''),
+                dropdownColor: _cardBg,
+                style: TextStyle(color: _textPrimary, fontSize: 13),
+                decoration: _inputDecoration(context, ''),
                 items: _leaveTypes
                     .map(
                       (t) => DropdownMenuItem(
                         value: t,
                         child: Text(
                           t,
-                          style: const TextStyle(fontSize: 13),
+                          style: TextStyle(fontSize: 13, color: _textPrimary),
                         ),
                       ),
                     )
@@ -1770,7 +1870,7 @@ class _NewLeaveSheetState extends State<_NewLeaveSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _FieldLabel('From Date'),
+                        _FieldLabel(context, 'From Date'),
                         const SizedBox(height: 6),
                         GestureDetector(
                           onTap: () => _pickDate(isFrom: true),
@@ -1780,18 +1880,18 @@ class _NewLeaveSheetState extends State<_NewLeaveSheet> {
                               vertical: 12,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
+                              color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
-                                color: const Color(0xFFE2E8F0),
+                                color: _border,
                               ),
                             ),
                             child: Row(
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.calendar_today_outlined,
                                   size: 14,
-                                  color: Color(0xFF94A3B8),
+                                  color: _textSecondary,
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
@@ -1801,8 +1901,8 @@ class _NewLeaveSheetState extends State<_NewLeaveSheet> {
                                   style: TextStyle(
                                     fontSize: 13,
                                     color: _fromDate == null
-                                        ? const Color(0xFF94A3B8)
-                                        : const Color(0xFF1E293B),
+                                        ? _textMuted
+                                        : _textPrimary,
                                   ),
                                 ),
                               ],
@@ -1817,7 +1917,7 @@ class _NewLeaveSheetState extends State<_NewLeaveSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _FieldLabel('To Date'),
+                        _FieldLabel(context, 'To Date'),
                         const SizedBox(height: 6),
                         GestureDetector(
                           onTap: () => _pickDate(isFrom: false),
@@ -1827,18 +1927,18 @@ class _NewLeaveSheetState extends State<_NewLeaveSheet> {
                               vertical: 12,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
+                              color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
-                                color: const Color(0xFFE2E8F0),
+                                color: _border,
                               ),
                             ),
                             child: Row(
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.calendar_today_outlined,
                                   size: 14,
-                                  color: Color(0xFF94A3B8),
+                                  color: _textSecondary,
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
@@ -1848,8 +1948,8 @@ class _NewLeaveSheetState extends State<_NewLeaveSheet> {
                                   style: TextStyle(
                                     fontSize: 13,
                                     color: _toDate == null
-                                        ? const Color(0xFF94A3B8)
-                                        : const Color(0xFF1E293B),
+                                        ? _textMuted
+                                        : _textPrimary,
                                   ),
                                 ),
                               ],
@@ -1862,12 +1962,13 @@ class _NewLeaveSheetState extends State<_NewLeaveSheet> {
                 ],
               ),
               const SizedBox(height: 14),
-              _FieldLabel('Reason'),
+              _FieldLabel(context, 'Reason'),
               const SizedBox(height: 6),
               TextField(
                 controller: _reasonCtrl,
                 maxLines: 3,
-                decoration: _inputDecoration('Enter reason for leave...'),
+                style: TextStyle(color: _textPrimary, fontSize: 13),
+                decoration: _inputDecoration(context, 'Enter reason for leave...'),
               ),
               const SizedBox(height: 20),
               SizedBox(
@@ -1909,20 +2010,24 @@ class _NewLeaveSheetState extends State<_NewLeaveSheet> {
     );
   }
 
-  InputDecoration _inputDecoration(String hint) {
+  InputDecoration _inputDecoration(BuildContext context, String hint) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _border = AppTheme.borderOf(context);
+    final _textMuted = AppTheme.textMutedOf(context);
+
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+      hintStyle: TextStyle(color: _textMuted, fontSize: 13),
       filled: true,
-      fillColor: const Color(0xFFF8FAFC),
+      fillColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        borderSide: BorderSide(color: _border),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        borderSide: BorderSide(color: _border),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
@@ -1932,13 +2037,13 @@ class _NewLeaveSheetState extends State<_NewLeaveSheet> {
   }
 }
 
-Widget _FieldLabel(String text) {
+Widget _FieldLabel(BuildContext context, String text) {
   return Text(
     text,
-    style: const TextStyle(
+    style: TextStyle(
       fontSize: 13,
       fontWeight: FontWeight.w600,
-      color: Color(0xFF475569),
+      color: AppTheme.textSecondaryOf(context),
     ),
   );
 }

@@ -1,9 +1,13 @@
 // tasks_page.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../blocs/task/task_bloc.dart';
-import '../models/task_model.dart';
-import '../widgets/app_drawer.dart';
+import 'package:file_picker/file_picker.dart';
+import '../../blocs/task/task_bloc.dart';
+import '../../models/task_model.dart';
+import '../../widgets/app_drawer.dart';
+import '../../theme/app_theme.dart';
+import '../../blocs/theme/theme_bloc.dart';
 
 // ─── TASKS PAGE ───────────────────────────────────────────────────────────────
 
@@ -25,15 +29,32 @@ class _TasksPageState extends State<TasksPage> {
   String _searchQuery = '';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // Filter state
+  final Set<TaskPriority> _selectedPriorities = {};
+  final Set<TaskStatus> _selectedStatuses = {};
+
   static const Color _primary = Color(0xFF0EA5E9);
-  static const Color _bg = Color(0xFFF8FAFC);
-  static const Color _textPrimary = Color(0xFF0F172A);
-  static const Color _textSecondary = Color(0xFF64748B);
-  static const Color _border = Color(0xFFE2E8F0);
+
+  Color get _bg => Theme.of(context).scaffoldBackgroundColor;
+  Color get _border => AppTheme.borderOf(context);
+  Color get _textPrimary => AppTheme.textPrimaryOf(context);
+  Color get _textSecondary => AppTheme.textSecondaryOf(context);
 
   List<TaskItem> _filtered(List<TaskItem> tasks) => tasks.where((t) {
-        if (_searchQuery.isEmpty) return true;
-        return t.summary.toLowerCase().contains(_searchQuery.toLowerCase());
+        // Search filter
+        if (_searchQuery.isNotEmpty &&
+            !t.summary.toLowerCase().contains(_searchQuery.toLowerCase())) {
+          return false;
+        }
+        // Priority filter
+        if (_selectedPriorities.isNotEmpty && !_selectedPriorities.contains(t.priority)) {
+          return false;
+        }
+        // Status filter
+        if (_selectedStatuses.isNotEmpty && !_selectedStatuses.contains(t.status)) {
+          return false;
+        }
+        return true;
       }).toList();
 
   int _unassignedCount(List<TaskItem> tasks) =>
@@ -45,6 +66,7 @@ class _TasksPageState extends State<TasksPage> {
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width > 600;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       key: _scaffoldKey,
@@ -57,15 +79,15 @@ class _TasksPageState extends State<TasksPage> {
         },
       ),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
         leading: isWide
             ? null
             : IconButton(
-                icon: const Icon(Icons.menu_rounded, color: Color(0xFF374151)),
+                icon: Icon(Icons.menu_rounded, color: isDark ? Colors.white : const Color(0xFF374151)),
                 onPressed: () => _scaffoldKey.currentState?.openDrawer(),
               ),
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -73,15 +95,31 @@ class _TasksPageState extends State<TasksPage> {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF0F172A),
+                color: _textPrimary,
               ),
             ),
             Text(
               'Collaborate and track progress across all project tasks.',
-              style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+              style: TextStyle(fontSize: 11, color: _textSecondary),
             ),
           ],
         ),
+        actions: [
+          BlocBuilder<ThemeBloc, ThemeState>(
+            builder: (context, themeState) {
+              final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+              return IconButton(
+                icon: Icon(
+                  isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  color: isDarkTheme ? Colors.white : const Color(0xFF374151),
+                ),
+                onPressed: () {
+                  context.read<ThemeBloc>().add(ToggleThemeEvent());
+                },
+              );
+            },
+          ),
+        ],
       ),
       body: SafeArea(
         child: BlocBuilder<TaskBloc, TaskState>(
@@ -108,12 +146,12 @@ class _TasksPageState extends State<TasksPage> {
     final isWide = MediaQuery.of(context).size.width > 600;
 
     final importBtn = OutlinedButton.icon(
-      onPressed: () {},
+      onPressed: () => _showImportSheet(context),
       icon: const Icon(Icons.upload_file, size: 14),
       label: const Text('Import'),
       style: OutlinedButton.styleFrom(
         foregroundColor: _textPrimary,
-        side: const BorderSide(color: _border),
+        side: BorderSide(color: _border),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
       ),
@@ -125,7 +163,7 @@ class _TasksPageState extends State<TasksPage> {
       label: const Text('Filter'),
       style: OutlinedButton.styleFrom(
         foregroundColor: _textPrimary,
-        side: const BorderSide(color: _border),
+        side: BorderSide(color: _border),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
       ),
@@ -183,21 +221,23 @@ class _TasksPageState extends State<TasksPage> {
       ],
     );
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final searchField = Container(
       height: 36,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
         border: Border.all(color: _border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: TextField(
         onChanged: (v) => setState(() => _searchQuery = v),
-        decoration: const InputDecoration(
+        style: TextStyle(color: _textPrimary, fontSize: 13),
+        decoration: InputDecoration(
           hintText: 'Search tasks...',
-          hintStyle: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-          prefixIcon: Icon(Icons.search, size: 16, color: Color(0xFF94A3B8)),
+          hintStyle: TextStyle(fontSize: 12, color: AppTheme.textMutedOf(context)),
+          prefixIcon: Icon(Icons.search, size: 16, color: AppTheme.textMutedOf(context)),
           border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(vertical: 8),
         ),
       ),
     );
@@ -328,7 +368,7 @@ class _TasksPageState extends State<TasksPage> {
             children: [
               const Icon(Icons.trending_up, size: 18, color: _primary),
               const SizedBox(width: 6),
-              const Text(
+              Text(
                 'Resource Allocation Dashboard',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _textPrimary),
               ),
@@ -339,7 +379,7 @@ class _TasksPageState extends State<TasksPage> {
                 label: const Text('Sync Board'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: _textSecondary,
-                  side: const BorderSide(color: _border),
+                  side: BorderSide(color: _border),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   textStyle: const TextStyle(fontSize: 12),
                 ),
@@ -393,7 +433,7 @@ class _TasksPageState extends State<TasksPage> {
             child: Icon(Icons.task_outlined, size: 30, color: _primary),
           ),
           const SizedBox(height: 14),
-          Text(msg, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _textPrimary)),
+          Text(msg, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _textPrimary)),
         ],
       ),
     );
@@ -448,49 +488,444 @@ class _TasksPageState extends State<TasksPage> {
   }
 
   void _showFilterSheet(BuildContext context) {
+    // Temporary copies so changes only apply when user taps Apply
+    final tempPriorities = Set<TaskPriority>.from(_selectedPriorities);
+    final tempStatuses = Set<TaskStatus>.from(_selectedStatuses);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _FilterSheet(
+        isDark: isDark,
+        initialPriorities: tempPriorities,
+        initialStatuses: tempStatuses,
+        onApply: (priorities, statuses) {
+          setState(() {
+            _selectedPriorities
+              ..clear()
+              ..addAll(priorities);
+            _selectedStatuses
+              ..clear()
+              ..addAll(statuses);
+          });
+        },
+        onClear: () {
+          setState(() {
+            _selectedPriorities.clear();
+            _selectedStatuses.clear();
+          });
+        },
+      ),
+    );
+  }
+
+  Future<void> _showImportSheet(BuildContext context) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? AppTheme.bgCardDark : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Filter Tasks', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 16),
-            const Text('Priority', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: TaskPriority.values.map((p) => FilterChip(
-                label: Text(p.label),
-                onSelected: (_) {},
-                labelStyle: TextStyle(fontSize: 12, color: p.color),
-                backgroundColor: p.bgColor,
+      builder: (ctx) => _ImportSheet(
+        onImport: () async {
+          Navigator.pop(ctx);
+          await _pickAndImportCsv(context);
+        },
+      ),
+    );
+  }
+
+  Future<void> _pickAndImportCsv(BuildContext context) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        allowMultiple: false,
+      );
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.first;
+      String content;
+      if (file.bytes != null) {
+        content = String.fromCharCodes(file.bytes!);
+      } else if (file.path != null) {
+        content = await File(file.path!).readAsString();
+      } else {
+        return;
+      }
+
+      final lines = content
+          .split(RegExp(r'\r?\n'))
+          .where((l) => l.trim().isNotEmpty)
+          .toList();
+
+      if (lines.length < 2) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('CSV must have a header row and at least one data row.')),
+          );
+        }
+        return;
+      }
+
+      // Parse header
+      final headers = _parseCsvLine(lines.first)
+          .map((h) => h.trim().toLowerCase())
+          .toList();
+
+      final int titleIdx = headers.indexWhere((h) => h == 'title' || h == 'summary' || h == 'task');
+      final int statusIdx = headers.indexWhere((h) => h == 'status');
+      final int priorityIdx = headers.indexWhere((h) => h == 'priority');
+      final int ownerIdx = headers.indexWhere((h) => h == 'owner' || h == 'assignee');
+      final int projectIdx = headers.indexWhere((h) => h == 'project' || h == 'parent project');
+      final int dueDateIdx = headers.indexWhere((h) => h == 'due date' || h == 'due_date' || h == 'duedate');
+      final int descIdx = headers.indexWhere((h) => h == 'description' || h == 'desc');
+
+      if (titleIdx == -1) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('CSV must have a "title" or "summary" column.')),
+          );
+        }
+        return;
+      }
+
+      int imported = 0;
+      for (int i = 1; i < lines.length; i++) {
+        final cols = _parseCsvLine(lines[i]);
+        if (cols.isEmpty) continue;
+        String col(int idx) => (idx >= 0 && idx < cols.length) ? cols[idx].trim() : '';
+
+        final title = col(titleIdx);
+        if (title.isEmpty) continue;
+
+        final task = TaskItem(
+          id: DateTime.now().millisecondsSinceEpoch.toString() + i.toString(),
+          summary: title,
+          description: col(descIdx),
+          parentProject: col(projectIdx).isNotEmpty ? col(projectIdx) : null,
+          owner: col(ownerIdx).isNotEmpty ? col(ownerIdx) : null,
+          dueDate: dueDateIdx >= 0 ? DateTime.tryParse(col(dueDateIdx)) : null,
+          status: _parseStatus(col(statusIdx)),
+          priority: _parsePriority(col(priorityIdx)),
+        );
+        if (context.mounted) {
+          context.read<TaskBloc>().add(AddTaskEvent(task));
+        }
+        imported++;
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Imported $imported task${imported == 1 ? '' : 's'} successfully!'),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Import failed: $e')),
+        );
+      }
+    }
+  }
+
+  List<String> _parseCsvLine(String line) {
+    final result = <String>[];
+    final buf = StringBuffer();
+    bool inQuotes = false;
+    for (int i = 0; i < line.length; i++) {
+      final ch = line[i];
+      if (ch == '"') {
+        if (inQuotes && i + 1 < line.length && line[i + 1] == '"') {
+          buf.write('"');
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (ch == ',' && !inQuotes) {
+        result.add(buf.toString());
+        buf.clear();
+      } else {
+        buf.write(ch);
+      }
+    }
+    result.add(buf.toString());
+    return result;
+  }
+
+  TaskStatus _parseStatus(String s) {
+    switch (s.toLowerCase().replaceAll(' ', '_')) {
+      case 'in_progress': return TaskStatus.inProgress;
+      case 'review': return TaskStatus.review;
+      case 'done': return TaskStatus.done;
+      default: return TaskStatus.toDo;
+    }
+  }
+
+  TaskPriority _parsePriority(String p) {
+    switch (p.toLowerCase()) {
+      case 'high': return TaskPriority.high;
+      case 'low': return TaskPriority.low;
+      default: return TaskPriority.medium;
+    }
+  }
+}
+
+// ─── FILTER SHEET ─────────────────────────────────────────────────────────────
+
+class _FilterSheet extends StatefulWidget {
+  final bool isDark;
+  final Set<TaskPriority> initialPriorities;
+  final Set<TaskStatus> initialStatuses;
+  final void Function(Set<TaskPriority>, Set<TaskStatus>) onApply;
+  final VoidCallback onClear;
+
+  const _FilterSheet({
+    required this.isDark,
+    required this.initialPriorities,
+    required this.initialStatuses,
+    required this.onApply,
+    required this.onClear,
+  });
+
+  @override
+  State<_FilterSheet> createState() => _FilterSheetState();
+}
+
+class _FilterSheetState extends State<_FilterSheet> {
+  late Set<TaskPriority> _priorities;
+  late Set<TaskStatus> _statuses;
+
+  @override
+  void initState() {
+    super.initState();
+    _priorities = Set.from(widget.initialPriorities);
+    _statuses = Set.from(widget.initialStatuses);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final bg = isDark ? AppTheme.bgCardDark : Colors.white;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    const primary = Color(0xFF0EA5E9);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('Filter Tasks',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: textPrimary)),
+              const Spacer(),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _priorities.clear();
+                    _statuses.clear();
+                  });
+                  widget.onClear();
+                  Navigator.pop(context);
+                },
+                child: const Text('Clear All', style: TextStyle(color: Color(0xFFEF4444), fontSize: 12)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text('Priority',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: TaskPriority.values.map((p) {
+              final selected = _priorities.contains(p);
+              return FilterChip(
+                label: Text(p.label,
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: selected ? p.color : textSecondary,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
+                selected: selected,
+                onSelected: (v) => setState(() => v ? _priorities.add(p) : _priorities.remove(p)),
+                backgroundColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
                 selectedColor: p.bgColor,
                 checkmarkColor: p.color,
-              )).toList(),
-            ),
-            const SizedBox(height: 16),
-            const Text('Status', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: TaskStatus.values.map((s) => FilterChip(
-                label: Text(s.label),
-                onSelected: (_) {},
-                labelStyle: TextStyle(fontSize: 12, color: s.color),
-                backgroundColor: s.bgColor,
+                side: BorderSide(color: selected ? p.color : AppTheme.borderOf(context)),
+                showCheckmark: true,
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+          Text('Status',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: TaskStatus.values.map((s) {
+              final selected = _statuses.contains(s);
+              return FilterChip(
+                label: Text(s.label,
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: selected ? s.color : textSecondary,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
+                selected: selected,
+                onSelected: (v) => setState(() => v ? _statuses.add(s) : _statuses.remove(s)),
+                backgroundColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
                 selectedColor: s.bgColor,
-              )).toList(),
+                checkmarkColor: s.color,
+                side: BorderSide(color: selected ? s.color : AppTheme.borderOf(context)),
+                showCheckmark: true,
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: ElevatedButton(
+              onPressed: () {
+                widget.onApply(_priorities, _statuses);
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: Text(
+                _priorities.isEmpty && _statuses.isEmpty ? 'Show All Tasks' : 'Apply Filters',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+              ),
             ),
-            const SizedBox(height: 20),
-          ],
-        ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── IMPORT SHEET ─────────────────────────────────────────────────────────────
+
+class _ImportSheet extends StatelessWidget {
+  final VoidCallback onImport;
+  const _ImportSheet({required this.onImport});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppTheme.bgCardDark : Colors.white;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    final border = AppTheme.borderOf(context);
+    const primary = Color(0xFF0EA5E9);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.upload_file_rounded, color: primary, size: 22),
+              const SizedBox(width: 8),
+              Text('Import Tasks from CSV',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: textPrimary)),
+              const Spacer(),
+              IconButton(
+                icon: Icon(Icons.close, size: 20, color: textSecondary),
+                onPressed: () => Navigator.pop(context),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: primary.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: primary.withOpacity(0.2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('CSV Format', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: primary)),
+                const SizedBox(height: 6),
+                Text(
+                  'Your CSV file should have a header row with these columns:',
+                  style: TextStyle(fontSize: 11, color: textSecondary),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: border),
+                  ),
+                  child: Text(
+                    'title, status, priority, owner, project, due_date, description',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontFamily: 'monospace',
+                        color: textPrimary,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '• title / summary / task (required)\n'
+                  '• status: todo | in_progress | review | done\n'
+                  '• priority: low | medium | high\n'
+                  '• due_date: YYYY-MM-DD',
+                  style: TextStyle(fontSize: 10, color: textSecondary, height: 1.6),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: ElevatedButton.icon(
+              onPressed: onImport,
+              icon: const Icon(Icons.folder_open_rounded, size: 18),
+              label: const Text('Choose CSV File', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }
@@ -558,12 +993,13 @@ class _KanbanColumnMobileState extends State<_KanbanColumnMobile> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: AppTheme.borderOf(context)),
       ),
       child: Column(
         children: [
@@ -579,17 +1015,17 @@ class _KanbanColumnMobileState extends State<_KanbanColumnMobile> {
                   ),
                   const SizedBox(width: 8),
                   Text(widget.status.label,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimaryOf(context))),
                   const SizedBox(width: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-                    decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(10)),
+                    decoration: BoxDecoration(color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(10)),
                     child: Text('${widget.tasks.length}',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.textSecondaryOf(context))),
                   ),
                   const Spacer(),
                   Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                    size: 18, color: const Color(0xFF94A3B8)),
+                    size: 18, color: AppTheme.textMutedOf(context)),
                 ],
               ),
             ),
@@ -622,18 +1058,19 @@ class _ColumnHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       children: [
         Container(width: 8, height: 8, decoration: BoxDecoration(color: status.color, shape: BoxShape.circle)),
         const SizedBox(width: 8),
         Text(status.label,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimaryOf(context))),
         const SizedBox(width: 6),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-          decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(10)),
+          decoration: BoxDecoration(color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(10)),
           child: Text('$count',
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.textSecondaryOf(context))),
         ),
       ],
     );
@@ -652,15 +1089,15 @@ class _AddTaskButton extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFFE2E8F0), style: BorderStyle.solid),
+          border: Border.all(color: AppTheme.borderOf(context), style: BorderStyle.solid),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add, size: 14, color: Color(0xFF94A3B8)),
-            SizedBox(width: 4),
-            Text('Add Task', style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+            Icon(Icons.add, size: 14, color: AppTheme.textMutedOf(context)),
+            const SizedBox(width: 4),
+            Text('Add Task', style: TextStyle(fontSize: 12, color: AppTheme.textMutedOf(context))),
           ],
         ),
       ),
@@ -677,16 +1114,17 @@ class _TaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? AppTheme.bgCardDark : Colors.white,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))],
+          border: Border.all(color: AppTheme.borderOf(context)),
+          boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -701,7 +1139,7 @@ class _TaskCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(task.summary,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimaryOf(context))),
             if (task.parentProject != null) ...[
               const SizedBox(height: 4),
               Row(
@@ -711,25 +1149,25 @@ class _TaskCard extends StatelessWidget {
                   Expanded(
                     child: Text(task.parentProject!,
                       maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                      style: TextStyle(fontSize: 10, color: AppTheme.textSecondaryOf(context))),
                   ),
                 ],
               ),
             ],
             if (task.owner != null) ...[
               const SizedBox(height: 4),
-              Text('Lead: ${task.owner}', style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
+              Text('Lead: ${task.owner}', style: TextStyle(fontSize: 10, color: AppTheme.textMutedOf(context))),
             ],
             if (task.dueDate != null) ...[
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  const Icon(Icons.calendar_today_outlined, size: 11, color: Color(0xFF94A3B8)),
+                  Icon(Icons.calendar_today_outlined, size: 11, color: AppTheme.textMutedOf(context)),
                   const SizedBox(width: 3),
                   Text(
                     _formatDate(task.dueDate!),
-                    style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
+                    style: TextStyle(fontSize: 10, color: AppTheme.textMutedOf(context)),
                   ),
                 ],
               ),
@@ -757,14 +1195,15 @@ class _TaskListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? AppTheme.bgCardDark : Colors.white,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+          border: Border.all(color: AppTheme.borderOf(context)),
         ),
         child: Row(
           children: [
@@ -792,12 +1231,12 @@ class _TaskListTile extends StatelessWidget {
                 children: [
                   Text(task.summary,
                     style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF0F172A),
+                      fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimaryOf(context),
                       decoration: task.status == TaskStatus.done ? TextDecoration.lineThrough : null,
                     )),
                   if (task.parentProject != null)
                     Text(task.parentProject!, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
+                      style: TextStyle(fontSize: 10, color: AppTheme.textMutedOf(context))),
                 ],
               ),
             ),
@@ -836,13 +1275,14 @@ class _WorkloadCard extends StatelessWidget {
     for (final t in member.tasks) {
       taskDist[t.status] = (taskDist[t.status] ?? 0) + 1;
     }
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: AppTheme.borderOf(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -855,8 +1295,8 @@ class _WorkloadCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(member.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
-                    Text(member.role, style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                    Text(member.name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppTheme.textPrimaryOf(context))),
+                    Text(member.role, style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context))),
                     Text(member.department, style: const TextStyle(fontSize: 10, color: Color(0xFF0EA5E9), fontWeight: FontWeight.w600)),
                   ],
                 ),
@@ -873,14 +1313,14 @@ class _WorkloadCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          const Text('WEEKLY LOAD', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8), letterSpacing: 0.5)),
+          Text('WEEKLY LOAD', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppTheme.textMutedOf(context), letterSpacing: 0.5)),
           const SizedBox(height: 4),
           Row(
             children: [
               RichText(text: TextSpan(
                 children: [
-                  TextSpan(text: '${member.weeklyLoad}h', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
-                  TextSpan(text: ' / ${member.weeklyLimit}h limit', style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                  TextSpan(text: '${member.weeklyLoad}h', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppTheme.textPrimaryOf(context))),
+                  TextSpan(text: ' / ${member.weeklyLimit}h limit', style: TextStyle(fontSize: 12, color: AppTheme.textMutedOf(context))),
                 ],
               )),
               const Spacer(),
@@ -894,15 +1334,15 @@ class _WorkloadCard extends StatelessWidget {
             child: LinearProgressIndicator(
               value: pct.clamp(0.0, 1.0),
               minHeight: 6,
-              backgroundColor: const Color(0xFFE2E8F0),
+              backgroundColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFE2E8F0),
               valueColor: AlwaysStoppedAnimation<Color>(member.workloadColor),
             ),
           ),
           const SizedBox(height: 14),
-          const Text('TASK STATUS DISTRIBUTION', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8), letterSpacing: 0.5)),
+          Text('TASK STATUS DISTRIBUTION', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppTheme.textMutedOf(context), letterSpacing: 0.5)),
           const SizedBox(height: 6),
           if (taskDist.isEmpty)
-            const Text('No tasks assigned', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)))
+            Text('No tasks assigned', style: TextStyle(fontSize: 11, color: AppTheme.textMutedOf(context)))
           else
             Wrap(
               spacing: 10,
@@ -911,7 +1351,7 @@ class _WorkloadCard extends StatelessWidget {
                 children: [
                   Container(width: 7, height: 7, decoration: BoxDecoration(color: e.key.color, shape: BoxShape.circle)),
                   const SizedBox(width: 3),
-                  Text('${e.key.label}: ${e.value}', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                  Text('${e.key.label}: ${e.value}', style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context))),
                 ],
               )).toList(),
             ),
@@ -945,12 +1385,13 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: AppTheme.borderOf(context)),
       ),
       child: Row(
         children: [
@@ -958,9 +1399,9 @@ class _StatCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8), letterSpacing: 0.4)),
+                Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: AppTheme.textMutedOf(context), letterSpacing: 0.4)),
                 const SizedBox(height: 4),
-                Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.textPrimaryOf(context))),
               ],
             ),
           ),
@@ -994,9 +1435,9 @@ class _CreateTaskModalState extends State<_CreateTaskModal> {
   TaskPriority _priority = TaskPriority.medium;
 
   static const Color _primary = Color(0xFF0EA5E9);
-  static const Color _border = Color(0xFFE2E8F0);
-  static const Color _textPrimary = Color(0xFF0F172A);
-  static const Color _textSecondary = Color(0xFF64748B);
+  Color get _border => AppTheme.borderOf(context);
+  Color get _textPrimary => AppTheme.textPrimaryOf(context);
+  Color get _textSecondary => AppTheme.textSecondaryOf(context);
 
   final List<String> _projects = [
     'ARSENAL - Digital Marketing Premium',
@@ -1014,6 +1455,7 @@ class _CreateTaskModalState extends State<_CreateTaskModal> {
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final isWide = MediaQuery.of(context).size.width > 600;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final parentProjectField = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1023,10 +1465,12 @@ class _CreateTaskModalState extends State<_CreateTaskModal> {
         DropdownButtonFormField<String?>(
           value: _parentProject,
           isExpanded: true,
+          style: TextStyle(fontSize: 12, color: _textPrimary),
+          dropdownColor: isDark ? AppTheme.bgCardDark : Colors.white,
           decoration: _dec('Link to project'),
           items: [
-            const DropdownMenuItem(value: null, child: Text('Link to project', style: TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)),
-            ..._projects.map((p) => DropdownMenuItem(value: p, child: Text(p, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis))),
+            DropdownMenuItem(value: null, child: Text('Link to project', style: TextStyle(fontSize: 12, color: _textPrimary), overflow: TextOverflow.ellipsis)),
+            ..._projects.map((p) => DropdownMenuItem(value: p, child: Text(p, style: TextStyle(fontSize: 12, color: _textPrimary), overflow: TextOverflow.ellipsis))),
           ],
           onChanged: (v) => setState(() => _parentProject = v),
         ),
@@ -1041,10 +1485,12 @@ class _CreateTaskModalState extends State<_CreateTaskModal> {
         DropdownButtonFormField<String?>(
           value: _owner,
           isExpanded: true,
+          style: TextStyle(fontSize: 12, color: _textPrimary),
+          dropdownColor: isDark ? AppTheme.bgCardDark : Colors.white,
           decoration: _dec('Unassigned'),
           items: [
-            const DropdownMenuItem(value: null, child: Text('Unassigned', style: TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)),
-            ...widget.members.map((m) => DropdownMenuItem(value: m.name, child: Text(m.name, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis))),
+            DropdownMenuItem(value: null, child: Text('Unassigned', style: TextStyle(fontSize: 12, color: _textPrimary), overflow: TextOverflow.ellipsis)),
+            ...widget.members.map((m) => DropdownMenuItem(value: m.name, child: Text(m.name, style: TextStyle(fontSize: 12, color: _textPrimary), overflow: TextOverflow.ellipsis))),
           ],
           onChanged: (v) => setState(() => _owner = v),
         ),
@@ -1059,8 +1505,10 @@ class _CreateTaskModalState extends State<_CreateTaskModal> {
         DropdownButtonFormField<TaskStatus>(
           value: _status,
           isExpanded: true,
+          style: TextStyle(fontSize: 12, color: _textPrimary),
+          dropdownColor: isDark ? AppTheme.bgCardDark : Colors.white,
           decoration: _dec(''),
-          items: TaskStatus.values.map((s) => DropdownMenuItem(value: s, child: Text(s.label, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis))).toList(),
+          items: TaskStatus.values.map((s) => DropdownMenuItem(value: s, child: Text(s.label, style: TextStyle(fontSize: 12, color: _textPrimary), overflow: TextOverflow.ellipsis))).toList(),
           onChanged: (v) => setState(() => _status = v!),
         ),
       ],
@@ -1074,8 +1522,10 @@ class _CreateTaskModalState extends State<_CreateTaskModal> {
         DropdownButtonFormField<TaskPriority>(
           value: _priority,
           isExpanded: true,
+          style: TextStyle(fontSize: 12, color: _textPrimary),
+          dropdownColor: isDark ? AppTheme.bgCardDark : Colors.white,
           decoration: _dec(''),
-          items: TaskPriority.values.map((p) => DropdownMenuItem(value: p, child: Text(p.label[0] + p.label.substring(1).toLowerCase(), style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis))).toList(),
+          items: TaskPriority.values.map((p) => DropdownMenuItem(value: p, child: Text(p.label[0] + p.label.substring(1).toLowerCase(), style: TextStyle(fontSize: 12, color: _textPrimary), overflow: TextOverflow.ellipsis))).toList(),
           onChanged: (v) => setState(() => _priority = v!),
         ),
       ],
@@ -1113,26 +1563,27 @@ class _CreateTaskModalState extends State<_CreateTaskModal> {
             ],
           );
 
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: screenHeight * 0.90 - MediaQuery.of(context).viewInsets.bottom,
-      ),
+    return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: screenHeight * 0.90,
+        ),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         children: [
-          Center(child: Container(margin: const EdgeInsets.only(top: 10), width: 36, height: 4, decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2)))),
+          Center(child: Container(margin: const EdgeInsets.only(top: 10), width: 36, height: 4, decoration: BoxDecoration(color: _border, borderRadius: BorderRadius.circular(2)))),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
             child: Row(
               children: [
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Create New Task', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: _textPrimary)),
-                    const Text('Add a new task to your workspace. You can optionally link it to a project.',
+                    Text('Create New Task', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: _textPrimary)),
+                    Text('Add a new task to your workspace. You can optionally link it to a project.',
                       style: TextStyle(fontSize: 11, color: _textSecondary),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -1140,11 +1591,11 @@ class _CreateTaskModalState extends State<_CreateTaskModal> {
                   ]),
                 ),
                 const SizedBox(width: 8),
-                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close, size: 20), padding: EdgeInsets.zero, constraints: const BoxConstraints()),
+                IconButton(onPressed: () => Navigator.pop(context), icon: Icon(Icons.close, size: 20, color: _textSecondary), padding: EdgeInsets.zero, constraints: const BoxConstraints()),
               ],
             ),
           ),
-          const Divider(height: 20),
+          Divider(height: 20, color: _border),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1157,6 +1608,7 @@ class _CreateTaskModalState extends State<_CreateTaskModal> {
                   const SizedBox(height: 5),
                   TextField(
                     controller: _summaryCtrl,
+                    style: TextStyle(fontSize: 13, color: _textPrimary),
                     decoration: _dec('e.g. Design system audit...'),
                   ),
                   const SizedBox(height: 12),
@@ -1165,6 +1617,7 @@ class _CreateTaskModalState extends State<_CreateTaskModal> {
                   TextField(
                     controller: _descCtrl,
                     maxLines: 3,
+                    style: TextStyle(fontSize: 13, color: _textPrimary),
                     decoration: _dec('Add more context...'),
                   ),
                   const SizedBox(height: 20),
@@ -1176,7 +1629,18 @@ class _CreateTaskModalState extends State<_CreateTaskModal> {
                   const SizedBox(height: 5),
                   GestureDetector(
                     onTap: () async {
-                      final d = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2030));
+                      final d = await showDatePicker(
+                        context: context,
+                        initialDate: DateTime.now(),
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2030),
+                        builder: (context, child) {
+                          return Theme(
+                            data: Theme.of(context),
+                            child: child!,
+                          );
+                        },
+                      );
                       if (d != null) setState(() => _dueDate = d);
                     },
                     child: Container(
@@ -1184,11 +1648,11 @@ class _CreateTaskModalState extends State<_CreateTaskModal> {
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(border: Border.all(color: _border), borderRadius: BorderRadius.circular(8)),
                       child: Row(children: [
-                        const Icon(Icons.calendar_today_outlined, size: 14, color: Color(0xFF94A3B8)),
+                        Icon(Icons.calendar_today_outlined, size: 14, color: AppTheme.textMutedOf(context)),
                         const SizedBox(width: 8),
                         Text(
                           _dueDate != null ? '${_dueDate!.day}-${_dueDate!.month}-${_dueDate!.year}' : 'dd-mm-yyyy',
-                          style: TextStyle(fontSize: 13, color: _dueDate != null ? _textPrimary : const Color(0xFF94A3B8)),
+                          style: TextStyle(fontSize: 13, color: _dueDate != null ? _textPrimary : AppTheme.textMutedOf(context)),
                         ),
                       ]),
                     ),
@@ -1218,6 +1682,7 @@ class _CreateTaskModalState extends State<_CreateTaskModal> {
           ),
         ],
       ),
+    ),
     );
   }
 
@@ -1244,10 +1709,10 @@ class _CreateTaskModalState extends State<_CreateTaskModal> {
   }
 
   InputDecoration _dec(String hint) => InputDecoration(
-    hintText: hint, hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+    hintText: hint, hintStyle: TextStyle(fontSize: 12, color: AppTheme.textMutedOf(context)),
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _border)),
+    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _border)),
     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF0EA5E9), width: 1.5)),
   );
 }
@@ -1271,24 +1736,30 @@ class _TaskDetailModalState extends State<_TaskDetailModal> {
   @override
   Widget build(BuildContext context) {
     final t = widget.task;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppTheme.bgCardDark : Colors.white;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textMuted = AppTheme.textMutedOf(context);
+    final border = AppTheme.borderOf(context);
+
     return Container(
       height: MediaQuery.of(context).size.height * 0.75,
-      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      decoration: BoxDecoration(color: bg, borderRadius: const BorderRadius.vertical(top: Radius.circular(20))),
       child: Column(
         children: [
-          Center(child: Container(margin: const EdgeInsets.only(top: 10), width: 36, height: 4, decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2)))),
+          Center(child: Container(margin: const EdgeInsets.only(top: 10), width: 36, height: 4, decoration: BoxDecoration(color: border, borderRadius: BorderRadius.circular(2)))),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
             child: Row(
               children: [
-                Expanded(child: Text(t.summary, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)))),
+                Expanded(child: Text(t.summary, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: textPrimary))),
                 IconButton(icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444), size: 20),
                   onPressed: () { widget.onDelete(); Navigator.pop(context); }),
-                IconButton(icon: const Icon(Icons.close, size: 20), onPressed: () => Navigator.pop(context)),
+                IconButton(icon: Icon(Icons.close, size: 20, color: textMuted), onPressed: () => Navigator.pop(context)),
               ],
             ),
           ),
-          const Divider(height: 16),
+          Divider(height: 16, color: border),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1307,7 +1778,7 @@ class _TaskDetailModalState extends State<_TaskDetailModal> {
                 _DetailRow(label: 'Project', value: t.parentProject ?? 'None'),
                 _DetailRow(label: 'Due Date', value: t.dueDate != null ? '${t.dueDate!.day}/${t.dueDate!.month}/${t.dueDate!.year}' : 'No deadline'),
                 const SizedBox(height: 14),
-                const Text('STATUS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8), letterSpacing: 0.5)),
+                Text('STATUS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: textMuted, letterSpacing: 0.5)),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -1316,11 +1787,11 @@ class _TaskDetailModalState extends State<_TaskDetailModal> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: t.status == s ? s.bgColor : const Color(0xFFF8FAFC),
-                        border: Border.all(color: t.status == s ? s.color : const Color(0xFFE2E8F0)),
+                        color: t.status == s ? s.bgColor : (isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC)),
+                        border: Border.all(color: t.status == s ? s.color : (isDark ? AppTheme.bgBaseDark : const Color(0xFFE2E8F0))),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text(s.label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: t.status == s ? s.color : const Color(0xFF94A3B8))),
+                      child: Text(s.label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: t.status == s ? s.color : textMuted)),
                     ),
                   )).toList(),
                 ),
@@ -1341,12 +1812,14 @@ class _DetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textMuted = AppTheme.textMutedOf(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         children: [
-          SizedBox(width: 80, child: Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)))),
-          Expanded(child: Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)))),
+          SizedBox(width: 80, child: Text(label, style: TextStyle(fontSize: 12, color: textMuted))),
+          Expanded(child: Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary))),
         ],
       ),
     );
@@ -1378,7 +1851,14 @@ class _WorkloadBreakoutDialogState extends State<_WorkloadBreakoutDialog> {
   @override
   Widget build(BuildContext context) {
     final screenW = MediaQuery.of(context).size.width;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppTheme.bgCardDark : Colors.white;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textMuted = AppTheme.textMutedOf(context);
+    final border = AppTheme.borderOf(context);
+
     return Dialog(
+      backgroundColor: bg,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       insetPadding: EdgeInsets.symmetric(horizontal: screenW > 600 ? 60 : 16, vertical: 40),
       child: Container(
@@ -1393,11 +1873,11 @@ class _WorkloadBreakoutDialogState extends State<_WorkloadBreakoutDialog> {
                 _Avatar(name: widget.member.name, size: 36),
                 const SizedBox(width: 10),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(widget.member.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                  Text(widget.member.name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: textPrimary)),
                   Text('${widget.member.role} — ${widget.member.department} — WORKLOAD BREAKOUT',
-                    style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
+                    style: TextStyle(fontSize: 10, color: textMuted)),
                 ])),
-                IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => Navigator.pop(context)),
+                IconButton(icon: Icon(Icons.close, size: 18, color: textMuted), onPressed: () => Navigator.pop(context)),
               ],
             ),
             const SizedBox(height: 16),
@@ -1409,14 +1889,14 @@ class _WorkloadBreakoutDialogState extends State<_WorkloadBreakoutDialog> {
                     margin: const EdgeInsets.only(bottom: 10),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
+                      color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      border: Border.all(color: border),
                     ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('GLOBAL WORKSPACE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8), letterSpacing: 0.5)),
+                          Text('GLOBAL WORKSPACE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: textMuted, letterSpacing: 0.5)),
                           const SizedBox(height: 4),
                           LayoutBuilder(
                             builder: (context, constraints) {
@@ -1426,14 +1906,14 @@ class _WorkloadBreakoutDialogState extends State<_WorkloadBreakoutDialog> {
                                 children: [
                                   Text(t.summary, style: TextStyle(
                                     fontSize: 13, fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF0F172A),
+                                    color: textPrimary,
                                     decoration: t.status == TaskStatus.done ? TextDecoration.lineThrough : null,
                                   )),
                                   const SizedBox(height: 4),
                                   Row(children: [
                                     _StatusPill(status: t.status),
                                     const SizedBox(width: 6),
-                                    const Text('0', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                                    Text('0', style: TextStyle(fontSize: 11, color: textMuted)),
                                   ]),
                                 ],
                               );
@@ -1441,21 +1921,23 @@ class _WorkloadBreakoutDialogState extends State<_WorkloadBreakoutDialog> {
                               final reallocateCol = Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text('REALLOCATE TASK', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8), letterSpacing: 0.5)),
+                                  Text('REALLOCATE TASK', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: textMuted, letterSpacing: 0.5)),
                                   const SizedBox(height: 4),
                                   DropdownButtonFormField<String>(
                                     value: _selectedOwners[t.id],
                                     isExpanded: true,
+                                    style: TextStyle(fontSize: 12, color: textPrimary),
+                                    dropdownColor: isDark ? AppTheme.bgCardDark : Colors.white,
                                     decoration: InputDecoration(
                                       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF0EA5E9))),
-                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF0EA5E9))),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: border)),
+                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: border)),
                                     ),
                                     items: widget.allMembers.map((m) => DropdownMenuItem(
                                       value: m.name,
                                       child: Text(
                                         m.name == widget.member.name ? '${m.name} (Current)' : m.name,
-                                        style: const TextStyle(fontSize: 12),
+                                        style: TextStyle(fontSize: 12, color: textPrimary),
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     )).toList(),
@@ -1504,8 +1986,8 @@ class _WorkloadBreakoutDialogState extends State<_WorkloadBreakoutDialog> {
                     Navigator.pop(context);
                   },
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF0F172A),
-                    side: const BorderSide(color: Color(0xFFE2E8F0)),
+                    foregroundColor: textPrimary,
+                    side: BorderSide(color: border),
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                   ),
                   child: const Text('Close Breakout', style: TextStyle(fontSize: 13)),
@@ -1599,7 +2081,7 @@ class _Label extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(text, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF64748B), letterSpacing: 0.4));
+    return Text(text, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppTheme.textSecondaryOf(context), letterSpacing: 0.4));
   }
 }
 
@@ -1613,23 +2095,24 @@ class _ViewTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.transparent,
-          border: selected ? Border.all(color: const Color(0xFFE2E8F0)) : Border.all(color: Colors.transparent),
+          color: selected ? (isDark ? AppTheme.bgCardDark : Colors.white) : Colors.transparent,
+          border: selected ? Border.all(color: AppTheme.borderOf(context)) : Border.all(color: Colors.transparent),
           borderRadius: BorderRadius.circular(8),
           boxShadow: selected ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 1))] : [],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: selected ? const Color(0xFF0EA5E9) : const Color(0xFF94A3B8)),
+            Icon(icon, size: 14, color: selected ? const Color(0xFF0EA5E9) : AppTheme.textMutedOf(context)),
             const SizedBox(width: 4),
             Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-              color: selected ? const Color(0xFF0F172A) : const Color(0xFF94A3B8))),
+              color: selected ? AppTheme.textPrimaryOf(context) : AppTheme.textMutedOf(context))),
           ],
         ),
       ),

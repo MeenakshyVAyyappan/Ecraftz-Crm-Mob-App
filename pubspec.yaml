@@ -16,6 +16,10 @@ dependencies:
   supabase_flutter: ^2.8.0
   flutter_bloc: ^8.1.6
   equatable: ^2.0.5
+  url_launcher: ^6.3.2
+  file_picker: ^8.1.7
+  pdf: ^3.11.1
+  printing: ^5.13.2
 
 dev_dependencies:
   flutter_test:

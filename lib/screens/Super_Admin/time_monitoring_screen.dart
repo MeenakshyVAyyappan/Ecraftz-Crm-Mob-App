@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import '../widgets/app_drawer.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../theme/app_theme.dart';
+import '../../blocs/theme/theme_bloc.dart';
+import '../../widgets/app_drawer.dart';
 
 // ==================== MODELS ====================
 
@@ -152,13 +155,16 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _bg = Theme.of(context).scaffoldBackgroundColor;
+
     return Scaffold(
       key: _scaffoldKey,
       drawer: AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: widget.onItemSelected,
       ),
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: _bg,
       appBar: _buildAppBar(),
       body: Column(
         children: [
@@ -185,13 +191,20 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   PreferredSizeWidget _buildAppBar() {
     final w = MediaQuery.of(context).size.width;
     final isTablet = w >= 600;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+    final _textMuted = AppTheme.textMutedOf(context);
+
     return AppBar(
-      backgroundColor: Colors.white,
+      backgroundColor: _cardBg,
       elevation: 0,
       leading: isTablet
           ? null
           : IconButton(
-              icon: const Icon(Icons.menu, color: Color(0xFF2C3E50)),
+              icon: Icon(Icons.menu, color: _textPrimary),
               onPressed: () => _scaffoldKey.currentState?.openDrawer(),
             ),
       title: Column(
@@ -203,15 +216,15 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
                 'Dashboard',
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey[500],
+                  color: _textSecondary,
                 ),
               ),
-              Icon(Icons.chevron_right, size: 14, color: Colors.grey[400]),
+              Icon(Icons.chevron_right, size: 14, color: _textMuted),
               Text(
                 'Time Monitor',
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey[500],
+                  color: _textSecondary,
                 ),
               ),
             ],
@@ -219,13 +232,23 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
         ],
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.wb_sunny_outlined, color: Color(0xFF2C3E50)),
-          onPressed: () {},
+        BlocBuilder<ThemeBloc, ThemeState>(
+          builder: (context, themeState) {
+            final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+            return IconButton(
+              icon: Icon(
+                isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                color: isDarkTheme ? Colors.white : const Color(0xFF2C3E50),
+              ),
+              onPressed: () {
+                context.read<ThemeBloc>().add(ToggleThemeEvent());
+              },
+            );
+          },
         ),
         IconButton(
-          icon: const Icon(Icons.notifications_outlined,
-              color: Color(0xFF2C3E50)),
+          icon: Icon(Icons.notifications_outlined,
+              color: isDark ? Colors.white : const Color(0xFF2C3E50)),
           onPressed: () => _showNotificationsPanel(),
         ),
         Container(
@@ -242,14 +265,15 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
       ],
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
-        child: Container(color: Colors.grey[200], height: 1),
+        child: Container(color: _border, height: 1),
       ),
     );
   }
 
   Widget _buildTabBar() {
+    final _cardBg = Theme.of(context).colorScheme.surface;
     return Container(
-      color: Colors.white,
+      color: _cardBg,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
@@ -263,6 +287,10 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
 
   Widget _buildTabButton(String label, int index) {
     final isSelected = _selectedTab == index;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _border = AppTheme.borderOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     return GestureDetector(
       onTap: () {
         _tabController.animateTo(index);
@@ -271,11 +299,11 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF1A1A2E) : Colors.transparent,
+          color: isSelected ? (isDark ? const Color(0xFF0F2D4A) : const Color(0xFF1A1A2E)) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color:
-                isSelected ? const Color(0xFF1A1A2E) : Colors.grey[300]!,
+                isSelected ? (isDark ? const Color(0xFF1D4ED8) : const Color(0xFF1A1A2E)) : _border,
           ),
         ),
         child: Text(
@@ -283,7 +311,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: isSelected ? Colors.white : Colors.grey[600],
+            color: isSelected ? Colors.white : _textSecondary,
           ),
         ),
       ),
@@ -314,15 +342,18 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   }
 
   Widget _buildPageHeader(String title, String subtitle) {
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF1A1A2E),
+            color: _textPrimary,
           ),
         ),
         const SizedBox(height: 6),
@@ -330,7 +361,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
           subtitle,
           style: TextStyle(
             fontSize: 13,
-            color: Colors.grey[600],
+            color: _textSecondary,
             height: 1.4,
           ),
         ),
@@ -410,18 +441,24 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
 
   Widget _buildStatCard(String title, String value, String subtitle,
       IconData icon, Color iconColor, bool showLive) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
+        boxShadow: isDark ? null : [
           BoxShadow(
             color: Colors.grey.withOpacity(0.08),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
+        border: isDark ? Border.all(color: AppTheme.borderOf(context)) : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -434,7 +471,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
-                  color: Colors.grey[500],
+                  color: _textSecondary,
                   letterSpacing: 0.5,
                 ),
               ),
@@ -456,7 +493,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
               fontWeight: FontWeight.bold,
               color: iconColor == const Color(0xFFFF9800)
                   ? const Color(0xFFFF9800)
-                  : const Color(0xFF1A1A2E),
+                  : _textPrimary,
             ),
           ),
           const SizedBox(height: 6),
@@ -490,7 +527,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
               subtitle,
               style: TextStyle(
                 fontSize: 10,
-                color: Colors.grey[500],
+                color: _textSecondary,
               ),
               overflow: TextOverflow.ellipsis,
             ),
@@ -502,30 +539,38 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   Widget _buildSearchBar() {
     final w = MediaQuery.of(context).size.width;
     final showLabel = w >= 600;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textMuted = AppTheme.textMutedOf(context);
+
     return Row(
       children: [
         Expanded(
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: _cardBg,
               borderRadius: BorderRadius.circular(10),
-              boxShadow: [
+              boxShadow: isDark ? null : [
                 BoxShadow(
                   color: Colors.grey.withOpacity(0.08),
                   blurRadius: 6,
                   offset: const Offset(0, 2),
                 ),
               ],
+              border: isDark ? Border.all(color: _border) : null,
             ),
             child: TextField(
               controller: _searchController,
               onChanged: (v) => setState(() => _searchQuery = v),
+              style: TextStyle(color: _textPrimary, fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'Search employees...',
                 hintStyle:
-                    TextStyle(color: Colors.grey[400], fontSize: 13),
+                    TextStyle(color: _textMuted, fontSize: 13),
                 prefixIcon:
-                    Icon(Icons.search, color: Colors.grey[400], size: 20),
+                    Icon(Icons.search, color: _textMuted, size: 20),
                 border: InputBorder.none,
                 contentPadding:
                     const EdgeInsets.symmetric(vertical: 13, horizontal: 12),
@@ -543,21 +588,26 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
 
   Widget _buildIconButton(
       IconData icon, String label, bool showLabel, VoidCallback onTap) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: _cardBg,
           borderRadius: BorderRadius.circular(10),
-          boxShadow: [
+          boxShadow: isDark ? null : [
             BoxShadow(
               color: Colors.grey.withOpacity(0.08),
               blurRadius: 6,
               offset: const Offset(0, 2),
             ),
           ],
+          border: isDark ? Border.all(color: _border) : null,
         ),
         child: Row(
           children: [
@@ -580,17 +630,20 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   }
 
   Widget _buildEmployeeList() {
+    final _textMuted = AppTheme.textMutedOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     if (_filteredEmployees.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(
             children: [
-              Icon(Icons.person_search, size: 48, color: Colors.grey[300]),
+              Icon(Icons.person_search, size: 48, color: _textMuted),
               const SizedBox(height: 12),
               Text(
                 'No employees found',
-                style: TextStyle(color: Colors.grey[400], fontSize: 14),
+                style: TextStyle(color: _textSecondary, fontSize: 14),
               ),
             ],
           ),
@@ -608,30 +661,39 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   }
 
   Widget _buildEmployeeCard(Employee employee) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     Color statusColor;
     Color statusBg;
     switch (employee.status) {
       case 'WORKING':
         statusColor = const Color(0xFF2196F3);
-        statusBg = const Color(0xFFE3F2FD);
+        statusBg = isDark ? const Color(0xFF0F2D4A) : const Color(0xFFE3F2FD);
         break;
       case 'ON BREAK':
         statusColor = const Color(0xFFFF9800);
-        statusBg = const Color(0xFFFFF3E0);
+        statusBg = isDark ? const Color(0xFF452B09) : const Color(0xFFFFF3E0);
         break;
       default:
         statusColor = Colors.grey;
-        statusBg = Colors.grey[100]!;
+        statusBg = isDark ? AppTheme.bgBaseDark : Colors.grey[100]!;
     }
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(12),
         border: Border(
           top: BorderSide(color: statusColor, width: 3),
+          left: isDark ? BorderSide(color: _border) : BorderSide.none,
+          right: isDark ? BorderSide(color: _border) : BorderSide.none,
+          bottom: isDark ? BorderSide(color: _border) : BorderSide.none,
         ),
-        boxShadow: [
+        boxShadow: isDark ? null : [
           BoxShadow(
             color: Colors.grey.withOpacity(0.08),
             blurRadius: 8,
@@ -666,22 +728,22 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
                     children: [
                       Text(
                         employee.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
-                          color: Color(0xFF1A1A2E),
+                          color: _textPrimary,
                         ),
                       ),
                       Row(
                         children: [
                           Icon(Icons.access_time,
-                              size: 11, color: Colors.grey[400]),
+                              size: 11, color: _textSecondary),
                           const SizedBox(width: 3),
                           Text(
                             'Checked in at ${employee.checkedInAt}',
                             style: TextStyle(
                               fontSize: 11,
-                              color: Colors.grey[500],
+                              color: _textSecondary,
                             ),
                           ),
                         ],
@@ -711,7 +773,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8F9FA),
+                color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8F9FA),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -720,7 +782,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
                     Icons.timer_outlined,
                     'SESSION DURATION',
                     employee.sessionDuration,
-                    const Color(0xFF1A1A2E),
+                    _textPrimary,
                   ),
                   const SizedBox(height: 8),
                   _buildInfoRow(
@@ -728,7 +790,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
                     'ACTIVE TASK',
                     employee.activeTask,
                     employee.activeTask == 'No Task Started'
-                        ? Colors.grey
+                        ? _textSecondary
                         : const Color(0xFF2196F3),
                   ),
                 ],
@@ -761,11 +823,11 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
                 IconButton(
                   onPressed: () =>
                       _showEmployeeOptions(employee),
-                  icon: const Icon(Icons.more_vert,
-                      color: Color(0xFF2196F3)),
+                  icon: Icon(Icons.more_vert,
+                      color: isDark ? Colors.white : const Color(0xFF2196F3)),
                   style: IconButton.styleFrom(
                     backgroundColor:
-                        const Color(0xFFE3F2FD),
+                        isDark ? const Color(0xFF0F2D4A) : const Color(0xFFE3F2FD),
                     shape: RoundedRectangleBorder(
                         borderRadius:
                             BorderRadius.circular(8)),
@@ -781,15 +843,17 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
 
   Widget _buildInfoRow(
       IconData icon, String label, String value, Color valueColor) {
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     return Row(
       children: [
-        Icon(icon, size: 14, color: Colors.grey[500]),
+        Icon(icon, size: 14, color: _textSecondary),
         const SizedBox(width: 6),
         Text(
           label,
           style: TextStyle(
             fontSize: 10,
-            color: Colors.grey[500],
+            color: _textSecondary,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.3,
           ),
@@ -850,6 +914,8 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   }
 
   Widget _buildGovernanceSidebar() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Column(
       children: [
         // Tracking Rules (expandable)
@@ -921,9 +987,9 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFFFFF3E0),
+            color: isDark ? const Color(0xFF452B09) : const Color(0xFFFFF3E0),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFFFB74D)),
+            border: Border.all(color: isDark ? const Color(0xFF78350F) : const Color(0xFFFFB74D)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -937,7 +1003,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
                     child: Text(
                       'ADMIN CONTROL',
                       style: TextStyle(
-                        color: Colors.orange[800],
+                        color: isDark ? Colors.amber[200]! : Colors.orange[800],
                         fontWeight: FontWeight.bold,
                         fontSize: 11,
                       ),
@@ -949,7 +1015,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
               Text(
                 'THESE SETTINGS ENFORCE STRICT ORGANIZATIONAL COMPLIANCE. CHANGES ARE AUDITED IN REAL-TIME.',
                 style: TextStyle(
-                  color: Colors.orange[700],
+                  color: isDark ? Colors.amber[100]! : Colors.orange[700],
                   fontSize: 10,
                   height: 1.4,
                 ),
@@ -1039,17 +1105,23 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   }
 
   Widget _buildTrackingCoreLogic() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
+        boxShadow: isDark ? null : [
           BoxShadow(
             color: Colors.grey.withOpacity(0.08),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
+        border: isDark ? Border.all(color: _border) : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1058,21 +1130,21 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
           Container(
             padding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(
-                  bottom: BorderSide(color: Color(0xFFF0F0F0))),
+                  bottom: BorderSide(color: _border)),
             ),
             child: Row(
               children: [
                 const Icon(Icons.info_outline,
                     color: Color(0xFF2196F3), size: 18),
                 const SizedBox(width: 8),
-                const Text(
+                Text(
                   'TRACKING CORE LOGIC',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A1A2E),
+                    color: AppTheme.textPrimaryOf(context),
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -1087,7 +1159,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
                   'CONFIGURE HOW EMPLOYEE TIME IS CALCULATED AND ENFORCED.',
                   style: TextStyle(
                     fontSize: 10,
-                    color: Colors.grey[500],
+                    color: _textSecondary,
                     letterSpacing: 0.3,
                   ),
                 ),
@@ -1225,6 +1297,10 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
 
   Widget _buildConfigField(
       String label, String value, bool editable, Function(String) onChanged) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1233,7 +1309,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w600,
-            color: Colors.grey[500],
+            color: _textSecondary,
             letterSpacing: 0.3,
           ),
         ),
@@ -1257,18 +1333,18 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
                     const BorderSide(color: Color(0xFF2196F3)),
               ),
               filled: true,
-              fillColor: const Color(0xFFF0F8FF),
+              fillColor: isDark ? const Color(0xFF0F2D4A) : const Color(0xFFF0F8FF),
             ),
-            style: const TextStyle(
-                fontSize: 16, fontWeight: FontWeight.bold),
+            style: TextStyle(
+                fontSize: 16, fontWeight: FontWeight.bold, color: _textPrimary),
           )
         else
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1A1A2E),
+              color: _textPrimary,
             ),
           ),
       ],
@@ -1277,10 +1353,14 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
 
   Widget _buildToggleRow(String label, String subtitle, bool value,
       bool editable, Function(bool) onChanged) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FA),
+        color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8F9FA),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -1291,17 +1371,17 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF1A1A2E),
+                    color: _textPrimary,
                   ),
                 ),
                 Text(
                   subtitle,
                   style: TextStyle(
                     fontSize: 10,
-                    color: Colors.grey[500],
+                    color: _textSecondary,
                   ),
                 ),
               ],
@@ -1319,12 +1399,16 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   }
 
   Widget _buildMaxBreakCard() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF8E1),
+        color: isDark ? const Color(0xFF3E2D0F) : const Color(0xFFFFF8E1),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFFFECB3)),
+        border: Border.all(color: isDark ? const Color(0xFF785C0F) : const Color(0xFFFFECB3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1347,7 +1431,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
           const SizedBox(height: 4),
           Text(
             'Total cumulative break minutes allowed per work session. Employees cannot start new breaks once this limit is reached.',
-            style: TextStyle(fontSize: 10, color: Colors.orange[700]),
+            style: TextStyle(fontSize: 10, color: isDark ? Colors.amber[200]! : Colors.orange[700]),
           ),
           const SizedBox(height: 10),
           Row(
@@ -1366,26 +1450,26 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
                           horizontal: 8, vertical: 8),
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(6),
-                          borderSide: const BorderSide(
-                              color: Color(0xFFFF9800))),
+                          borderSide: BorderSide(
+                              color: isDark ? Colors.amber : const Color(0xFFFF9800))),
                       enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(6),
-                          borderSide: const BorderSide(
-                              color: Color(0xFFFF9800))),
+                          borderSide: BorderSide(
+                              color: isDark ? Colors.amber : const Color(0xFFFF9800))),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: _cardBg,
                     ),
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 16),
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 16, color: _textPrimary),
                   ),
                 )
               else
                 Text(
                   _config.maxBreakTimeMinutes.toString(),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A1A2E),
+                    color: _textPrimary,
                   ),
                 ),
               const SizedBox(width: 8),
@@ -1409,7 +1493,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
               Text(
                 '= ${(_isEditing ? _editingConfig.maxBreakTimeMinutes : _config.maxBreakTimeMinutes) ~/ 60}h ${(_isEditing ? _editingConfig.maxBreakTimeMinutes : _config.maxBreakTimeMinutes) % 60}m per shift',
                 style: TextStyle(
-                    fontSize: 11, color: Colors.orange[700]),
+                    fontSize: 11, color: isDark ? Colors.amber[200]! : Colors.orange[700]),
               ),
             ],
           ),
@@ -1419,14 +1503,18 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   }
 
   Widget _buildStandardShiftSchedule() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.08),
+            color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey.withOpacity(0.08),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1435,12 +1523,12 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'STANDARD SHIFT SCHEDULE',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1A1A2E),
+              color: _textPrimary,
               letterSpacing: 0.5,
             ),
           ),
@@ -1501,6 +1589,10 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
 
   Widget _buildTimeField(String label, String value, bool editable,
       Function(String) onChanged, bool isStart) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1509,7 +1601,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w600,
-            color: Colors.grey[500],
+            color: _textSecondary,
             letterSpacing: 0.3,
           ),
         ),
@@ -1533,8 +1625,8 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             decoration: BoxDecoration(
               color: editable
-                  ? const Color(0xFFF0F8FF)
-                  : const Color(0xFFF8F9FA),
+                  ? (isDark ? const Color(0xFF1E3A5F) : const Color(0xFFF0F8FF))
+                  : (isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF8F9FA)),
               borderRadius: BorderRadius.circular(8),
               border: editable
                   ? Border.all(color: const Color(0xFF2196F3))
@@ -1554,10 +1646,10 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
                 const SizedBox(width: 8),
                 Text(
                   value,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A1A2E),
+                    color: _textPrimary,
                   ),
                 ),
                 if (editable) ...[
@@ -1576,15 +1668,18 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   Widget _buildWorkingDaysSection() {
     final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final activeDays = [true, true, true, true, true, false, false];
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _textPrimary = AppTheme.textPrimaryOf(context);
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.08),
+            color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey.withOpacity(0.08),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1593,12 +1688,12 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'WORKING DAYS',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1A1A2E),
+              color: _textPrimary,
               letterSpacing: 0.5,
             ),
           ),
@@ -1616,13 +1711,14 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   }
 
   Widget _buildDayChip(String day, bool isActive) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: 36,
       height: 36,
       decoration: BoxDecoration(
         color: isActive
             ? const Color(0xFF2196F3)
-            : const Color(0xFFF0F0F0),
+            : (isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF0F0F0)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Center(
@@ -1631,7 +1727,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: isActive ? Colors.white : Colors.grey[500],
+            color: isActive ? Colors.white : (isDark ? Colors.grey[400] : Colors.grey[500]),
           ),
         ),
       ),
@@ -1690,15 +1786,20 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   }
 
   void _showActivityLog(Employee employee) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
         height: MediaQuery.of(context).size.height * 0.75,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: _cardBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(
           children: [
@@ -1707,7 +1808,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
               height: 4,
               margin: const EdgeInsets.only(top: 12),
               decoration: BoxDecoration(
-                color: Colors.grey[300],
+                color: isDark ? Colors.grey[700] : Colors.grey[300],
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -1730,25 +1831,25 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
                     children: [
                       Text(
                         employee.name,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 16),
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16, color: _textPrimary),
                       ),
-                      const Text(
+                      Text(
                         'Activity Log',
                         style:
-                            TextStyle(color: Colors.grey, fontSize: 12),
+                            TextStyle(color: _textSecondary, fontSize: 12),
                       ),
                     ],
                   ),
                   const Spacer(),
                   IconButton(
                     onPressed: () => Navigator.pop(ctx),
-                    icon: const Icon(Icons.close),
+                    icon: Icon(Icons.close, color: _textPrimary),
                   ),
                 ],
               ),
             ),
-            const Divider(),
+            Divider(color: isDark ? Colors.grey[800] : Colors.grey[300]),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.all(16),
@@ -1774,6 +1875,9 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
 
   Widget _buildActivityLogItem(
       String time, String action, IconData icon, Color color) {
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -1791,14 +1895,14 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
           Expanded(
             child: Text(
               action,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w500, fontSize: 13),
+              style: TextStyle(
+                  fontWeight: FontWeight.w500, fontSize: 13, color: _textPrimary),
             ),
           ),
           Text(
             time,
             style:
-                TextStyle(color: Colors.grey[500], fontSize: 12),
+                TextStyle(color: _textSecondary, fontSize: 12),
           ),
         ],
       ),
@@ -1806,13 +1910,17 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   }
 
   void _showEmployeeOptions(Employee employee) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: _cardBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -1822,15 +1930,15 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey[300],
+                color: isDark ? Colors.grey[700] : Colors.grey[300],
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
             const SizedBox(height: 16),
             Text(
               employee.name,
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 16),
+              style: TextStyle(
+                  fontWeight: FontWeight.bold, fontSize: 16, color: _textPrimary),
             ),
             const SizedBox(height: 16),
             _buildOptionTile(Icons.assignment_turned_in_outlined,
@@ -1881,14 +1989,20 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   }
 
   void _confirmCheckOut(Employee employee) {
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: _cardBg,
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Force Check Out'),
+        title: Text('Force Check Out', style: TextStyle(color: _textPrimary)),
         content: Text(
-            'Are you sure you want to force check out ${employee.name}?'),
+            'Are you sure you want to force check out ${employee.name}?',
+            style: TextStyle(color: _textSecondary)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -1918,16 +2032,32 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
 
   void _showAssignTaskDialog(Employee employee) {
     final taskController = TextEditingController();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: _cardBg,
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Assign Task to ${employee.name}'),
+        title: Text('Assign Task to ${employee.name}', style: TextStyle(color: _textPrimary)),
         content: TextField(
           controller: taskController,
+          style: TextStyle(color: _textPrimary),
           decoration: InputDecoration(
             hintText: 'Enter task name...',
+            hintStyle: TextStyle(color: _textSecondary),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFF2196F3)),
+            ),
             border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8)),
           ),
@@ -1962,6 +2092,11 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   }
 
   void _showAddEmployeeDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1971,10 +2106,10 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
           bottom: MediaQuery.of(ctx).viewInsets.bottom,
         ),
         child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
+          decoration: BoxDecoration(
+            color: _cardBg,
             borderRadius:
-                BorderRadius.vertical(top: Radius.circular(20)),
+                const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -1983,23 +2118,31 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
             children: [
               Row(
                 children: [
-                  const Text(
+                  Text(
                     'Add Employee Session',
                     style: TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 16),
+                        fontWeight: FontWeight.bold, fontSize: 16, color: _textPrimary),
                   ),
                   const Spacer(),
                   IconButton(
                     onPressed: () => Navigator.pop(ctx),
-                    icon: const Icon(Icons.close),
+                    icon: Icon(Icons.close, color: _textPrimary),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              const TextField(
+              TextField(
+                style: TextStyle(color: _textPrimary),
                 decoration: InputDecoration(
                   labelText: 'Employee Name',
-                  border: OutlineInputBorder(),
+                  labelStyle: TextStyle(color: _textSecondary),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
+                  ),
+                  focusedBorder: const OutlineInputBorder(
+                    borderSide: BorderSide(color: Color(0xFF2196F3)),
+                  ),
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 12),
@@ -2020,36 +2163,43 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   }
 
   void _showFiltersPanel() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: _cardBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Filter Employees',
+            Text('Filter Employees',
                 style: TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 16)),
+                    fontWeight: FontWeight.bold, fontSize: 16, color: _textPrimary)),
             const SizedBox(height: 16),
-            const Text('Status',
+            Text('Status',
                 style: TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 13)),
+                    fontWeight: FontWeight.w600, fontSize: 13, color: _textSecondary)),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               children: ['All', 'Working', 'On Break', 'Offline']
                   .map((s) => FilterChip(
-                        label: Text(s),
+                        label: Text(s, style: TextStyle(color: _textPrimary)),
                         selected: s == 'All',
                         onSelected: (_) {},
                         selectedColor:
                             const Color(0xFF2196F3).withOpacity(0.2),
+                        checkmarkColor: const Color(0xFF2196F3),
+                        backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
                       ))
                   .toList(),
             ),
@@ -2088,15 +2238,19 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   }
 
   void _showNotificationsPanel() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
         height: MediaQuery.of(context).size.height * 0.6,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: _cardBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(
           children: [
@@ -2105,26 +2259,26 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
               height: 4,
               margin: const EdgeInsets.only(top: 12),
               decoration: BoxDecoration(
-                color: Colors.grey[300],
+                color: isDark ? Colors.grey[700] : Colors.grey[300],
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.all(16),
+            Padding(
+              padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  Icon(Icons.notifications_outlined,
+                  const Icon(Icons.notifications_outlined,
                       color: Color(0xFF2196F3)),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   Text(
                     'Notifications',
                     style: TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 16),
+                        fontWeight: FontWeight.bold, fontSize: 16, color: _textPrimary),
                   ),
                 ],
               ),
             ),
-            const Divider(),
+            Divider(color: isDark ? Colors.grey[800] : Colors.grey[300]),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.all(16),
@@ -2158,15 +2312,18 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
 
   Widget _buildNotificationItem(
       String title, String time, IconData icon, Color color) {
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     return ListTile(
       leading: CircleAvatar(
         backgroundColor: color.withOpacity(0.1),
         child: Icon(icon, color: color, size: 18),
       ),
       title: Text(title,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: _textPrimary)),
       subtitle: Text(time,
-          style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+          style: TextStyle(fontSize: 11, color: _textSecondary)),
     );
   }
 }

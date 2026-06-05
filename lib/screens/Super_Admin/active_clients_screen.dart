@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../widgets/app_drawer.dart';
-import '../models/client_model.dart';
-import '../blocs/client/client_bloc.dart';
+import '../../widgets/app_drawer.dart';
+import '../../models/client_model.dart';
+import '../../blocs/client/client_bloc.dart';
+import '../../theme/app_theme.dart';
+import '../../blocs/theme/theme_bloc.dart';
 
 // ─── SERVICE COLORS ───────────────────────────────────────────────────────────
 
@@ -38,6 +40,11 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  Color get _bg => Theme.of(context).scaffoldBackgroundColor;
+  Color get _border => AppTheme.borderOf(context);
+  Color get _textPrimary => AppTheme.textPrimaryOf(context);
+  Color get _textSecondary => AppTheme.textSecondaryOf(context);
 
   @override
   void initState() {
@@ -123,10 +130,11 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width > 600;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: _bg,
       drawer: AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: (i) {
@@ -135,38 +143,52 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
         },
       ),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
         leading: isWide
             ? null
             : IconButton(
-                icon: const Icon(Icons.menu_rounded, color: Color(0xFF374151)),
+                icon: Icon(Icons.menu_rounded, color: isDark ? Colors.white : const Color(0xFF374151)),
                 onPressed: () => _scaffoldKey.currentState?.openDrawer(),
               ),
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Active Clients',
                 style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
-                    color: Color(0xFF111827))),
+                    color: _textPrimary)),
             Text('Manage your active customer relationships and contracts.',
-                style: TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+                style: TextStyle(fontSize: 11, color: _textSecondary)),
           ],
         ),
         actions: [
+          BlocBuilder<ThemeBloc, ThemeState>(
+            builder: (context, themeState) {
+              final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+              return IconButton(
+                icon: Icon(
+                  isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  color: isDarkTheme ? Colors.white : const Color(0xFF374151),
+                ),
+                onPressed: () {
+                  context.read<ThemeBloc>().add(ToggleThemeEvent());
+                },
+              );
+            },
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: OutlinedButton.icon(
               onPressed: _showBulkImport,
-              icon: const Icon(Icons.upload_file_outlined, size: 15, color: Color(0xFF374151)),
+              icon: Icon(Icons.upload_file_outlined, size: 15, color: _textPrimary),
               label: Text(
                 isWide ? 'Bulk Import' : 'Import',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF374151)),
+                style: TextStyle(fontSize: 12, color: _textPrimary),
               ),
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFFE5E7EB)),
+                side: BorderSide(color: _border),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
@@ -175,7 +197,7 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: const Color(0xFFE5E7EB)),
+          child: Container(height: 1, color: _border),
         ),
       ),
       body: BlocBuilder<ClientBloc, ClientState>(
@@ -188,31 +210,32 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
               _buildStatsStrip(allClients),
               // Search bar
               Container(
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.surface,
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: TextField(
                   controller: _searchCtrl,
                   onChanged: (v) => setState(() => _searchQuery = v),
+                  style: TextStyle(color: _textPrimary, fontSize: 13),
                   decoration: InputDecoration(
                     hintText: 'Search active clients...',
-                    hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
-                    prefixIcon: const Icon(Icons.search, color: Color(0xFF9CA3AF), size: 18),
+                    hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 13),
+                    prefixIcon: Icon(Icons.search, color: AppTheme.textMutedOf(context), size: 18),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(Icons.close, size: 16, color: Color(0xFF6B7280)),
+                            icon: Icon(Icons.close, size: 16, color: _textSecondary),
                             onPressed: () {
                               _searchCtrl.clear();
                               setState(() => _searchQuery = '');
                             })
                         : null,
                     filled: true,
-                    fillColor: const Color(0xFFF9FAFB),
+                    fillColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                        borderSide: BorderSide(color: _border)),
                     enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                        borderSide: BorderSide(color: _border)),
                     focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
@@ -239,7 +262,7 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
     final services = allClients.expand((c) => c.services).toSet().length;
 
     return Container(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       width: double.infinity,
       child: Wrap(
@@ -269,7 +292,7 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
               style: TextStyle(
                   color: color, fontSize: 13, fontWeight: FontWeight.w700)),
           Text(label,
-              style: const TextStyle(color: Color(0xFF6B7280), fontSize: 10)),
+              style: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 10)),
         ],
       ),
     );
@@ -280,13 +303,13 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.people_outline, size: 48, color: Color(0xFFD1D5DB)),
+          Icon(Icons.people_outline, size: 48, color: AppTheme.textMutedOf(context)),
           const SizedBox(height: 12),
-          const Text('No active clients found',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+          Text('No active clients found',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textPrimaryOf(context))),
           const SizedBox(height: 6),
-          const Text('Clients appear here after submitting onboarding forms\nor via bulk import.',
-              style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
+          Text('Clients appear here after submitting onboarding forms\nor via bulk import.',
+              style: TextStyle(color: AppTheme.textSecondaryOf(context), fontSize: 13),
               textAlign: TextAlign.center),
           const SizedBox(height: 20),
           ElevatedButton.icon(
@@ -305,6 +328,7 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
   }
 
   Widget _buildTable(List<ActiveClient> clients, bool isWide) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     if (!isWide) {
       return ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -326,9 +350,9 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
           margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDark ? AppTheme.bgCardDark : Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
+            border: Border.all(color: AppTheme.borderOf(context)),
           ),
           child: Row(
             children: [
@@ -374,10 +398,10 @@ class _TableHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(text,
-        style: const TextStyle(
+        style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF6B7280)));
+            color: AppTheme.textSecondaryOf(context)));
   }
 }
 
@@ -402,15 +426,21 @@ class _ClientRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    final textMuted = AppTheme.textMutedOf(context);
+    final border = AppTheme.borderOf(context);
+
     if (!isWide) {
       return Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? AppTheme.bgCardDark : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-          boxShadow: [
+          border: Border.all(color: border),
+          boxShadow: isDark ? [] : [
             BoxShadow(
               color: Colors.black.withOpacity(0.02),
               blurRadius: 6,
@@ -432,19 +462,19 @@ class _ClientRow extends StatelessWidget {
                     children: [
                       Text(
                         client.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF111827),
+                          color: textPrimary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
                         client.email,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: Color(0xFF6B7280),
+                          color: textSecondary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -453,9 +483,10 @@ class _ClientRow extends StatelessWidget {
                   ),
                 ),
                 PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, size: 18, color: Color(0xFF9CA3AF)),
+                  icon: Icon(Icons.more_vert, size: 18, color: textMuted),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
+                  color: isDark ? AppTheme.bgCardDark : Colors.white,
                   itemBuilder: (_) => [
                     const PopupMenuItem(
                       value: 'delete',
@@ -476,7 +507,7 @@ class _ClientRow extends StatelessWidget {
               children: client.services.map((s) => _ServiceBadge(service: s)).toList(),
             ),
             const SizedBox(height: 12),
-            const Divider(height: 1, color: Color(0xFFF3F4F6)),
+            Divider(height: 1, color: border),
             const SizedBox(height: 12),
             // Value + Actions
             Row(
@@ -485,9 +516,9 @@ class _ClientRow extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'CONTRACT VALUE',
-                      style: TextStyle(fontSize: 9, color: Color(0xFF9CA3AF), fontWeight: FontWeight.w600, letterSpacing: 0.5),
+                      style: TextStyle(fontSize: 9, color: textMuted, fontWeight: FontWeight.w600, letterSpacing: 0.5),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -497,7 +528,7 @@ class _ClientRow extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
-                        color: client.contractValue > 0 ? const Color(0xFF111827) : const Color(0xFF9CA3AF),
+                        color: client.contractValue > 0 ? textPrimary : textMuted,
                       ),
                     ),
                   ],
@@ -529,12 +560,12 @@ class _ClientRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
         border: Border(
-          left: const BorderSide(color: Color(0xFFE5E7EB)),
-          right: const BorderSide(color: Color(0xFFE5E7EB)),
+          left: BorderSide(color: border),
+          right: BorderSide(color: border),
           bottom: BorderSide(
-              color: isLast ? Colors.transparent : const Color(0xFFE5E7EB)),
+              color: isLast ? Colors.transparent : border),
         ),
         borderRadius: isLast
             ? const BorderRadius.vertical(bottom: Radius.circular(12))
@@ -554,15 +585,15 @@ class _ClientRow extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(client.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF111827)),
+                              color: textPrimary),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
                       Text(client.email,
-                          style: const TextStyle(
-                              fontSize: 11, color: Color(0xFF6B7280)),
+                          style: TextStyle(
+                              fontSize: 11, color: textSecondary),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
                     ],
@@ -591,8 +622,8 @@ class _ClientRow extends StatelessWidget {
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: client.contractValue > 0
-                      ? const Color(0xFF111827)
-                      : const Color(0xFF9CA3AF)),
+                      ? textPrimary
+                      : textMuted),
             ),
           ),
           // Actions
@@ -615,9 +646,10 @@ class _ClientRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 2),
                 PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_horiz,
-                      size: 18, color: Color(0xFF9CA3AF)),
+                  icon: Icon(Icons.more_horiz,
+                      size: 18, color: textMuted),
                   padding: EdgeInsets.zero,
+                  color: isDark ? AppTheme.bgCardDark : Colors.white,
                   itemBuilder: (_) => [
                     const PopupMenuItem(
                         value: 'delete',
@@ -645,14 +677,20 @@ class _ClientDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppTheme.bgCardDark : Colors.white;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    final border = AppTheme.borderOf(context);
+
     return DraggableScrollableSheet(
       initialChildSize: 0.65,
       maxChildSize: 0.92,
       minChildSize: 0.4,
       builder: (_, ctrl) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(
           children: [
@@ -661,7 +699,7 @@ class _ClientDetailSheet extends StatelessWidget {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
+                  color: border,
                   borderRadius: BorderRadius.circular(2)),
             ),
             const SizedBox(height: 4),
@@ -676,13 +714,13 @@ class _ClientDetailSheet extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(client.name,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,
-                                color: Color(0xFF111827))),
+                                color: textPrimary)),
                         Text(client.email,
-                            style: const TextStyle(
-                                fontSize: 12, color: Color(0xFF6B7280))),
+                            style: TextStyle(
+                                fontSize: 12, color: textSecondary)),
                       ],
                     ),
                   ),
@@ -708,7 +746,7 @@ class _ClientDetailSheet extends StatelessWidget {
                 ],
               ),
             ),
-            const Divider(height: 24),
+            Divider(height: 24, color: border),
             Expanded(
               child: ListView(
                 controller: ctrl,
@@ -780,14 +818,21 @@ class _InvoiceSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppTheme.bgCardDark : Colors.white;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    final textMuted = AppTheme.textMutedOf(context);
+    final border = AppTheme.borderOf(context);
+
     return DraggableScrollableSheet(
       initialChildSize: 0.7,
       maxChildSize: 0.92,
       minChildSize: 0.4,
       builder: (_, ctrl) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(
           children: [
@@ -796,7 +841,7 @@ class _InvoiceSheet extends StatelessWidget {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
+                  color: border,
                   borderRadius: BorderRadius.circular(2)),
             ),
             const SizedBox(height: 4),
@@ -804,16 +849,16 @@ class _InvoiceSheet extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
               child: Row(
                 children: [
-                  const Text('Invoice',
+                  Text('Invoice',
                       style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
-                          color: Color(0xFF111827))),
+                          color: textPrimary)),
                   const Spacer(),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF0FDFE),
+                      color: isDark ? const Color(0xFF164E63) : const Color(0xFFF0FDFE),
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(color: const Color(0xFF00BCD4).withOpacity(0.3)),
                     ),
@@ -827,7 +872,7 @@ class _InvoiceSheet extends StatelessWidget {
                 ],
               ),
             ),
-            const Divider(height: 24),
+            Divider(height: 24, color: border),
             Expanded(
               child: ListView(
                 controller: ctrl,
@@ -841,21 +886,21 @@ class _InvoiceSheet extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Bill To',
+                            Text('Bill To',
                                 style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
-                                    color: Color(0xFF6B7280),
+                                    color: textMuted,
                                     letterSpacing: 0.5)),
                             const SizedBox(height: 4),
                             Text(client.name,
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
-                                    color: Color(0xFF111827))),
+                                    color: textPrimary)),
                             Text(client.email,
-                                style: const TextStyle(
-                                    fontSize: 12, color: Color(0xFF6B7280))),
+                                style: TextStyle(
+                                    fontSize: 12, color: textSecondary)),
                           ],
                         ),
                       ),
@@ -863,17 +908,17 @@ class _InvoiceSheet extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            const Text('Invoice Date',
+                            Text('Invoice Date',
                                 style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
-                                    color: Color(0xFF6B7280),
+                                    color: textMuted,
                                     letterSpacing: 0.5)),
                             const SizedBox(height: 4),
                             Text(
                               '${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}',
-                              style: const TextStyle(
-                                  fontSize: 12, color: Color(0xFF111827)),
+                              style: TextStyle(
+                                  fontSize: 12, color: textPrimary),
                             ),
                           ],
                         ),
@@ -884,7 +929,7 @@ class _InvoiceSheet extends StatelessWidget {
                   // Services table
                   Container(
                     decoration: BoxDecoration(
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      border: Border.all(color: border),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Column(
@@ -893,20 +938,20 @@ class _InvoiceSheet extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 10),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFF9FAFB),
+                          decoration: BoxDecoration(
+                            color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
                             borderRadius:
-                                BorderRadius.vertical(top: Radius.circular(10)),
+                                const BorderRadius.vertical(top: Radius.circular(10)),
                           ),
-                          child: const Row(
+                          child: Row(
                             children: [
-                              Expanded(flex: 4, child: Text('Service', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280)))),
-                              Expanded(flex: 1, child: Text('Qty', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280)))),
-                              Expanded(flex: 2, child: Text('Amount', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280)), textAlign: TextAlign.end)),
+                              Expanded(flex: 4, child: Text('Service', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: textMuted))),
+                              Expanded(flex: 1, child: Text('Qty', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: textMuted))),
+                              Expanded(flex: 2, child: Text('Amount', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: textMuted), textAlign: TextAlign.end)),
                             ],
                           ),
                         ),
-                        const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                        Divider(height: 1, color: border),
                         ...client.services.asMap().entries.map((e) {
                           final perService = client.services.isEmpty
                               ? 0.0
@@ -921,25 +966,25 @@ class _InvoiceSheet extends StatelessWidget {
                                     Expanded(
                                       flex: 4,
                                       child: Text(e.value,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                               fontSize: 13,
-                                              color: Color(0xFF111827))),
+                                              color: textPrimary)),
                                     ),
-                                    const Expanded(
+                                    Expanded(
                                       flex: 1,
                                       child: Text('1',
                                           style: TextStyle(
                                               fontSize: 13,
-                                              color: Color(0xFF6B7280))),
+                                              color: textSecondary)),
                                     ),
                                     Expanded(
                                       flex: 2,
                                       child: Text(
                                         '\$${perService.toStringAsFixed(0)}',
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w600,
-                                            color: Color(0xFF111827)),
+                                            color: textPrimary),
                                         textAlign: TextAlign.end,
                                       ),
                                     ),
@@ -947,24 +992,24 @@ class _InvoiceSheet extends StatelessWidget {
                                 ),
                               ),
                               if (e.key < client.services.length - 1)
-                                const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                                Divider(height: 1, color: border),
                             ],
                           );
                         }).toList(),
-                        const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                        Divider(height: 1, color: border),
                         // Total
                         Padding(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 12),
                           child: Row(
                             children: [
-                              const Expanded(
+                              Expanded(
                                   flex: 4,
                                   child: Text('Total',
                                       style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w700,
-                                          color: Color(0xFF111827)))),
+                                          color: textPrimary))),
                               const Expanded(flex: 1, child: SizedBox()),
                               Expanded(
                                 flex: 2,
@@ -990,10 +1035,10 @@ class _InvoiceSheet extends StatelessWidget {
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.download_outlined, size: 16, color: Color(0xFF374151)),
-                          label: const Text('Download PDF', style: TextStyle(color: Color(0xFF374151), fontSize: 13)),
+                          icon: Icon(Icons.download_outlined, size: 16, color: textPrimary),
+                          label: Text('Download PDF', style: TextStyle(color: textPrimary, fontSize: 13)),
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFFE5E7EB)),
+                            side: BorderSide(color: border),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
@@ -1075,14 +1120,20 @@ class _BulkImportSheetState extends State<_BulkImportSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppTheme.bgCardDark : Colors.white;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    final border = AppTheme.borderOf(context);
+
     return DraggableScrollableSheet(
       initialChildSize: 0.8,
       maxChildSize: 0.95,
       minChildSize: 0.5,
       builder: (_, ctrl) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(
           children: [
@@ -1091,27 +1142,27 @@ class _BulkImportSheetState extends State<_BulkImportSheet> {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
+                  color: border,
                   borderRadius: BorderRadius.circular(2)),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
               child: Row(
                 children: [
-                  const Text('Bulk Import Clients',
+                  Text('Bulk Import Clients',
                       style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.w800,
-                          color: Color(0xFF111827))),
+                          color: textPrimary)),
                   const Spacer(),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Color(0xFF6B7280)),
+                    icon: Icon(Icons.close, color: textSecondary),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 20),
+            Divider(height: 20, color: border),
             Expanded(
               child: ListView(
                 controller: ctrl,
@@ -1121,7 +1172,7 @@ class _BulkImportSheetState extends State<_BulkImportSheet> {
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF0FDFE),
+                      color: isDark ? const Color(0xFF164E63) : const Color(0xFFF0FDFE),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                           color: const Color(0xFF00BCD4).withOpacity(0.3)),
@@ -1142,41 +1193,39 @@ class _BulkImportSheetState extends State<_BulkImportSheet> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        const Text(
+                        Text(
                             'Each row: Name, Email, Service(s separated by ;), ContractValue\n'
                             'Example:\narsenal, arsenal@gmail.com, Digital Marketing, 30000\njanani, livein@janani.in, Web Development;SEO Services, 20000',
                             style: TextStyle(
                                 fontSize: 11,
-                                color: Color(0xFF0369A1),
+                                color: isDark ? const Color(0xFFBAE6FD) : const Color(0xFF0369A1),
                                 fontFamily: 'monospace')),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text('Paste CSV Data',
+                  Text('Paste CSV Data',
                       style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF374151))),
+                          color: textPrimary)),
                   const SizedBox(height: 6),
                   TextField(
                     controller: _csvCtrl,
                     maxLines: 8,
-                    style: const TextStyle(
-                        fontSize: 12, fontFamily: 'monospace'),
+                    style: TextStyle(
+                        fontSize: 12, fontFamily: 'monospace', color: textPrimary),
                     decoration: InputDecoration(
                       hintText:
                           'arsenal, arsenal@gmail.com, Digital Marketing, 30000\njanani, livein@janani.in, Web Development;SEO, 20000',
-                      hintStyle: const TextStyle(
-                          color: Color(0xFFD1D5DB), fontSize: 11),
+                      hintStyle: TextStyle(
+                          color: AppTheme.textMutedOf(context), fontSize: 11),
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide:
-                              const BorderSide(color: Color(0xFFE5E7EB))),
+                          borderSide: BorderSide(color: border)),
                       enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide:
-                              const BorderSide(color: Color(0xFFE5E7EB))),
+                          borderSide: BorderSide(color: border)),
                       focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: const BorderSide(
@@ -1198,7 +1247,7 @@ class _BulkImportSheetState extends State<_BulkImportSheet> {
                   ElevatedButton(
                     onPressed: _parse,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF374151),
+                      backgroundColor: isDark ? AppTheme.bgBaseDark : const Color(0xFF374151),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
@@ -1228,10 +1277,9 @@ class _BulkImportSheetState extends State<_BulkImportSheet> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 10),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF9FAFB),
+                            color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                                color: const Color(0xFFE5E7EB)),
+                            border: Border.all(color: border),
                           ),
                           child: Row(
                             children: [
@@ -1243,14 +1291,14 @@ class _BulkImportSheetState extends State<_BulkImportSheet> {
                                       CrossAxisAlignment.start,
                                   children: [
                                     Text(c.name,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w600,
-                                            color: Color(0xFF111827))),
+                                            color: textPrimary)),
                                     Text(c.email,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                             fontSize: 11,
-                                            color: Color(0xFF6B7280))),
+                                            color: textSecondary)),
                                   ],
                                 ),
                               ),
@@ -1258,10 +1306,10 @@ class _BulkImportSheetState extends State<_BulkImportSheet> {
                                 c.contractValue > 0
                                     ? '\$${c.contractValue.toStringAsFixed(0)}'
                                     : '\$0',
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w700,
-                                    color: Color(0xFF374151)),
+                                    color: textPrimary),
                               ),
                             ],
                           ),
@@ -1400,12 +1448,13 @@ class _DetailSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
+        color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: AppTheme.borderOf(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1415,10 +1464,10 @@ class _DetailSection extends StatelessWidget {
               Icon(icon, size: 14, color: const Color(0xFF00BCD4)),
               const SizedBox(width: 6),
               Text(title,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF374151))),
+                      color: AppTheme.textPrimaryOf(context))),
             ],
           ),
           const SizedBox(height: 10),
@@ -1442,14 +1491,14 @@ class _DetailRow extends StatelessWidget {
       child: Row(
         children: [
           Text('$label: ',
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 12,
-                  color: Color(0xFF6B7280),
+                  color: AppTheme.textSecondaryOf(context),
                   fontWeight: FontWeight.w500)),
           Expanded(
             child: Text(value,
-                style: const TextStyle(
-                    fontSize: 12, color: Color(0xFF111827)),
+                style: TextStyle(
+                    fontSize: 12, color: AppTheme.textPrimaryOf(context)),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis),
           ),

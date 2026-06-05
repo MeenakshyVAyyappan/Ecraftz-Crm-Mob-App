@@ -1,6 +1,11 @@
 // asset_renewals_page.dart
 import 'package:flutter/material.dart';
-import '../widgets/app_drawer.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../widgets/app_drawer.dart';
+import '../../theme/app_theme.dart';
+import '../../blocs/theme/theme_bloc.dart';
+import '../../services/supabase_service.dart';
 
 // ─── DATA MODELS ─────────────────────────────────────────────────────────────
 
@@ -91,6 +96,57 @@ class AssetRenewal {
     this.associatedProject = 'Independent Service',
   });
 
+  factory AssetRenewal.fromJson(Map<String, dynamic> json) {
+    final clientsMap = json['clients'];
+    final cName = (clientsMap is Map && clientsMap['name'] != null)
+        ? clientsMap['name'].toString()
+        : '';
+        
+    final projectsMap = json['projects'];
+    final pName = (projectsMap is Map && projectsMap['name'] != null)
+        ? projectsMap['name'].toString()
+        : '';
+
+    return AssetRenewal(
+      id: json['id']?.toString() ?? '',
+      serviceName: json['service_name'] ?? '',
+      clientName: cName.isNotEmpty ? cName : (json['client_id']?.toString() ?? ''),
+      clientEntity: json['client_entity'] ?? '',
+      category: _categoryFromString(json['category']),
+      expiryDate: json['expiry_date'] != null 
+          ? DateTime.tryParse(json['expiry_date']) ?? DateTime.now()
+          : DateTime.now(),
+      amount: (json['amount'] ?? 0).toDouble(),
+      status: _statusFromString(json['status']),
+      description: json['description'] ?? '',
+      associatedProject: pName.isNotEmpty ? pName : (json['project_id']?.toString() ?? 'Independent Service'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'service_name': serviceName,
+      'client_name': clientName,
+      'client_entity': clientEntity,
+      'category': category.name,
+      'expiry_date': expiryDate.toIso8601String(),
+      'amount': amount,
+      'status': status.name,
+      'description': description,
+      'associated_project': associatedProject,
+    };
+  }
+
+  static ServiceCategory _categoryFromString(String? val) {
+    if (val == null) return ServiceCategory.hosting;
+    return ServiceCategory.values.firstWhere((e) => e.name == val, orElse: () => ServiceCategory.hosting);
+  }
+
+  static RenewalStatus _statusFromString(String? val) {
+    if (val == null) return RenewalStatus.pending;
+    return RenewalStatus.values.firstWhere((e) => e.name == val, orElse: () => RenewalStatus.pending);
+  }
+
   bool get isExpiringSoon =>
       expiryDate.difference(DateTime.now()).inDays <= 30 &&
       expiryDate.isAfter(DateTime.now());
@@ -131,21 +187,36 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final _searchCtrl = TextEditingController();
   String _search = '';
+  
+  List<AssetRenewal> _renewals = [];
+  bool _isLoading = true;
 
-  final List<AssetRenewal> _renewals = [
-    AssetRenewal(
-      id: '1',
-      serviceName: 'swderfssdd',
-      clientName: 'CHIMBU',
-      clientEntity: 'CHIMBU • JANANI',
-      category: ServiceCategory.hostingDomain,
-      expiryDate: DateTime(2026, 5, 15),
-      amount: 50,
-      status: RenewalStatus.paid,
-      description: 'AWS Production Hosting + Domain renewal',
-      associatedProject: 'JANANI Web Project',
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchRenewals();
+  }
+
+  Future<void> _fetchRenewals() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      // Fetch renewals, joining clients and projects to get their names
+      final data = await SupabaseService.client
+          .from('renewals')
+          .select('*, clients(name), projects(name)')
+          .order('expiry_date', ascending: true);
+      if (!mounted) return;
+      setState(() {
+        _renewals = (data as List).map((e) => AssetRenewal.fromJson(e)).toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _snack('Failed to load renewals: $e', Colors.red);
+    }
+  }
 
   List<AssetRenewal> get _filtered {
     if (_search.isEmpty) return _renewals;
@@ -167,23 +238,39 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
       builder: (_) => _ScheduleRenewalDialog(
         existing: existing,
         clients: _renewals.map((r) => r.clientName).toSet().toList(),
-        onSave: (r) {
-          setState(() {
+        onSave: (r) async {
+          setState(() => _isLoading = true);
+          try {
             if (existing != null) {
-              final idx = _renewals.indexWhere((x) => x.id == existing.id);
-              if (idx != -1) _renewals[idx] = r;
+              await SupabaseService.client.from('renewals').update(r.toJson()).eq('id', existing.id);
             } else {
-              _renewals.add(r);
+              await SupabaseService.client.from('renewals').insert(r.toJson());
             }
-          });
+            await _fetchRenewals();
+            if (mounted) _snack(existing != null ? 'Renewal updated!' : 'Renewal scheduled!', const Color(0xFF10B981));
+          } catch (e) {
+            if (mounted) {
+              setState(() => _isLoading = false);
+              _snack('Error saving renewal: $e', Colors.red);
+            }
+          }
         },
       ),
     );
   }
 
-  void _markAsPaid(AssetRenewal r) {
-    setState(() => r.status = RenewalStatus.paid);
-    _snack('Marked as PAID', const Color(0xFF10B981));
+  Future<void> _markAsPaid(AssetRenewal r) async {
+    setState(() => _isLoading = true);
+    try {
+      await SupabaseService.client.from('renewals').update({'status': 'paid'}).eq('id', r.id);
+      await _fetchRenewals();
+      if (mounted) _snack('Marked as PAID', const Color(0xFF10B981));
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _snack('Failed to update status: $e', Colors.red);
+      }
+    }
   }
 
   void _sendReminder(AssetRenewal r) =>
@@ -198,10 +285,19 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
-            onPressed: () {
-              setState(() => _renewals.removeWhere((x) => x.id == r.id));
+            onPressed: () async {
               Navigator.pop(context);
-              _snack('Renewal deleted', Colors.red);
+              setState(() => _isLoading = true);
+              try {
+                await SupabaseService.client.from('renewals').delete().eq('id', r.id);
+                await _fetchRenewals();
+                if (mounted) _snack('Renewal deleted', Colors.red);
+              } catch (e) {
+                if (mounted) {
+                  setState(() => _isLoading = false);
+                  _snack('Failed to delete: $e', Colors.red);
+                }
+              }
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
@@ -229,6 +325,7 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width > 650;
     final filtered = _filtered;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       key: _scaffoldKey,
@@ -239,42 +336,58 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
           Navigator.pop(context);
         },
       ),
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       floatingActionButton: FloatingActionButton(
         onPressed: _showQuickCreate,
         backgroundColor: const Color(0xFF00BCD4),
         child: const Icon(Icons.add, color: Colors.white),
       ),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
         leading: isWide
             ? null
             : IconButton(
-                icon: const Icon(Icons.menu_rounded, color: Color(0xFF374151)),
+                icon: Icon(Icons.menu_rounded, color: isDark ? Colors.white : const Color(0xFF374151)),
                 onPressed: () => _scaffoldKey.currentState?.openDrawer(),
               ),
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Asset Renewals',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF111827))),
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppTheme.textPrimaryOf(context))),
             Text('Track and manage recurring service renewals.',
-                style: TextStyle(fontSize: 10, color: Color(0xFF6B7280))),
+                style: TextStyle(fontSize: 10, color: AppTheme.textSecondaryOf(context))),
           ],
         ),
+        actions: [
+          BlocBuilder<ThemeBloc, ThemeState>(
+            builder: (context, themeState) {
+              final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+              return IconButton(
+                icon: Icon(
+                  isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  color: isDarkTheme ? Colors.white : const Color(0xFF374151),
+                ),
+                onPressed: () {
+                  context.read<ThemeBloc>().add(ToggleThemeEvent());
+                },
+              );
+            },
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: const Color(0xFFE5E7EB)),
+          child: Container(height: 1, color: AppTheme.borderOf(context)),
         ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           // Description
-          const Text(
+          Text(
             'Track and manage recurring service renewals for project hosting, domains, and enterprise mail systems.',
-            style: TextStyle(fontSize: 13, color: Color(0xFF6B7280), height: 1.5),
+            style: TextStyle(fontSize: 13, color: AppTheme.textSecondaryOf(context), height: 1.5),
           ),
           const SizedBox(height: 16),
           // Stats
@@ -287,17 +400,17 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
               onChanged: (v) => setState(() => _search = v),
               decoration: InputDecoration(
                 hintText: 'Search by client, domain or category...',
-                hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 12),
-                prefixIcon: const Icon(Icons.search, color: Color(0xFF9CA3AF), size: 18),
+                hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 12),
+                prefixIcon: Icon(Icons.search, color: AppTheme.textMutedOf(context), size: 18),
                 suffixIcon: _search.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.close, size: 16, color: Color(0xFF6B7280)),
+                        icon: Icon(Icons.close, size: 16, color: AppTheme.textSecondaryOf(context)),
                         onPressed: () { _searchCtrl.clear(); setState(() => _search = ''); })
                     : null,
                 filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                fillColor: isDark ? AppTheme.bgCardDark : Colors.white,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppTheme.borderOf(context))),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppTheme.borderOf(context))),
                 focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),
               ),
@@ -327,17 +440,17 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
                     onChanged: (v) => setState(() => _search = v),
                     decoration: InputDecoration(
                       hintText: 'Search by client, domain or category...',
-                      hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 12),
-                      prefixIcon: const Icon(Icons.search, color: Color(0xFF9CA3AF), size: 18),
+                      hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 12),
+                      prefixIcon: Icon(Icons.search, color: AppTheme.textMutedOf(context), size: 18),
                       suffixIcon: _search.isNotEmpty
                           ? IconButton(
-                              icon: const Icon(Icons.close, size: 16, color: Color(0xFF6B7280)),
+                              icon: Icon(Icons.close, size: 16, color: AppTheme.textSecondaryOf(context)),
                               onPressed: () { _searchCtrl.clear(); setState(() => _search = ''); })
                           : null,
                       filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                      fillColor: isDark ? AppTheme.bgCardDark : Colors.white,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppTheme.borderOf(context))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppTheme.borderOf(context))),
                       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
                       contentPadding: const EdgeInsets.symmetric(vertical: 10),
                     ),
@@ -361,7 +474,13 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
           ],
           const SizedBox(height: 12),
           // Table
-          _buildTable(filtered, isWide),
+          if (_isLoading)
+            const Padding(
+              padding: EdgeInsets.all(48),
+              child: Center(child: CircularProgressIndicator(color: Color(0xFF00BCD4))),
+            )
+          else
+            _buildTable(filtered, isWide),
         ],
       ),
     );
@@ -370,13 +489,14 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
   // ── STATS ─────────────────────────────────────────────────────────────────
 
   Widget _buildStats(bool isWide) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final cards = [
       _StatData('TOTAL RENEWALS', '$_totalRenewals', 'Active recurring services',
-          Icons.calendar_month_outlined, const Color(0xFF374151), Colors.white),
+          Icons.calendar_month_outlined, isDark ? AppTheme.textSecondaryOf(context) : const Color(0xFF374151), isDark ? AppTheme.bgCardDark : Colors.white),
       _StatData('CRITICAL WINDOW', '$_criticalWindow', 'Expiring within 30 days',
-          Icons.warning_amber_rounded, const Color(0xFFF59E0B), const Color(0xFFFFFBEB)),
+          Icons.warning_amber_rounded, const Color(0xFFF59E0B), isDark ? const Color(0xFF2E1F0F) : const Color(0xFFFFFBEB)),
       _StatData('REVENUE LOCKED', '\$$_revenueLocked', 'Current period collection',
-          Icons.check_circle_outline_rounded, const Color(0xFF10B981), const Color(0xFFF0FDF4),
+          Icons.check_circle_outline_rounded, const Color(0xFF10B981), isDark ? const Color(0xFF08271C) : const Color(0xFFF0FDF4),
           valueColor: const Color(0xFF10B981), valueLarge: true),
     ];
 
@@ -388,6 +508,7 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
   // ── TABLE ─────────────────────────────────────────────────────────────────
 
   Widget _buildTable(List<AssetRenewal> renewals, bool isWide) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       children: [
         // Header
@@ -395,18 +516,18 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: const Color(0xFFF9FAFB),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
+              color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF9FAFB),
+              border: Border.all(color: AppTheme.borderOf(context)),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
             ),
             child: Row(
               children: [
-                const Expanded(flex: 3, child: _TH('SERVICE / CLIENT')),
-                const Expanded(flex: 3, child: _TH('CATEGORY')),
+                const Expanded(flex: 4, child: _TH('SERVICE / CLIENT')),
+                const Expanded(flex: 2, child: _TH('CATEGORY')),
                 const Expanded(flex: 2, child: _TH('EXPIRY DATE')),
-                const Expanded(flex: 1, child: _TH('AMOUNT')),
+                const Expanded(flex: 2, child: _TH('AMOUNT')),
                 const Expanded(flex: 2, child: _TH('STATUS')),
-                const Expanded(flex: 1, child: _TH('ACTIONS')),
+                const SizedBox(width: 40),
               ],
             ),
           ),
@@ -414,17 +535,17 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
           Container(
             padding: const EdgeInsets.all(48),
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: const Color(0xFFE5E7EB)),
+              color: isDark ? AppTheme.bgCardDark : Colors.white,
+              border: Border.all(color: AppTheme.borderOf(context)),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(
               children: [
                 const Icon(Icons.autorenew_rounded, size: 40, color: Color(0xFFD1D5DB)),
                 const SizedBox(height: 12),
-                const Text('No renewals found', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+                Text('No renewals found', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textPrimaryOf(context))),
                 const SizedBox(height: 6),
-                const Text('Schedule a renewal to start tracking.', style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 12)),
+                Text('Schedule a renewal to start tracking.', style: TextStyle(color: AppTheme.textSecondaryOf(context), fontSize: 12)),
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
                   onPressed: () => _showScheduleDialog(),
@@ -483,13 +604,14 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: data.bgColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: data.iconColor.withOpacity(0.15)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))],
+        border: Border.all(color: isDark ? AppTheme.borderOf(context) : data.iconColor.withOpacity(0.15)),
+        boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -511,10 +633,10 @@ class _StatCard extends StatelessWidget {
               style: TextStyle(
                   fontSize: data.valueLarge ? 26 : 22,
                   fontWeight: FontWeight.w800,
-                  color: data.valueColor ?? const Color(0xFF111827))),
+                  color: data.valueColor ?? AppTheme.textPrimaryOf(context))),
           const SizedBox(height: 2),
           Text(data.subtitle,
-              style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+              style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context))),
         ],
       ),
     );
@@ -542,46 +664,75 @@ class _RenewalRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
         border: Border(
-          left: const BorderSide(color: Color(0xFFE5E7EB)),
-          right: const BorderSide(color: Color(0xFFE5E7EB)),
-          bottom: BorderSide(color: isLast ? Colors.transparent : const Color(0xFFE5E7EB)),
+          left: BorderSide(color: AppTheme.borderOf(context)),
+          right: BorderSide(color: AppTheme.borderOf(context)),
+          bottom: BorderSide(color: isLast ? Colors.transparent : AppTheme.borderOf(context)),
           top: renewal.isExpiringSoon
-              ? const BorderSide(color: Color(0xFFFEF9C3), width: 0)
+              ? BorderSide(color: isDark ? const Color(0xFF5B4010) : const Color(0xFFFEF9C3), width: 0)
               : BorderSide.none,
         ),
         borderRadius: isLast
             ? const BorderRadius.vertical(bottom: Radius.circular(10))
             : BorderRadius.zero,
         color: renewal.isExpired
-            ? const Color(0xFFFEF2F2).withOpacity(0.4)
+            ? (isDark ? const Color(0xFF3B1F21) : const Color(0xFFFEF2F2)).withOpacity(0.4)
             : renewal.isExpiringSoon
-                ? const Color(0xFFFFFBEB).withOpacity(0.5)
-                : Colors.white,
+                ? (isDark ? const Color(0xFF2E1F0F) : const Color(0xFFFFFBEB)).withOpacity(0.5)
+                : (isDark ? AppTheme.bgCardDark : Colors.white),
       ),
       child: Row(
         children: [
           // Service / Client
           Expanded(
-            flex: 3,
+            flex: 4,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(renewal.serviceName,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF111827)),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text(renewal.clientEntity,
-                    style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280)),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                if (renewal.description.isNotEmpty)
+                  Text(renewal.description,
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimaryOf(context)),
+                      maxLines: 2, overflow: TextOverflow.ellipsis),
+                if (renewal.description.isNotEmpty && renewal.clientName.isNotEmpty)
+                  const SizedBox(height: 4),
+                if (renewal.clientName.isNotEmpty)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Icon(Icons.person_outline_rounded, size: 12, color: AppTheme.textSecondaryOf(context)),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(renewal.clientName,
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppTheme.textSecondaryOf(context)),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
+                    ],
+                  ),
+                if (renewal.clientName.isNotEmpty && renewal.associatedProject.isNotEmpty && renewal.associatedProject != 'Independent Service')
+                  const SizedBox(height: 2),
+                if (renewal.associatedProject.isNotEmpty && renewal.associatedProject != 'Independent Service')
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Icon(Icons.folder_outlined, size: 12, color: AppTheme.textSecondaryOf(context)),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(renewal.associatedProject,
+                            style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context)),
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),
           // Category
           Expanded(
-            flex: 3,
+            flex: 2,
             child: Row(
               children: [
                 Icon(renewal.category.icon, size: 14, color: renewal.category.color),
@@ -606,7 +757,7 @@ class _RenewalRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(renewal.formattedExpiry,
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.textPrimaryOf(context))),
                 Text(renewal.expiryLabel,
                     style: TextStyle(
                         fontSize: 10,
@@ -614,15 +765,15 @@ class _RenewalRow extends StatelessWidget {
                             ? const Color(0xFFEF4444)
                             : renewal.isExpiringSoon
                                 ? const Color(0xFFF59E0B)
-                                : const Color(0xFF9CA3AF))),
+                                : AppTheme.textMutedOf(context))),
               ],
             ),
           ),
           // Amount
           Expanded(
-            flex: 1,
+            flex: 2,
             child: Text('\$${renewal.amount.toStringAsFixed(0)}',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.textPrimaryOf(context))),
           ),
           // Status
           Expanded(
@@ -630,13 +781,13 @@ class _RenewalRow extends StatelessWidget {
             child: _StatusBadge(status: renewal.status),
           ),
           // Actions
-          Expanded(
-            flex: 1,
+          SizedBox(
+            width: 40,
             child: PopupMenuButton<String>(
-              icon: const Icon(Icons.more_horiz, size: 18, color: Color(0xFF9CA3AF)),
+              icon: Icon(Icons.more_horiz, size: 18, color: AppTheme.textMutedOf(context)),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               itemBuilder: (_) => [
-                _menuItem(Icons.edit_outlined, 'EDIT RECORD', const Color(0xFF374151), 'edit'),
+                _menuItem(Icons.edit_outlined, 'EDIT RECORD', isDark ? Colors.white : const Color(0xFF374151), 'edit'),
                 _menuItem(Icons.notifications_outlined, 'SEND REMINDER', const Color(0xFF3B82F6), 'remind'),
                 _menuItem(Icons.check_circle_outline, 'MARK AS PAID', const Color(0xFF10B981), 'paid'),
                 _menuItem(Icons.delete_outline, 'DELETE ENTRY', const Color(0xFFEF4444), 'delete'),
@@ -725,7 +876,7 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
       return;
     }
     final renewal = AssetRenewal(
-      id: widget.existing?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      id: widget.existing?.id ?? '',
       serviceName: _nameCtrl.text.trim(),
       clientName: _selectedClient.isEmpty ? 'Unknown' : _selectedClient,
       clientEntity: _entityCtrl.text.trim().isEmpty
@@ -740,20 +891,16 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
     );
     widget.onSave(renewal);
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(widget.existing != null ? 'Renewal updated!' : 'Renewal scheduled!'),
-        backgroundColor: const Color(0xFF10B981),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
     final isMobile = MediaQuery.of(context).size.width <= 600;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Dialog(
+      backgroundColor: isDark ? AppTheme.bgCardDark : Colors.white,
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: SingleChildScrollView(
@@ -771,17 +918,17 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
                     children: [
                       Text(
                         isEdit ? 'EDIT RENEWAL' : 'SCHEDULE NEW RENEWAL',
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF111827), letterSpacing: 0.3),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimaryOf(context), letterSpacing: 0.3),
                       ),
-                      const Text(
+                      Text(
                         'Configure renewal tracking for hosting, domains, or enterprise mail services.',
-                        style: TextStyle(fontSize: 11, color: Color(0xFF6B7280), height: 1.4),
+                        style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context), height: 1.4),
                       ),
                     ],
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, size: 20, color: Color(0xFF6B7280)),
+                  icon: Icon(Icons.close, size: 20, color: AppTheme.textSecondaryOf(context)),
                   onPressed: () => Navigator.pop(context),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -790,13 +937,13 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
             ),
             const SizedBox(height: 20),
             // Service Name
-            _DlgLabel('SERVICE NAME'),
+            _DlgLabel(context, 'SERVICE NAME'),
             const SizedBox(height: 6),
-            _DlgInput(_nameCtrl, 'e.g. AWS Production Hosting'),
+            _DlgInput(context, _nameCtrl, 'e.g. AWS Production Hosting'),
             const SizedBox(height: 14),
             // Client + Project
             if (isMobile) ...[
-              _DlgLabel('CLIENT SELECTION'),
+              _DlgLabel(context, 'CLIENT SELECTION'),
               const SizedBox(height: 6),
               _DropdownField(
                 value: _selectedClient.isEmpty ? null : _selectedClient,
@@ -807,7 +954,7 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
                 onChanged: (v) => setState(() => _selectedClient = v ?? ''),
               ),
               const SizedBox(height: 14),
-              _DlgLabel('ASSOCIATED PROJECT (OPTIONAL)'),
+              _DlgLabel(context, 'ASSOCIATED PROJECT (OPTIONAL)'),
               const SizedBox(height: 6),
               _DropdownField(
                 value: _associatedProject,
@@ -821,7 +968,7 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _DlgLabel('CLIENT SELECTION'),
+                        _DlgLabel(context, 'CLIENT SELECTION'),
                         const SizedBox(height: 6),
                         _DropdownField(
                           value: _selectedClient.isEmpty ? null : _selectedClient,
@@ -839,7 +986,7 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _DlgLabel('ASSOCIATED PROJECT (OPTIONAL)'),
+                        _DlgLabel(context, 'ASSOCIATED PROJECT (OPTIONAL)'),
                         const SizedBox(height: 6),
                         _DropdownField(
                           value: _associatedProject,
@@ -855,27 +1002,28 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
             const SizedBox(height: 14),
             // Category + Expiry
             if (isMobile) ...[
-              _DlgLabel('SERVICE CATEGORY'),
+              _DlgLabel(context, 'SERVICE CATEGORY'),
               const SizedBox(height: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                  color: isDark ? AppTheme.bgCardDark : Colors.white,
+                  border: Border.all(color: AppTheme.borderOf(context)),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<ServiceCategory>(
                     value: _category,
                     isExpanded: true,
-                    style: const TextStyle(fontSize: 13, color: Color(0xFF111827)),
+                    style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
                     items: ServiceCategory.values.map((c) =>
-                        DropdownMenuItem(value: c, child: Text(c.label, style: const TextStyle(fontSize: 12)))).toList(),
+                        DropdownMenuItem(value: c, child: Text(c.label, style: TextStyle(fontSize: 12, color: AppTheme.textPrimaryOf(context))))).toList(),
                     onChanged: (v) => setState(() => _category = v!),
                   ),
                 ),
               ),
               const SizedBox(height: 14),
-              _DlgLabel('EXPIRATION DATE'),
+              _DlgLabel(context, 'EXPIRATION DATE'),
               const SizedBox(height: 6),
               GestureDetector(
                 onTap: () async {
@@ -895,15 +1043,16 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    color: isDark ? AppTheme.bgCardDark : Colors.white,
+                    border: Border.all(color: AppTheme.borderOf(context)),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.calendar_today_outlined, size: 14, color: Color(0xFF9CA3AF)),
+                      Icon(Icons.calendar_today_outlined, size: 14, color: AppTheme.textMutedOf(context)),
                       const SizedBox(width: 6),
                       Text('${_expiryDate.day.toString().padLeft(2,'0')}-${_expiryDate.month.toString().padLeft(2,'0')}-${_expiryDate.year}',
-                          style: const TextStyle(fontSize: 13, color: Color(0xFF111827))),
+                          style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context))),
                     ],
                   ),
                 ),
@@ -915,21 +1064,22 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _DlgLabel('SERVICE CATEGORY'),
+                        _DlgLabel(context, 'SERVICE CATEGORY'),
                         const SizedBox(height: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           decoration: BoxDecoration(
-                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                            color: isDark ? AppTheme.bgCardDark : Colors.white,
+                            border: Border.all(color: AppTheme.borderOf(context)),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<ServiceCategory>(
                               value: _category,
                               isExpanded: true,
-                              style: const TextStyle(fontSize: 13, color: Color(0xFF111827)),
+                              style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
                               items: ServiceCategory.values.map((c) =>
-                                  DropdownMenuItem(value: c, child: Text(c.label, style: const TextStyle(fontSize: 12)))).toList(),
+                                  DropdownMenuItem(value: c, child: Text(c.label, style: TextStyle(fontSize: 12, color: AppTheme.textPrimaryOf(context))))).toList(),
                               onChanged: (v) => setState(() => _category = v!),
                             ),
                           ),
@@ -942,7 +1092,7 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _DlgLabel('EXPIRATION DATE'),
+                        _DlgLabel(context, 'EXPIRATION DATE'),
                         const SizedBox(height: 6),
                         GestureDetector(
                           onTap: () async {
@@ -962,15 +1112,16 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                             decoration: BoxDecoration(
-                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                              color: isDark ? AppTheme.bgCardDark : Colors.white,
+                              border: Border.all(color: AppTheme.borderOf(context)),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.calendar_today_outlined, size: 14, color: Color(0xFF9CA3AF)),
+                                Icon(Icons.calendar_today_outlined, size: 14, color: AppTheme.textMutedOf(context)),
                                 const SizedBox(width: 6),
                                 Text('${_expiryDate.day.toString().padLeft(2,'0')}-${_expiryDate.month.toString().padLeft(2,'0')}-${_expiryDate.year}',
-                                    style: const TextStyle(fontSize: 13, color: Color(0xFF111827))),
+                                    style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context))),
                               ],
                             ),
                           ),
@@ -984,37 +1135,40 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
             const SizedBox(height: 14),
             // Amount + Status
             if (isMobile) ...[
-              _DlgLabel('RENEWAL AMOUNT (\$)'),
+              _DlgLabel(context, 'RENEWAL AMOUNT (\$)'),
               const SizedBox(height: 6),
               TextField(
                 controller: _amountCtrl,
                 keyboardType: TextInputType.number,
-                style: const TextStyle(fontSize: 13),
+                style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
                 decoration: InputDecoration(
                   hintText: '0.00',
-                  hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                  hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 13),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.borderOf(context))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.borderOf(context))),
                   focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  filled: true,
+                  fillColor: isDark ? AppTheme.bgCardDark : Colors.white,
                 ),
               ),
               const SizedBox(height: 14),
-              _DlgLabel('STATUS'),
+              _DlgLabel(context, 'STATUS'),
               const SizedBox(height: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                  color: isDark ? AppTheme.bgCardDark : Colors.white,
+                  border: Border.all(color: AppTheme.borderOf(context)),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<RenewalStatus>(
                     value: _status,
                     isExpanded: true,
-                    style: const TextStyle(fontSize: 13, color: Color(0xFF111827)),
+                    style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
                     items: RenewalStatus.values.map((s) =>
-                        DropdownMenuItem(value: s, child: Text(s.label, style: const TextStyle(fontSize: 12)))).toList(),
+                        DropdownMenuItem(value: s, child: Text(s.label, style: TextStyle(fontSize: 12, color: AppTheme.textPrimaryOf(context))))).toList(),
                     onChanged: (v) => setState(() => _status = v!),
                   ),
                 ),
@@ -1026,19 +1180,21 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _DlgLabel('RENEWAL AMOUNT (\$)'),
+                        _DlgLabel(context, 'RENEWAL AMOUNT (\$)'),
                         const SizedBox(height: 6),
                         TextField(
                           controller: _amountCtrl,
                           keyboardType: TextInputType.number,
-                          style: const TextStyle(fontSize: 13),
+                          style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
                           decoration: InputDecoration(
                             hintText: '0.00',
-                            hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                            hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 13),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.borderOf(context))),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.borderOf(context))),
                             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            filled: true,
+                            fillColor: isDark ? AppTheme.bgCardDark : Colors.white,
                           ),
                         ),
                       ],
@@ -1049,21 +1205,22 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _DlgLabel('STATUS'),
+                        _DlgLabel(context, 'STATUS'),
                         const SizedBox(height: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           decoration: BoxDecoration(
-                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                            color: isDark ? AppTheme.bgCardDark : Colors.white,
+                            border: Border.all(color: AppTheme.borderOf(context)),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<RenewalStatus>(
                               value: _status,
                               isExpanded: true,
-                              style: const TextStyle(fontSize: 13, color: Color(0xFF111827)),
+                              style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
                               items: RenewalStatus.values.map((s) =>
-                                  DropdownMenuItem(value: s, child: Text(s.label, style: const TextStyle(fontSize: 12)))).toList(),
+                                  DropdownMenuItem(value: s, child: Text(s.label, style: TextStyle(fontSize: 12, color: AppTheme.textPrimaryOf(context))))).toList(),
                               onChanged: (v) => setState(() => _status = v!),
                             ),
                           ),
@@ -1076,19 +1233,21 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
             ],
             const SizedBox(height: 14),
             // Description
-            _DlgLabel('DESCRIPTION / SERVICE DETAILS'),
+            _DlgLabel(context, 'DESCRIPTION / SERVICE DETAILS'),
             const SizedBox(height: 6),
             TextField(
               controller: _descCtrl,
               maxLines: 3,
-              style: const TextStyle(fontSize: 13),
+              style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
               decoration: InputDecoration(
                 hintText: 'e.g. AWS Production Hosting, Google Workspace Business Starter...',
-                hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 12),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.borderOf(context))),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.borderOf(context))),
                 focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
                 contentPadding: const EdgeInsets.all(12),
+                filled: true,
+                fillColor: isDark ? AppTheme.bgCardDark : Colors.white,
               ),
             ),
             const SizedBox(height: 20),
@@ -1123,6 +1282,7 @@ class _QuickCreateSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final items = [
       (Icons.people_alt_outlined, 'New Lead', const Color(0xFF3B82F6)),
       (Icons.folder_outlined, 'New Project', const Color(0xFF8B5CF6)),
@@ -1134,23 +1294,23 @@ class _QuickCreateSheet extends StatelessWidget {
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20)],
+        boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20)],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('QUICK CREATE',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF6B7280), letterSpacing: 0.8)),
+          Text('QUICK CREATE',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.textSecondaryOf(context), letterSpacing: 0.8)),
           const SizedBox(height: 12),
           ...items.map((item) => GestureDetector(
             onTap: () => Navigator.pop(context),
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-              decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6))),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: isDark ? AppTheme.borderOf(context) : const Color(0xFFF3F4F6))),
               ),
               child: Row(
                 children: [
@@ -1163,9 +1323,9 @@ class _QuickCreateSheet extends StatelessWidget {
                     child: Icon(item.$1, size: 16, color: item.$3),
                   ),
                   const SizedBox(width: 12),
-                  Text(item.$2, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF111827))),
+                  Text(item.$2, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textPrimaryOf(context))),
                   const Spacer(),
-                  const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Color(0xFF9CA3AF)),
+                  Icon(Icons.arrow_forward_ios_rounded, size: 12, color: AppTheme.textMutedOf(context)),
                 ],
               ),
             ),
@@ -1213,24 +1373,29 @@ class _TH extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(text,
-      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF6B7280), letterSpacing: 0.4));
+      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppTheme.textSecondaryOf(context), letterSpacing: 0.4));
 }
 
-Widget _DlgLabel(String text) => Text(text,
-    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF374151), letterSpacing: 0.4));
+Widget _DlgLabel(BuildContext context, String text) => Text(text,
+    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppTheme.textSecondaryOf(context), letterSpacing: 0.4));
 
-Widget _DlgInput(TextEditingController ctrl, String hint) => TextField(
-  controller: ctrl,
-  style: const TextStyle(fontSize: 13),
-  decoration: InputDecoration(
-    hintText: hint,
-    hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-  ),
-);
+Widget _DlgInput(BuildContext context, TextEditingController ctrl, String hint) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  return TextField(
+    controller: ctrl,
+    style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+    decoration: InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 13),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.borderOf(context))),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppTheme.borderOf(context))),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      filled: true,
+      fillColor: isDark ? AppTheme.bgCardDark : Colors.white,
+    ),
+  );
+}
 
 class _DropdownField extends StatelessWidget {
   final String? value;
@@ -1242,19 +1407,21 @@ class _DropdownField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
+        border: Border.all(color: AppTheme.borderOf(context)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
-          hint: hint != null ? Text(hint!, style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13)) : null,
+          hint: hint != null ? Text(hint!, style: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 13)) : null,
           isExpanded: true,
-          style: const TextStyle(fontSize: 13, color: Color(0xFF111827)),
-          items: items.map((i) => DropdownMenuItem(value: i, child: Text(i, style: const TextStyle(fontSize: 13)))).toList(),
+          style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+          items: items.map((i) => DropdownMenuItem(value: i, child: Text(i, style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context))))).toList(),
           onChanged: onChanged,
         ),
       ),
@@ -1281,20 +1448,21 @@ class _RenewalCardMobile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: renewal.isExpired
               ? const Color(0xFFEF4444).withOpacity(0.3)
               : renewal.isExpiringSoon
                   ? const Color(0xFFF59E0B).withOpacity(0.4)
-                  : const Color(0xFFE5E7EB),
+                  : AppTheme.borderOf(context),
         ),
-        boxShadow: [
+        boxShadow: isDark ? [] : [
           BoxShadow(
             color: Colors.black.withOpacity(0.02),
             blurRadius: 6,
@@ -1337,12 +1505,12 @@ class _RenewalCardMobile extends StatelessWidget {
                   _StatusBadge(status: renewal.status),
                   const SizedBox(width: 4),
                   PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert, size: 18, color: Color(0xFF9CA3AF)),
+                    icon: Icon(Icons.more_vert, size: 18, color: AppTheme.textMutedOf(context)),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                     itemBuilder: (_) => [
-                      _menuItem(Icons.edit_outlined, 'EDIT RECORD', const Color(0xFF374151), 'edit'),
+                      _menuItem(Icons.edit_outlined, 'EDIT RECORD', isDark ? Colors.white : const Color(0xFF374151), 'edit'),
                       _menuItem(Icons.notifications_outlined, 'SEND REMINDER', const Color(0xFF3B82F6), 'remind'),
                       _menuItem(Icons.check_circle_outline, 'MARK AS PAID', const Color(0xFF10B981), 'paid'),
                       _menuItem(Icons.delete_outline, 'DELETE ENTRY', const Color(0xFFEF4444), 'delete'),
@@ -1359,41 +1527,46 @@ class _RenewalCardMobile extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          // Service Name
-          Text(
-            renewal.serviceName,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF111827),
-            ),
-          ),
-          const SizedBox(height: 4),
-          // Client details
-          Row(
-            children: [
-              const Icon(Icons.person_outline_rounded, size: 13, color: Color(0xFF6B7280)),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  renewal.clientEntity,
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+          // Description as Title
+          if (renewal.description.isNotEmpty) ...[
+            Text(
+              renewal.description,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textPrimaryOf(context),
               ),
-            ],
-          ),
-          if (renewal.associatedProject.isNotEmpty && renewal.associatedProject != 'Independent Service') ...[
-            const SizedBox(height: 4),
+            ),
+            const SizedBox(height: 6),
+          ],
+          // Client details
+          if (renewal.clientName.isNotEmpty) ...[
             Row(
               children: [
-                const Icon(Icons.folder_outlined, size: 13, color: Color(0xFF6B7280)),
-                const SizedBox(width: 4),
+                Icon(Icons.person_outline_rounded, size: 14, color: AppTheme.textSecondaryOf(context)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    renewal.clientName,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppTheme.textSecondaryOf(context)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+          ],
+          // Project
+          if (renewal.associatedProject.isNotEmpty && renewal.associatedProject != 'Independent Service') ...[
+            Row(
+              children: [
+                Icon(Icons.folder_outlined, size: 14, color: AppTheme.textSecondaryOf(context)),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     renewal.associatedProject,
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondaryOf(context)),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1401,7 +1574,7 @@ class _RenewalCardMobile extends StatelessWidget {
               ],
             ),
           ],
-          const Divider(height: 20, color: Color(0xFFE5E7EB)),
+          Divider(height: 20, color: AppTheme.borderOf(context)),
           // Row 3: Expiry Date & Amount
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1409,16 +1582,16 @@ class _RenewalCardMobile extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'EXPIRY DATE',
-                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFF9CA3AF), letterSpacing: 0.3),
+                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: AppTheme.textMutedOf(context), letterSpacing: 0.3),
                   ),
                   const SizedBox(height: 2),
                   Row(
                     children: [
                       Text(
                         renewal.formattedExpiry,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF374151)),
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textPrimaryOf(context)),
                       ),
                       const SizedBox(width: 6),
                       Text(
@@ -1440,14 +1613,14 @@ class _RenewalCardMobile extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const Text(
+                  Text(
                     'AMOUNT',
-                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFF9CA3AF), letterSpacing: 0.3),
+                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: AppTheme.textMutedOf(context), letterSpacing: 0.3),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     '\$${renewal.amount.toStringAsFixed(0)}',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppTheme.textPrimaryOf(context)),
                   ),
                 ],
               ),

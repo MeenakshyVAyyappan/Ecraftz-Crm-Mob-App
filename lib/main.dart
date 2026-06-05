@@ -15,6 +15,7 @@ import 'blocs/task/task_bloc.dart';
 import 'blocs/billing/billing_bloc.dart';
 import 'blocs/dashboard/dashboard_bloc.dart';
 import 'blocs/department/department_bloc.dart';
+import 'blocs/onboarding/onboarding_bloc.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,6 +41,7 @@ void main() async {
         BlocProvider<BillingBloc>(create: (_) => BillingBloc()),
         BlocProvider<DashboardBloc>(create: (_) => DashboardBloc()),
         BlocProvider<DepartmentBloc>(create: (_) => DepartmentBloc()),
+        BlocProvider<OnboardingBloc>(create: (_) => OnboardingBloc()..add(LoadOnboardingDataEvent())),
       ],
       child: const EcraftzCRMApp(),
     ),

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import '../widgets/app_drawer.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../theme/app_theme.dart';
+import '../../blocs/theme/theme_bloc.dart';
+import '../../widgets/app_drawer.dart';
 
 
 // ─── Data Models ─────────────────────────────────────────────────────────────
@@ -409,10 +412,17 @@ class _RolesAccessScreenState extends State<RolesAccessScreen> {
     final filtered = _filtered;
     final w = MediaQuery.of(context).size.width;
     final isTablet = w >= 600;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _bg = Theme.of(context).scaffoldBackgroundColor;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+    final _textMuted = AppTheme.textMutedOf(context);
 
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: _bg,
       drawer: AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: (i) {
@@ -421,23 +431,37 @@ class _RolesAccessScreenState extends State<RolesAccessScreen> {
         },
       ),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: _cardBg,
         elevation: 0,
         leading: isTablet
             ? null
             : IconButton(
-                icon: const Icon(Icons.menu_rounded, color: Color(0xFF1E293B)),
+                icon: Icon(Icons.menu_rounded, color: _textPrimary),
                 onPressed: () => _scaffoldKey.currentState?.openDrawer(),
               ),
-        title: const Text(
+        title: Text(
           'Roles & Access',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF1E293B),
+            color: _textPrimary,
           ),
         ),
         actions: [
+          BlocBuilder<ThemeBloc, ThemeState>(
+            builder: (context, themeState) {
+              final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+              return IconButton(
+                icon: Icon(
+                  isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  color: isDarkTheme ? Colors.white : const Color(0xFF374151),
+                ),
+                onPressed: () {
+                  context.read<ThemeBloc>().add(ToggleThemeEvent());
+                },
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.add_circle_outline_rounded, size: 24, color: Color(0xFF0EA5E9)),
             onPressed: _showCreateRoleDialog,
@@ -446,21 +470,21 @@ class _RolesAccessScreenState extends State<RolesAccessScreen> {
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(color: const Color(0xFFE2E8F0), height: 1),
+          child: Container(color: _border, height: 1),
         ),
       ),
       body: Column(
         children: [
           // Header
           Container(
-            color: Colors.white,
+            color: _cardBg,
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Define enterprise roles, assign permissions, and control dynamic module visibility.',
-                  style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                  style: TextStyle(fontSize: 13, color: _textSecondary),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -468,14 +492,14 @@ class _RolesAccessScreenState extends State<RolesAccessScreen> {
                   onChanged: (v) => setState(() => _searchQuery = v),
                   decoration: InputDecoration(
                     hintText: 'Search roles by name or description...',
-                    hintStyle: const TextStyle(
-                        fontSize: 13, color: Color(0xFF94A3B8)),
-                    prefixIcon: const Icon(Icons.search,
-                        size: 18, color: Color(0xFF94A3B8)),
+                    hintStyle: TextStyle(
+                        fontSize: 13, color: _textSecondary),
+                    prefixIcon: Icon(Icons.search,
+                        size: 18, color: _textSecondary),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(Icons.close,
-                                size: 16, color: Color(0xFF94A3B8)),
+                            icon: Icon(Icons.close,
+                                size: 16, color: _textSecondary),
                             onPressed: () {
                               _searchCtrl.clear();
                               setState(() => _searchQuery = '');
@@ -483,7 +507,7 @@ class _RolesAccessScreenState extends State<RolesAccessScreen> {
                           )
                         : null,
                     filled: true,
-                    fillColor: const Color(0xFFF1F5F9),
+                    fillColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF1F5F9),
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 10),
                     border: OutlineInputBorder(
@@ -500,16 +524,16 @@ class _RolesAccessScreenState extends State<RolesAccessScreen> {
           // Roles grid
           Expanded(
             child: filtered.isEmpty
-                ? const Center(
+                ? Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.shield_outlined,
-                            size: 48, color: Color(0xFFCBD5E1)),
-                        SizedBox(height: 8),
+                            size: 48, color: _textMuted),
+                        const SizedBox(height: 8),
                         Text('No roles found',
                             style: TextStyle(
-                                color: Color(0xFF94A3B8), fontSize: 14)),
+                                color: _textSecondary, fontSize: 14)),
                       ],
                     ),
                   )
@@ -576,22 +600,24 @@ class _StatsBar extends StatelessWidget {
     final totalUsers =
         roles.fold<int>(0, (s, r) => s + r.activeUsers.length);
     final w = MediaQuery.of(context).size.width;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
 
     return Container(
-      color: Colors.white,
+      color: _cardBg,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       margin: const EdgeInsets.only(bottom: 2),
       child: Row(
         children: [
           _StatItem(label: 'Total Roles', value: '${roles.length}',
               color: const Color(0xFF0EA5E9)),
-          _vDivider(w < 360 ? 4 : 8),
+          _vDivider(_border, w < 360 ? 4 : 8),
           _StatItem(label: 'System', value: '$systemRoles',
               color: const Color(0xFF8B5CF6)),
-          _vDivider(w < 360 ? 4 : 8),
+          _vDivider(_border, w < 360 ? 4 : 8),
           _StatItem(label: 'Custom', value: '$customRoles',
               color: const Color(0xFF10B981)),
-          _vDivider(w < 360 ? 4 : 8),
+          _vDivider(_border, w < 360 ? 4 : 8),
           _StatItem(label: 'Total Users', value: '$totalUsers',
               color: const Color(0xFFF59E0B)),
         ],
@@ -599,8 +625,8 @@ class _StatsBar extends StatelessWidget {
     );
   }
 
-  Widget _vDivider(double horizontalMargin) => Container(
-      width: 1, height: 28, color: const Color(0xFFE2E8F0),
+  Widget _vDivider(Color border, double horizontalMargin) => Container(
+      width: 1, height: 28, color: border,
       margin: EdgeInsets.symmetric(horizontal: horizontalMargin));
 }
 
@@ -625,7 +651,7 @@ class _StatItem extends StatelessWidget {
             textAlign: TextAlign.center),
         Text(label,
             style:
-                TextStyle(fontSize: isCompact ? 8 : 10, color: const Color(0xFF94A3B8)),
+                TextStyle(fontSize: isCompact ? 8 : 10, color: AppTheme.textSecondaryOf(context)),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center),
@@ -655,16 +681,25 @@ class _RoleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pct = role.permissionsEnabled / role.totalPermissions;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
-        ],
+        border: isDark ? Border.all(color: _border, width: 1) : null,
+        boxShadow: isDark
+            ? []
+            : [
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2)),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -679,7 +714,7 @@ class _RoleCard extends StatelessWidget {
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE0F2FE),
+                    color: isDark ? const Color(0xFF0EA5E9).withOpacity(0.15) : const Color(0xFFE0F2FE),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.shield_outlined,
@@ -693,16 +728,16 @@ class _RoleCard extends StatelessWidget {
                       Text(role.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF1E293B))),
+                              color: _textPrimary)),
                       const SizedBox(height: 2),
                       Text(role.description,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 12, color: Color(0xFF94A3B8))),
+                          style: TextStyle(
+                              fontSize: 12, color: _textSecondary)),
                     ],
                   ),
                 ),
@@ -728,10 +763,10 @@ class _RoleCard extends StatelessWidget {
                 const SizedBox(width: 4),
                 GestureDetector(
                   onTap: onMore,
-                  child: const Padding(
-                    padding: EdgeInsets.all(4),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
                     child: Icon(Icons.more_vert_rounded,
-                        size: 20, color: Color(0xFF94A3B8)),
+                        size: 20, color: _textSecondary),
                   ),
                 ),
               ],
@@ -744,7 +779,7 @@ class _RoleCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
                 value: pct,
-                backgroundColor: const Color(0xFFF1F5F9),
+                backgroundColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF1F5F9),
                 color: _permColor,
                 minHeight: 5,
               ),
@@ -756,13 +791,13 @@ class _RoleCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Row(
               children: [
-                const Icon(Icons.people_outline_rounded,
-                    size: 14, color: Color(0xFF94A3B8)),
+                Icon(Icons.people_outline_rounded,
+                    size: 14, color: _textSecondary),
                 const SizedBox(width: 4),
                 Text(
                   '${role.activeUsers.length} Active User${role.activeUsers.length != 1 ? 's' : ''}',
-                  style: const TextStyle(
-                      fontSize: 12, color: Color(0xFF64748B)),
+                  style: TextStyle(
+                      fontSize: 12, color: _textSecondary),
                 ),
                 const Spacer(),
                 Container(
@@ -770,8 +805,8 @@ class _RoleCard extends StatelessWidget {
                       horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: role.isSystem
-                        ? const Color(0xFFE0F2FE)
-                        : const Color(0xFFECFDF5),
+                        ? (isDark ? const Color(0xFF0EA5E9).withOpacity(0.15) : const Color(0xFFE0F2FE))
+                        : (isDark ? const Color(0xFF10B981).withOpacity(0.15) : const Color(0xFFECFDF5)),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -780,8 +815,8 @@ class _RoleCard extends StatelessWidget {
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
                       color: role.isSystem
-                          ? const Color(0xFF0369A1)
-                          : const Color(0xFF059669),
+                          ? (isDark ? const Color(0xFF38BDF8) : const Color(0xFF0369A1))
+                          : (isDark ? const Color(0xFF34D399) : const Color(0xFF059669)),
                       letterSpacing: 0.3,
                     ),
                   ),
@@ -805,7 +840,7 @@ class _RoleCard extends StatelessWidget {
                             color: u.color.withOpacity(0.2),
                             shape: BoxShape.circle,
                             border: Border.all(
-                                color: Colors.white, width: 1.5),
+                                color: _cardBg, width: 1.5),
                           ),
                           alignment: Alignment.center,
                           child: Text(u.initial,
@@ -818,7 +853,7 @@ class _RoleCard extends StatelessWidget {
               ),
             ),
           const SizedBox(height: 12),
-          Container(height: 1, color: const Color(0xFFF1F5F9)),
+          Container(height: 1, color: _border),
           // Configure button
           GestureDetector(
             onTap: onConfigure,
@@ -858,10 +893,17 @@ class _RoleOptionsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textMuted = AppTheme.textMutedOf(context);
+
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: _cardBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        border: isDark ? Border.all(color: _border, width: 1) : null,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -871,7 +913,7 @@ class _RoleOptionsSheet extends StatelessWidget {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-                color: const Color(0xFFE2E8F0),
+                color: _border,
                 borderRadius: BorderRadius.circular(2)),
           ),
           const SizedBox(height: 16),
@@ -880,10 +922,10 @@ class _RoleOptionsSheet extends StatelessWidget {
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(role.name,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF1E293B))),
+                      color: _textPrimary)),
             ),
           ),
           const SizedBox(height: 8),
@@ -916,12 +958,12 @@ class _RoleOptionsSheet extends StatelessWidget {
                   horizontal: 20, vertical: 10),
               child: Row(
                 children: [
-                  const Icon(Icons.lock_outline_rounded,
-                      size: 16, color: Color(0xFFCBD5E1)),
+                  Icon(Icons.lock_outline_rounded,
+                      size: 16, color: _textMuted),
                   const SizedBox(width: 8),
-                  const Text('System roles cannot be deleted',
+                  Text('System roles cannot be deleted',
                       style: TextStyle(
-                          fontSize: 12, color: Color(0xFFCBD5E1))),
+                          fontSize: 12, color: _textMuted)),
                 ],
               ),
             ),
@@ -947,17 +989,21 @@ class _SheetOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+    final _textMuted = AppTheme.textMutedOf(context);
+
     return ListTile(
       onTap: onTap,
       leading: Icon(icon,
-          size: 20, color: iconColor ?? const Color(0xFF475569)),
+          size: 20, color: iconColor ?? _textSecondary),
       title: Text(label,
           style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: labelColor ?? const Color(0xFF1E293B))),
-      trailing: const Icon(Icons.chevron_right_rounded,
-          size: 18, color: Color(0xFFCBD5E1)),
+              color: labelColor ?? _textPrimary)),
+      trailing: Icon(Icons.chevron_right_rounded,
+          size: 18, color: _textMuted),
     );
   }
 }
@@ -985,7 +1031,12 @@ class _CreateRoleDialogState extends State<_CreateRoleDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     return Dialog(
+      backgroundColor: _cardBg,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -995,50 +1046,52 @@ class _CreateRoleDialogState extends State<_CreateRoleDialog> {
           children: [
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text('Create Enterprise Role',
                       style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF1E293B))),
+                          color: _textPrimary)),
                 ),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
-                  child: const Icon(Icons.close_rounded,
-                      size: 20, color: Color(0xFF94A3B8)),
+                  child: Icon(Icons.close_rounded,
+                      size: 20, color: _textSecondary),
                 ),
               ],
             ),
             const SizedBox(height: 4),
-            const Text(
+            Text(
               'Define a new role. You can configure granular permissions after creation.',
               style:
-                  TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                  TextStyle(fontSize: 12, color: _textSecondary),
             ),
             const SizedBox(height: 16),
-            const Text('Role Name',
+            Text('Role Name',
                 style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF475569))),
+                    color: _textSecondary)),
             const SizedBox(height: 6),
             TextField(
               controller: _nameCtrl,
               autofocus: true,
-              decoration: _inputDec('e.g. Project Manager'),
+              style: TextStyle(color: _textPrimary, fontSize: 13),
+              decoration: _inputDec(context, 'e.g. Project Manager'),
             ),
             const SizedBox(height: 14),
-            const Text('Description',
+            Text('Description',
                 style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF475569))),
+                    color: _textSecondary)),
             const SizedBox(height: 6),
             TextField(
               controller: _descCtrl,
               maxLines: 3,
+              style: TextStyle(color: _textPrimary, fontSize: 13),
               decoration:
-                  _inputDec('Explain the responsibilities of this role...'),
+                  _inputDec(context, 'Explain the responsibilities of this role...'),
             ),
             const SizedBox(height: 20),
             Row(
@@ -1046,9 +1099,9 @@ class _CreateRoleDialogState extends State<_CreateRoleDialog> {
               children: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel',
+                  child: Text('Cancel',
                       style: TextStyle(
-                          color: Color(0xFF64748B), fontSize: 14)),
+                          color: _textSecondary, fontSize: 14)),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
@@ -1080,28 +1133,32 @@ class _CreateRoleDialogState extends State<_CreateRoleDialog> {
     );
   }
 
-  InputDecoration _inputDec(String hint) => InputDecoration(
-        hintText: hint,
-        hintStyle:
-            const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-        filled: true,
-        fillColor: const Color(0xFFF8FAFC),
-        contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12, vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFF0EA5E9)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide:
-              const BorderSide(color: Color(0xFF0EA5E9), width: 1.5),
-        ),
-      );
+  InputDecoration _inputDec(BuildContext context, String hint) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _border = AppTheme.borderOf(context);
+    final _textMuted = AppTheme.textMutedOf(context);
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: _textMuted, fontSize: 13),
+      filled: true,
+      fillColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
+      contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFF0EA5E9)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: _border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide:
+            const BorderSide(color: Color(0xFF0EA5E9), width: 1.5),
+      ),
+    );
+  }
 }
 
 // ─── Configure Role Screen ────────────────────────────────────────────────────
@@ -1199,14 +1256,21 @@ class _ConfigureRoleScreenState extends State<_ConfigureRoleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _bg = Theme.of(context).scaffoldBackgroundColor;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: _cardBg,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-          color: const Color(0xFF1E293B),
+          color: _textPrimary,
           onPressed: () => Navigator.pop(context),
         ),
         title: Column(
@@ -1214,14 +1278,28 @@ class _ConfigureRoleScreenState extends State<_ConfigureRoleScreen> {
           children: [
             Text(
               'Configure: ${widget.role.name}',
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1E293B)),
+                  color: _textPrimary),
             ),
           ],
         ),
         actions: [
+          BlocBuilder<ThemeBloc, ThemeState>(
+            builder: (context, themeState) {
+              final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+              return IconButton(
+                icon: Icon(
+                  isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  color: isDarkTheme ? Colors.white : const Color(0xFF374151),
+                ),
+                onPressed: () {
+                  context.read<ThemeBloc>().add(ToggleThemeEvent());
+                },
+              );
+            },
+          ),
           TextButton(
             onPressed: () {
               setState(() => _showPreview = !_showPreview);
@@ -1253,7 +1331,7 @@ class _ConfigureRoleScreenState extends State<_ConfigureRoleScreen> {
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(color: const Color(0xFFE2E8F0), height: 1),
+          child: Container(color: _border, height: 1),
         ),
       ),
       body: SingleChildScrollView(
@@ -1261,9 +1339,9 @@ class _ConfigureRoleScreenState extends State<_ConfigureRoleScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Define granular access rights and module visibility. Changes reflect instantly for all assigned users.',
-              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+              style: TextStyle(fontSize: 13, color: _textSecondary),
             ),
             const SizedBox(height: 16),
 
@@ -1294,8 +1372,8 @@ class _ConfigureRoleScreenState extends State<_ConfigureRoleScreen> {
                               color: Color(0xFF10B981),
                               fontWeight: FontWeight.w600)),
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFFA7F3D0)),
-                        backgroundColor: const Color(0xFFF0FDF4),
+                        side: BorderSide(color: isDark ? const Color(0xFF059669) : const Color(0xFFA7F3D0)),
+                        backgroundColor: isDark ? const Color(0xFF064E3B) : const Color(0xFFF0FDF4),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8)),
                         padding:
@@ -1315,8 +1393,8 @@ class _ConfigureRoleScreenState extends State<_ConfigureRoleScreen> {
                               color: Color(0xFFEF4444),
                               fontWeight: FontWeight.w600)),
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFFFECACA)),
-                        backgroundColor: const Color(0xFFFFF5F5),
+                        side: BorderSide(color: isDark ? const Color(0xFFDC2626) : const Color(0xFFFECACA)),
+                        backgroundColor: isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFFF5F5),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8)),
                         padding:
@@ -1402,6 +1480,7 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final _textSecondary = AppTheme.textSecondaryOf(context);
     return Row(
       children: [
         Container(
@@ -1421,10 +1500,10 @@ class _SectionHeader extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF475569),
+              color: _textSecondary,
               letterSpacing: 0.4),
         ),
       ],
@@ -1442,19 +1521,28 @@ class _ModuleToggleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _border = AppTheme.borderOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+    final _textMuted = AppTheme.textMutedOf(context);
+
+    // Dynamic colors for selection state in light/dark mode
+    final activeBg = isDark ? const Color(0xFF0F2D4A) : const Color(0xFFEFF6FF);
+    final inactiveBg = isDark ? AppTheme.bgCardDark : Colors.white;
+    final activeBorder = isDark ? const Color(0xFF1D4ED8) : const Color(0xFFBFDBFE);
+    final inactiveBorder = _border;
+    final activeTextColor = isDark ? const Color(0xFF60A5FA) : const Color(0xFF1D4ED8);
+    final inactiveTextColor = _textSecondary;
+
     return GestureDetector(
       onTap: onToggle,
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: module.enabled
-              ? const Color(0xFFEFF6FF)
-              : Colors.white,
+          color: module.enabled ? activeBg : inactiveBg,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: module.enabled
-                ? const Color(0xFFBFDBFE)
-                : const Color(0xFFE2E8F0),
+            color: module.enabled ? activeBorder : inactiveBorder,
             width: 1,
           ),
         ),
@@ -1472,7 +1560,7 @@ class _ModuleToggleCard extends StatelessWidget {
                 border: module.enabled
                     ? null
                     : Border.all(
-                        color: const Color(0xFFCBD5E1), width: 1.5),
+                        color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1), width: 1.5),
               ),
               child: module.enabled
                   ? const Icon(Icons.check_rounded,
@@ -1489,15 +1577,13 @@ class _ModuleToggleCard extends StatelessWidget {
                     style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: module.enabled
-                            ? const Color(0xFF1D4ED8)
-                            : const Color(0xFF475569)),
+                        color: module.enabled ? activeTextColor : inactiveTextColor),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     module.description,
-                    style: const TextStyle(
-                        fontSize: 10, color: Color(0xFF94A3B8)),
+                    style: TextStyle(
+                        fontSize: 10, color: _textMuted),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1539,18 +1625,25 @@ class _PermissionGroupState extends State<_PermissionGroup> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textMuted = AppTheme.textMutedOf(context);
+
     final allEnabled = _allEnabled;
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
+        boxShadow: isDark ? null : [
           BoxShadow(
               color: Colors.black.withOpacity(0.03),
               blurRadius: 6,
               offset: const Offset(0, 1)),
         ],
+        border: isDark ? Border.all(color: _border) : null,
       ),
       child: Column(
         children: [
@@ -1576,7 +1669,7 @@ class _PermissionGroupState extends State<_PermissionGroup> {
                         border: allEnabled
                             ? null
                             : Border.all(
-                                color: const Color(0xFFCBD5E1),
+                                color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
                                 width: 1.5),
                       ),
                       child: allEnabled
@@ -1589,10 +1682,10 @@ class _PermissionGroupState extends State<_PermissionGroup> {
                   Expanded(
                     child: Text(
                       widget.title.toUpperCase(),
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF1E293B),
+                          color: _textPrimary,
                           letterSpacing: 0.4),
                     ),
                   ),
@@ -1602,10 +1695,10 @@ class _PermissionGroupState extends State<_PermissionGroup> {
                     decoration: BoxDecoration(
                       color: widget.enabledCount ==
                               widget.permissions.length
-                          ? const Color(0xFFD1FAE5)
+                          ? (isDark ? const Color(0xFF064E3B) : const Color(0xFFD1FAE5))
                           : widget.enabledCount == 0
-                              ? const Color(0xFFF1F5F9)
-                              : const Color(0xFFFEF3C7),
+                              ? (isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9))
+                              : (isDark ? const Color(0xFF78350F) : const Color(0xFFFEF3C7)),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -1615,10 +1708,10 @@ class _PermissionGroupState extends State<_PermissionGroup> {
                         fontWeight: FontWeight.w700,
                         color: widget.enabledCount ==
                                 widget.permissions.length
-                            ? const Color(0xFF059669)
+                            ? (isDark ? const Color(0xFF34D399) : const Color(0xFF059669))
                             : widget.enabledCount == 0
-                                ? const Color(0xFF94A3B8)
-                                : const Color(0xFFD97706),
+                                ? _textMuted
+                                : (isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706)),
                       ),
                     ),
                   ),
@@ -1628,14 +1721,14 @@ class _PermissionGroupState extends State<_PermissionGroup> {
                         ? Icons.keyboard_arrow_up_rounded
                         : Icons.keyboard_arrow_down_rounded,
                     size: 18,
-                    color: const Color(0xFF94A3B8),
+                    color: _textMuted,
                   ),
                 ],
               ),
             ),
           ),
           if (_expanded) ...[
-            Container(height: 1, color: const Color(0xFFF1F5F9)),
+            Container(height: 1, color: _border),
             // Permissions grid
             Padding(
               padding: const EdgeInsets.all(12),
@@ -1687,19 +1780,27 @@ class _PermissionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _border = AppTheme.borderOf(context);
+    final _textSecondary = AppTheme.textSecondaryOf(context);
+    final _textMuted = AppTheme.textMutedOf(context);
+
+    final activeBg = isDark ? const Color(0xFF0F2D4A) : const Color(0xFFEFF6FF);
+    final inactiveBg = isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC);
+    final activeBorder = isDark ? const Color(0xFF1D4ED8) : const Color(0xFFBFDBFE);
+    final inactiveBorder = _border;
+    final activeTextColor = isDark ? const Color(0xFF60A5FA) : const Color(0xFF1D4ED8);
+    final inactiveTextColor = _textSecondary;
+
     return GestureDetector(
       onTap: onToggle,
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: perm.enabled
-              ? const Color(0xFFEFF6FF)
-              : const Color(0xFFF8FAFC),
+          color: perm.enabled ? activeBg : inactiveBg,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: perm.enabled
-                ? const Color(0xFFBFDBFE)
-                : const Color(0xFFE2E8F0),
+            color: perm.enabled ? activeBorder : inactiveBorder,
           ),
         ),
         child: Row(
@@ -1717,7 +1818,7 @@ class _PermissionTile extends StatelessWidget {
                 border: perm.enabled
                     ? null
                     : Border.all(
-                        color: const Color(0xFFCBD5E1), width: 1.5),
+                        color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1), width: 1.5),
               ),
               child: perm.enabled
                   ? const Icon(Icons.check_rounded,
@@ -1734,16 +1835,14 @@ class _PermissionTile extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: perm.enabled
-                          ? const Color(0xFF1D4ED8)
-                          : const Color(0xFF475569),
+                      color: perm.enabled ? activeTextColor : inactiveTextColor,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     perm.description,
-                    style: const TextStyle(
-                        fontSize: 10, color: Color(0xFF94A3B8)),
+                    style: TextStyle(
+                        fontSize: 10, color: _textMuted),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1775,12 +1874,18 @@ class _WorkspacePreviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final _cardBg = Theme.of(context).colorScheme.surface;
+    final _border = AppTheme.borderOf(context);
+    final _textPrimary = AppTheme.textPrimaryOf(context);
+    final _textMuted = AppTheme.textMutedOf(context);
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE0F2FE), width: 1.5),
+        border: Border.all(color: isDark ? _border : const Color(0xFFE0F2FE), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1799,21 +1904,21 @@ class _WorkspacePreviewCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          const Text('What users with this role will see',
+          Text('What users with this role will see',
               style:
-                  TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                  TextStyle(fontSize: 11, color: _textMuted)),
           const SizedBox(height: 12),
-          const Text('VISIBLE MODULES',
+          Text('VISIBLE MODULES',
               style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF94A3B8),
+                  color: _textMuted,
                   letterSpacing: 0.5)),
           const SizedBox(height: 8),
           visibleModules.isEmpty
-              ? const Text('No modules visible',
+              ? Text('No modules visible',
                   style: TextStyle(
-                      fontSize: 12, color: Color(0xFFCBD5E1)))
+                      fontSize: 12, color: _textMuted))
               : Wrap(
                   spacing: 6,
                   runSpacing: 6,
@@ -1823,15 +1928,15 @@ class _WorkspacePreviewCard extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFEFF6FF),
+                              color: isDark ? const Color(0xFF0F2D4A) : const Color(0xFFEFF6FF),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               m.toUpperCase(),
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.w700,
-                                  color: Color(0xFF1D4ED8),
+                                  color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF1D4ED8),
                                   letterSpacing: 0.3),
                             ),
                           ))
@@ -1841,16 +1946,16 @@ class _WorkspacePreviewCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('TOTAL PERMISSIONS',
+              Text('TOTAL PERMISSIONS',
                   style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF94A3B8))),
+                      color: _textMuted)),
               Text('$enabledCount / $totalCount',
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF1E293B))),
+                      color: _textPrimary)),
             ],
           ),
           const SizedBox(height: 6),
@@ -1858,7 +1963,7 @@ class _WorkspacePreviewCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: totalCount > 0 ? enabledCount / totalCount : 0,
-              backgroundColor: const Color(0xFFF1F5F9),
+              backgroundColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF1F5F9),
               color: const Color(0xFF0EA5E9),
               minHeight: 6,
             ),
@@ -1877,8 +1982,8 @@ class _WorkspacePreviewCard extends StatelessWidget {
                           color: Color(0xFF10B981),
                           fontWeight: FontWeight.w600)),
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFFA7F3D0)),
-                    backgroundColor: const Color(0xFFF0FDF4),
+                    side: BorderSide(color: isDark ? const Color(0xFF059669) : const Color(0xFFA7F3D0)),
+                    backgroundColor: isDark ? const Color(0xFF064E3B) : const Color(0xFFF0FDF4),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
                     padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1897,8 +2002,8 @@ class _WorkspacePreviewCard extends StatelessWidget {
                           color: Color(0xFFEF4444),
                           fontWeight: FontWeight.w600)),
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFFFECACA)),
-                    backgroundColor: const Color(0xFFFFF5F5),
+                    side: BorderSide(color: isDark ? const Color(0xFFDC2626) : const Color(0xFFFECACA)),
+                    backgroundColor: isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFFF5F5),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
                     padding: const EdgeInsets.symmetric(vertical: 8),

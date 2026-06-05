@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../blocs/theme/theme_bloc.dart';
-import '../theme/app_theme.dart';
-import '../models/dashboard_models.dart';
-import '../widgets/app_drawer.dart';
-import '../widgets/stat_card.dart';
-import '../widgets/revenue_chart.dart';
-import '../widgets/donut_chart.dart';
-import '../blocs/dashboard/dashboard_bloc.dart';
-import '../blocs/department/department_bloc.dart';
-import '../models/department_model.dart';
-import '../blocs/task/task_bloc.dart';
-import '../blocs/project/project_bloc.dart';
-import '../models/task_model.dart' show TaskStatus;
+import '../../blocs/theme/theme_bloc.dart';
+import '../../theme/app_theme.dart';
+import '../../models/dashboard_models.dart';
+import '../../widgets/app_drawer.dart';
+import '../../widgets/stat_card.dart';
+import '../../widgets/revenue_chart.dart';
+import '../../widgets/donut_chart.dart';
+import '../../blocs/dashboard/dashboard_bloc.dart';
+import '../../blocs/department/department_bloc.dart';
+import '../../models/department_model.dart';
+import '../../blocs/task/task_bloc.dart';
+import '../../blocs/project/project_bloc.dart';
+import '../../models/task_model.dart' show TaskStatus;
 import 'teams_screen.dart' show teamMembers, TeamMember;
 
 class DashboardScreen extends StatefulWidget {

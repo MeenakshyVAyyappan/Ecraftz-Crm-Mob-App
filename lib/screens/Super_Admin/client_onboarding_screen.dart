@@ -1,9 +1,16 @@
 // client_onboarding_page.dart
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../blocs/client/client_bloc.dart';
-import '../models/client_model.dart';
-import '../widgets/app_drawer.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../blocs/client/client_bloc.dart';
+import '../../blocs/onboarding/onboarding_bloc.dart';
+import '../../models/client_model.dart';
+import '../../services/supabase_service.dart';
+import '../../widgets/app_drawer.dart';
+import '../../theme/app_theme.dart';
+import '../../blocs/theme/theme_bloc.dart';
 
 int _uniqueIdCounter = 0;
 String _generateUniqueId() {
@@ -59,7 +66,7 @@ extension ServiceCategoryExt on ServiceCategory {
   }
 }
 
-enum TemplateAvailability { active, draft, testing }
+enum TemplateAvailability { active, draft, testing, archived }
 
 extension TemplateAvailabilityExt on TemplateAvailability {
   String get label {
@@ -67,6 +74,7 @@ extension TemplateAvailabilityExt on TemplateAvailability {
       case TemplateAvailability.active: return 'ACTIVE';
       case TemplateAvailability.draft: return 'DRAFT';
       case TemplateAvailability.testing: return 'TESTING';
+      case TemplateAvailability.archived: return 'ARCHIVED';
     }
   }
 
@@ -75,6 +83,7 @@ extension TemplateAvailabilityExt on TemplateAvailability {
       case TemplateAvailability.active: return const Color(0xFF10B981);
       case TemplateAvailability.draft: return const Color(0xFF6B7280);
       case TemplateAvailability.testing: return const Color(0xFFF59E0B);
+      case TemplateAvailability.archived: return const Color(0xFFEF4444);
     }
   }
 }
@@ -200,66 +209,256 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
   String _templateFilter = 'All Templates';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  late List<Submission> _submissions;
-
   @override
   void initState() {
     super.initState();
-    _submissions = [
-      const Submission(id: '1', clientName: 'arsenal', templateName: 'Digital Marketing Premium Intake v1', progress: 1.0, status: IntakeStatus.approved, submittedAgo: '3 days ago'),
-      const Submission(id: '2', clientName: 'janani', templateName: 'Web Development Dynamic Specification v1', progress: 1.0, status: IntakeStatus.approved, submittedAgo: '6 days ago'),
-      const Submission(id: '3', clientName: 'Steve Rogers', templateName: 'Content Creation Requirements Questionnaire', progress: 0.8, status: IntakeStatus.pending, submittedAgo: '2 hours ago'),
-      const Submission(id: '4', clientName: 'Tony Stark', templateName: 'Web Development Dynamic Specification v1', progress: 0.6, status: IntakeStatus.review, submittedAgo: '1 day ago'),
-    ];
+    // Load data from Supabase via BLoC on page open
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<OnboardingBloc>().add(LoadOnboardingDataEvent());
+    });
   }
 
-  final List<OnboardingTemplate> _templates = [
-    OnboardingTemplate(
-      id: '1',
-      name: 'Web Development Dynamic Specification v1',
-      description: 'Structured system layout detailing server, database hosting, expected pages, and design style.',
-      category: ServiceCategory.webDevelopment,
-      availability: TemplateAvailability.active,
-      version: 1,
-      sections: [
-        FormSection(id: 's1', title: 'Company Information', description: 'Base details for branding', questions: [
-          FormQuestion(id: 'q1', fieldCode: 'company_name', questionLabel: 'Company Name', fieldType: FieldType.textInput, isRequired: true),
-          FormQuestion(id: 'q2', fieldCode: 'contact_name', questionLabel: 'Contact Person Name', fieldType: FieldType.textInput, isRequired: true),
-          FormQuestion(id: 'q3', fieldCode: 'contact_email', questionLabel: 'Official Email', fieldType: FieldType.textInput, isRequired: true),
-          FormQuestion(id: 'q4', fieldCode: 'services_needed', questionLabel: 'Interested Services (Select all that apply)', fieldType: FieldType.multiSelect, isRequired: true, choices: 'Web Development, Digital Marketing, Content Creation, SEO Services, Branding & Design, Social Media Management'),
-        ]),
-        FormSection(id: 's2', title: 'Specification Detail', description: 'Hosting setups, preferred pages, design specifications', questions: [
-          FormQuestion(id: 'q5', fieldCode: 'domain_status', questionLabel: 'Domain/Hosting Status', fieldType: FieldType.dropdown, isRequired: true, choices: 'Have Domain & Hosting, Need Both Domain & Hosting, Have Domain, Need Hosting'),
-          FormQuestion(id: 'q6', fieldCode: 'existing_site', questionLabel: 'Existing Website URL', fieldType: FieldType.urlValidation),
-          FormQuestion(id: 'q7', fieldCode: 'required_pages', questionLabel: 'Required Pages', fieldType: FieldType.textArea, isRequired: true),
-          FormQuestion(id: 'q8', fieldCode: 'ecommerce_needed', questionLabel: 'Ecommerce Needed?', fieldType: FieldType.radioToggle, isRequired: true, choices: 'Yes, No'),
-          FormQuestion(id: 'q9', fieldCode: 'payment_gateway', questionLabel: 'Preferred Payment Gateway?', fieldType: FieldType.textInput),
-          FormQuestion(id: 'q10', fieldCode: 'admin_panel', questionLabel: 'Admin Panel Needed?', fieldType: FieldType.radioToggle, isRequired: true, choices: 'Yes, No'),
-          FormQuestion(id: 'q11', fieldCode: 'booking_system', questionLabel: 'Booking System?', fieldType: FieldType.radioToggle, isRequired: true, choices: 'Yes, No'),
-          FormQuestion(id: 'q12', fieldCode: 'design_style', questionLabel: 'Preferred Design Style', fieldType: FieldType.textInput, isRequired: true),
-        ]),
-      ],
-    ),
-    OnboardingTemplate(
-      id: '2',
-      name: 'Content Creation Requirements Questionnaire',
-      description: 'Creative tone, assets availability, and publishing targets.',
-      category: ServiceCategory.contentCreation,
-      availability: TemplateAvailability.active,
-      version: 1,
-    ),
-    OnboardingTemplate(
-      id: '3',
-      name: 'Digital Marketing Premium Intake v1',
-      description: 'Comprehensive intake request encompassing Company context, Social channels, and Credential files.',
-      category: ServiceCategory.digitalMarketing,
-      availability: TemplateAvailability.active,
-      version: 1,
-    ),
-  ];
+  // ─── HELPERS: Convert DB maps → local model instances ──────────────────────
 
-  List<OnboardingTemplate> get _filteredTemplates {
-    var list = _templates;
+  /// Parse a raw DB submission row into a [Submission] view-model.
+  Submission _parseSubmission(Map<String, dynamic> row) {
+    final createdAt = row['created_at'] != null
+        ? DateTime.tryParse(row['created_at'].toString()) ?? DateTime.now()
+        : DateTime.now();
+    final diff = DateTime.now().difference(createdAt);
+    String ago;
+    if (diff.inMinutes < 60) {
+      ago = '${diff.inMinutes} min ago';
+    } else if (diff.inHours < 24) {
+      ago = '${diff.inHours} hours ago';
+    } else {
+      ago = '${diff.inDays} days ago';
+    }
+
+    final statusStr = row['status']?.toString() ?? 'pending';
+    final IntakeStatus status;
+    switch (statusStr) {
+      case 'approved':
+        status = IntakeStatus.approved;
+        break;
+      case 'review':
+      case 'needs_review':
+        status = IntakeStatus.review;
+        break;
+      case 'rejected':
+        status = IntakeStatus.rejected;
+        break;
+      default:
+        status = IntakeStatus.pending;
+    }
+
+    // The joined template name lives in onboarding_templates relationship
+    final templateJoin = row['onboarding_templates'] ?? row['form_templates'];
+    final templateName = (templateJoin is Map)
+        ? templateJoin['name']?.toString() ?? ''
+        : '';
+
+    // Handle nested client or lead names
+    String clientName = 'Unknown Client';
+    final clientJoin = row['clients'];
+    final leadJoin = row['leads'];
+    if (clientJoin is Map) {
+      clientName = clientJoin['name']?.toString() ?? 'Unknown Client';
+    } else if (leadJoin is Map) {
+      clientName = leadJoin['company']?.toString() ?? 'Unknown Client';
+    } else {
+      // Look into form_submission_answers
+      final answers = row['form_submission_answers'];
+      if (answers is List && answers.isNotEmpty) {
+        String? companyNameAnswer;
+        String? contactNameAnswer;
+        
+        final templateJoin = row['onboarding_templates'] ?? row['form_templates'];
+        if (templateJoin is Map) {
+          var sectionsRaw = templateJoin['sections'];
+          if (sectionsRaw is String && sectionsRaw.isNotEmpty) {
+            try {
+              sectionsRaw = jsonDecode(sectionsRaw);
+            } catch (_) {}
+          }
+          
+          final Map<String, String> fieldIdToCode = {};
+          if (sectionsRaw is List) {
+            for (var sec in sectionsRaw) {
+              if (sec is Map) {
+                final questions = sec['questions'] ?? sec['form_fields'];
+                if (questions is List) {
+                  for (var q in questions) {
+                    if (q is Map) {
+                      final qId = q['id']?.toString();
+                      final qCode = (q['fieldCode'] ?? q['code'])?.toString();
+                      if (qId != null && qCode != null) {
+                        fieldIdToCode[qId] = qCode;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          
+          for (var ans in answers) {
+            if (ans is Map) {
+              final fId = ans['field_id']?.toString();
+              final val = ans['answer_value']?.toString();
+              if (fId != null && val != null && val.trim().isNotEmpty) {
+                final code = fieldIdToCode[fId];
+                if (code == 'company_name') {
+                  companyNameAnswer = val;
+                } else if (code == 'contact_name') {
+                  contactNameAnswer = val;
+                }
+              }
+            }
+          }
+        }
+        
+        if (companyNameAnswer != null) {
+          clientName = companyNameAnswer;
+        } else if (contactNameAnswer != null) {
+          clientName = contactNameAnswer;
+        }
+      }
+    }
+
+    final progressVal = row['completion_rate'];
+    final double progress = (progressVal is num)
+        ? (progressVal as num).toDouble() / 100.0
+        : (double.tryParse(progressVal?.toString() ?? '') ?? 0.0) / 100.0;
+
+    return Submission(
+      id: row['id']?.toString() ?? '',
+      clientName: clientName,
+      templateName: templateName,
+      progress: progress,
+      status: status,
+      submittedAgo: ago,
+    );
+  }
+
+  /// Parse a raw DB template row into an [OnboardingTemplate] view-model.
+  OnboardingTemplate _parseTemplate(Map<String, dynamic> row) {
+    final catStr = row['service_type']?.toString() ?? row['category']?.toString() ?? '';
+    ServiceCategory cat;
+    switch (catStr) {
+      case 'Digital Marketing':
+      case 'digital_marketing':
+        cat = ServiceCategory.digitalMarketing;
+        break;
+      case 'Content Creation':
+      case 'content_creation':
+        cat = ServiceCategory.contentCreation;
+        break;
+      case 'SEO':
+      case 'seo':
+        cat = ServiceCategory.seo;
+        break;
+      case 'Branding':
+      case 'branding':
+        cat = ServiceCategory.branding;
+        break;
+      default:
+        cat = ServiceCategory.webDevelopment;
+    }
+
+    final availStr = row['status']?.toString() ?? row['availability']?.toString() ?? 'active';
+    TemplateAvailability avail;
+    switch (availStr) {
+      case 'draft':
+        avail = TemplateAvailability.draft;
+        break;
+      case 'testing':
+        avail = TemplateAvailability.testing;
+        break;
+      case 'archived':
+        avail = TemplateAvailability.archived;
+        break;
+      default:
+        avail = TemplateAvailability.active;
+    }
+
+    // sections stored in form_sections table from nested select OR sections column as JSON list
+    List<FormSection> sections = [];
+    var sectionsRaw = row['form_sections'] ?? row['sections'];
+    if (sectionsRaw is String && sectionsRaw.isNotEmpty) {
+      try {
+        sectionsRaw = jsonDecode(sectionsRaw);
+      } catch (_) {}
+    }
+    if (sectionsRaw is List) {
+      sections = sectionsRaw.map((s) {
+        final sm = s as Map<String, dynamic>;
+        final qRawList = (sm['questions'] ?? sm['form_fields']) as List? ?? [];
+        final qList = qRawList.map((q) {
+          final qm = q as Map<String, dynamic>;
+          final ftStr = (qm['fieldType'] ?? qm['field_type'] ?? 'text').toString();
+          FieldType ft;
+          switch (ftStr) {
+            case 'textarea': ft = FieldType.textArea; break;
+            case 'dropdown': ft = FieldType.dropdown; break;
+            case 'multiselect': ft = FieldType.multiSelect; break;
+            case 'radio': ft = FieldType.radioToggle; break;
+            case 'url': ft = FieldType.urlValidation; break;
+            case 'file': ft = FieldType.fileUpload; break;
+            case 'date': ft = FieldType.dateInput; break;
+            default: ft = FieldType.textInput;
+          }
+
+          // Parse choices from config['options'] or direct string
+          String choices = '';
+          final choicesRaw = qm['choices'];
+          if (choicesRaw is String) {
+            choices = choicesRaw;
+          } else {
+            final config = qm['config'];
+            if (config is Map) {
+              final opts = config['options'];
+              if (opts is List) {
+                choices = opts.join(', ');
+              }
+            }
+          }
+
+          return FormQuestion(
+            id: qm['id']?.toString() ?? _generateUniqueId(),
+            fieldCode: (qm['fieldCode'] ?? qm['code'])?.toString() ?? '',
+            questionLabel: (qm['questionLabel'] ?? qm['label'])?.toString() ?? '',
+            fieldType: ft,
+            isRequired: qm['isRequired'] == true || qm['is_required'] == true,
+            isSensitive: qm['isSensitive'] == true || qm['is_sensitive'] == true,
+            choices: choices,
+          );
+        }).toList();
+
+        return FormSection(
+          id: sm['id']?.toString() ?? _generateUniqueId(),
+          title: sm['title']?.toString() ?? '',
+          description: sm['description']?.toString() ?? '',
+          questions: qList,
+        );
+      }).toList();
+    }
+
+    return OnboardingTemplate(
+      id: row['id']?.toString() ?? '',
+      name: row['name']?.toString() ?? '',
+      description: row['description']?.toString() ?? '',
+      category: cat,
+      availability: avail,
+      sections: sections,
+      version: (row['version'] is int) ? row['version'] as int : int.tryParse(row['version']?.toString() ?? '') ?? 1,
+    );
+  }
+
+  List<OnboardingTemplate> _filteredTemplates(List<Map<String, dynamic>> rawTemplates) {
+    var list = rawTemplates.map(_parseTemplate).toList();
+    // Filter out archived templates by default to hide duplicate versions
+    list = list.where((t) => t.availability != TemplateAvailability.archived).toList();
     if (_templateFilter == 'Dynamic Only') {
       list = list.where((t) => t.sections.isNotEmpty).toList();
     }
@@ -271,9 +470,10 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
     return list;
   }
 
-  List<Submission> get _filteredSubmissions {
-    if (_searchQuery.isEmpty) return _submissions;
-    return _submissions.where((s) =>
+  List<Submission> _filteredSubmissions(List<Map<String, dynamic>> rawSubmissions) {
+    final all = rawSubmissions.map(_parseSubmission).toList();
+    if (_searchQuery.isEmpty) return all;
+    return all.where((s) =>
         s.clientName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
         s.templateName.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
   }
@@ -305,12 +505,6 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
               Text('Status: ${s.status.label.toUpperCase()}'),
               const SizedBox(height: 6),
               Text('Progress: ${(s.progress * 100).toInt()}%'),
-              const SizedBox(height: 12),
-              const Divider(),
-              const SizedBox(height: 8),
-              const Text('Submitted Answers:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              const SizedBox(height: 6),
-              const Text('• Company Name: ...\n• Project Scope: Needs high performance CRM modules\n• Budget: Premium tier setup\n• Timeline: 4 weeks', style: TextStyle(fontSize: 12, color: Colors.black87)),
             ],
           ),
           actions: [
@@ -326,6 +520,12 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 onPressed: () {
+                  // 1. Approve the submission in Supabase
+                  context.read<OnboardingBloc>().add(
+                    UpdateSubmissionStatusEvent(s.id, 'approved', progress: 1.0),
+                  );
+
+                  // 2. Add to active clients in Supabase
                   final client = ActiveClient(
                     id: _generateUniqueId(),
                     name: s.clientName,
@@ -336,21 +536,7 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
                     templateUsed: s.templateName,
                   );
                   context.read<ClientBloc>().add(AddClientEvent(client));
-                  
-                  setState(() {
-                    final idx = _submissions.indexWhere((x) => x.id == s.id);
-                    if (idx != -1) {
-                      _submissions[idx] = Submission(
-                        id: s.id,
-                        clientName: s.clientName,
-                        templateName: s.templateName,
-                        progress: 1.0,
-                        status: IntakeStatus.approved,
-                        submittedAgo: 'Just now',
-                      );
-                    }
-                  });
-                  
+
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -368,24 +554,64 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
   }
 
   void _openFormBuilder({OnboardingTemplate? template}) {
+    // Capture bloc BEFORE navigation (context may be stale inside onSave callback)
+    final onboardingBloc = context.read<OnboardingBloc>();
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => _FormBuilderPage(
           template: template,
           onSave: (t) {
-            setState(() {
-              final idx = _templates.indexWhere((x) => x.id == t.id);
-              if (idx != -1) {
-                _templates[idx] = t;
-              } else {
-                _templates.add(t);
-              }
-            });
+            // Build sections and fields as a nested structure of lists and maps
+            final sectionsData = t.sections.map((s) => {
+              'title': s.title,
+              'description': s.description,
+              'questions': s.questions.map((q) => {
+                'fieldCode': q.fieldCode,
+                'questionLabel': q.questionLabel,
+                'fieldType': q.fieldType.name,
+                'isRequired': q.isRequired,
+                'isSensitive': q.isSensitive,
+                'choices': q.choices,
+              }).toList(),
+            }).toList();
+
+            final catStr = _categoryToDbString(t.category);
+            final availStr = t.availability.name;
+
+            final data = {
+              'name': t.name,
+              'description': t.description,
+              'service_type': catStr,
+              'status': availStr,
+              'sections': sectionsData,
+              'version': t.version,
+            };
+
+            if (template != null && template.id.isNotEmpty) {
+              onboardingBloc.add(UpdateTemplateEvent(template.id, data));
+            } else {
+              onboardingBloc.add(CreateTemplateEvent(data));
+            }
           },
         ),
       ),
-    );
+    ).then((_) {
+      // Reload after returning from form builder
+      onboardingBloc.add(LoadTemplatesEvent());
+    });
+  }
+
+  /// Converts ServiceCategory enum to DB string value.
+  String _categoryToDbString(ServiceCategory cat) {
+    switch (cat) {
+      case ServiceCategory.digitalMarketing: return 'Digital Marketing';
+      case ServiceCategory.contentCreation: return 'Content Creation';
+      case ServiceCategory.seo: return 'SEO';
+      case ServiceCategory.branding: return 'Branding';
+      case ServiceCategory.webDevelopment: return 'Web Development';
+    }
   }
 
   void _deleteTemplate(OnboardingTemplate t) {
@@ -398,7 +624,8 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
             onPressed: () {
-              setState(() => _templates.removeWhere((x) => x.id == t.id));
+              // Delete from Supabase
+              context.read<OnboardingBloc>().add(DeleteTemplateEvent(t.id));
               Navigator.pop(context);
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
@@ -409,34 +636,53 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
   }
 
   void _duplicateTemplate(OnboardingTemplate t) {
-    setState(() {
-      _templates.add(OnboardingTemplate(
-        id: _generateUniqueId(),
-        name: '${t.name} (Copy)',
-        description: t.description,
-        category: t.category,
-        availability: TemplateAvailability.draft,
-        sections: t.sections.map((s) => FormSection(
-          id: _generateUniqueId(),
-          title: s.title,
-          description: s.description,
-          questions: s.questions.map((q) => q.copy()).toList(),
-        )).toList(),
-        version: t.version,
-      ));
-    });
+    final sectionsJson = jsonEncode(t.sections.map((s) => {
+      'id': _generateUniqueId(),
+      'title': s.title,
+      'description': s.description,
+      'questions': s.questions.map((q) => {
+        'id': _generateUniqueId(),
+        'fieldCode': q.fieldCode,
+        'questionLabel': q.questionLabel,
+        'fieldType': q.fieldType.name,
+        'isRequired': q.isRequired,
+        'isSensitive': q.isSensitive,
+        'choices': q.choices,
+      }).toList(),
+    }).toList());
+
+    context.read<OnboardingBloc>().add(CreateTemplateEvent({
+      'name': '${t.name} (Copy)',
+      'description': t.description,
+      'category': _categoryToDbString(t.category),
+      'availability': 'draft',
+      'sections': sectionsJson,
+      'version': t.version,
+    }));
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Template duplicated'), backgroundColor: Color(0xFF10B981)),
+    );
+  }
+
+  void _showSendLinkDialog(BuildContext context, OnboardingTemplate template) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        return _GenerateLinkDialog(template: template);
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width > 600;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       drawer: AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: (i) {
@@ -445,42 +691,86 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
         },
       ),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
         leading: isWide
             ? null
             : IconButton(
-                icon: const Icon(Icons.menu_rounded, color: Color(0xFF374151)),
+                icon: Icon(Icons.menu_rounded, color: isDark ? Colors.white : const Color(0xFF374151)),
                 onPressed: () => _scaffoldKey.currentState?.openDrawer(),
               ),
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Client Onboarding',
                 style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
-                    color: Color(0xFF111827))),
+                    color: AppTheme.textPrimaryOf(context))),
             Text('Design onboarding templates and manage intakes.',
-                style: TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+                style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context))),
           ],
         ),
+        actions: [
+          BlocBuilder<ThemeBloc, ThemeState>(
+            builder: (context, themeState) {
+              final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+              return IconButton(
+                icon: Icon(
+                  isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  color: isDarkTheme ? Colors.white : const Color(0xFF374151),
+                ),
+                onPressed: () {
+                  context.read<ThemeBloc>().add(ToggleThemeEvent());
+                },
+              );
+            },
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: const Color(0xFFE5E7EB)),
+          child: Container(height: 1, color: AppTheme.borderOf(context)),
         ),
       ),
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(child: _buildHeroBanner()),
-            SliverToBoxAdapter(child: _buildStatsRow()),
-            SliverToBoxAdapter(child: _buildTabBar()),
-            SliverToBoxAdapter(
-              child: _tabIndex == 0 ? _buildSubmissionsTab() : _buildTemplatesTab(),
+      body: BlocConsumer<OnboardingBloc, OnboardingState>(
+        listener: (context, state) {
+          if (state.status == OnboardingStatus.error && state.errorMessage != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.errorMessage!),
+                backgroundColor: const Color(0xFFEF4444),
+                duration: const Duration(seconds: 5),
+                action: SnackBarAction(
+                  label: 'Retry',
+                  textColor: Colors.white,
+                  onPressed: () =>
+                      context.read<OnboardingBloc>().add(LoadOnboardingDataEvent()),
+                ),
+              ),
+            );
+          }
+        },
+        builder: (context, state) {
+          if (state.status == OnboardingStatus.loading &&
+              state.templates.isEmpty &&
+              state.submissions.isEmpty) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          return SafeArea(
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(child: _buildHeroBanner()),
+                SliverToBoxAdapter(child: _buildStatsRow(state)),
+                SliverToBoxAdapter(child: _buildTabBar()),
+                SliverToBoxAdapter(
+                  child: _tabIndex == 0
+                      ? _buildSubmissionsTab(_filteredSubmissions(state.submissions))
+                      : _buildTemplatesTab(_filteredTemplates(state.templates)),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -591,12 +881,26 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
 
   // ── STATS ROW ────────────────────────────────────────────────────────────────
 
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(OnboardingState state) {
+    final templates = state.templates;
+    final submissions = state.submissions;
+    final needsReview = submissions.where((s) {
+      final status = s['status']?.toString() ?? '';
+      return status == 'review' || status == 'needs_review' || status == 'pending';
+    }).length;
+    final completionPct = submissions.isEmpty
+        ? 0
+        : (submissions
+                .map((s) => (s['progress'] is num) ? (s['progress'] as num).toDouble() : 0.0)
+                .fold(0.0, (a, b) => a + b) /
+            submissions.length *
+            100)
+            .toInt();
     final stats = [
-      _StatData(Icons.description_outlined, 'Total Forms', '${_templates.length}', 'Active Service Templates', const Color(0xFF3B82F6)),
-      _StatData(Icons.bar_chart_outlined, 'Completion Rate', '100%', 'Average Onboarding Progress', const Color(0xFF8B5CF6)),
-      _StatData(Icons.access_time_outlined, 'Needs Review', '0', 'Pending Lead Conversion', const Color(0xFFF59E0B)),
-      _StatData(Icons.people_outline, 'Drafts Saved', '0', 'Active Onboarding Sessions', const Color(0xFF10B981)),
+      _StatData(Icons.description_outlined, 'Total Forms', '${templates.length}', 'Active Service Templates', const Color(0xFF3B82F6)),
+      _StatData(Icons.bar_chart_outlined, 'Completion Rate', '$completionPct%', 'Average Onboarding Progress', const Color(0xFF8B5CF6)),
+      _StatData(Icons.access_time_outlined, 'Needs Review', '$needsReview', 'Pending Lead Conversion', const Color(0xFFF59E0B)),
+      _StatData(Icons.people_outline, 'Submissions', '${submissions.length}', 'Total Onboarding Submissions', const Color(0xFF10B981)),
     ];
 
     return Padding(
@@ -705,9 +1009,9 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
 
   // ── SUBMISSIONS TAB ───────────────────────────────────────────────────────────
 
-  Widget _buildSubmissionsTab() {
-    final subs = _filteredSubmissions;
+  Widget _buildSubmissionsTab(List<Submission> subs) {
     final isWide = MediaQuery.of(context).size.width > 600;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -718,9 +1022,9 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? AppTheme.bgCardDark : Colors.white,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
+                border: Border.all(color: AppTheme.borderOf(context)),
               ),
               child: const Row(
                 children: [
@@ -736,9 +1040,9 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
             Container(
               padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDark ? AppTheme.bgCardDark : Colors.white,
                 borderRadius: isWide ? const BorderRadius.vertical(bottom: Radius.circular(10)) : BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
+                border: Border.all(color: AppTheme.borderOf(context)),
               ),
               child: const Center(
                 child: Text('No submissions found',
@@ -752,9 +1056,8 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
               isLast: s == subs.last,
               onView: () => _viewSubmission(s),
               onDelete: () {
-                setState(() {
-                  _submissions.removeWhere((x) => x.id == s.id);
-                });
+                // Delete from Supabase via BLoC
+                context.read<OnboardingBloc>().add(DeleteSubmissionEvent(s.id));
               },
             )).toList(),
           const SizedBox(height: 24),
@@ -765,8 +1068,23 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
 
   // ── TEMPLATES TAB ─────────────────────────────────────────────────────────────
 
-  Widget _buildTemplatesTab() {
-    final templates = _filteredTemplates;
+  Widget _buildTemplatesTab(List<OnboardingTemplate> templates) {
+    if (templates.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(32),
+        child: Center(
+          child: Column(
+            children: [
+              Icon(Icons.description_outlined,
+                  size: 48, color: AppTheme.textMutedOf(context)),
+              const SizedBox(height: 12),
+              Text('No templates yet. Create your first onboarding form!',
+                  style: TextStyle(color: AppTheme.textMutedOf(context))),
+            ],
+          ),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
@@ -788,6 +1106,7 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
                 onEdit: () => _openFormBuilder(template: templates[i]),
                 onDelete: () => _deleteTemplate(templates[i]),
                 onDuplicate: () => _duplicateTemplate(templates[i]),
+                onSendLink: () => _showSendLinkDialog(context, templates[i]),
               ),
             );
           }),
@@ -815,13 +1134,14 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [
+        border: Border.all(color: AppTheme.borderOf(context)),
+        boxShadow: isDark ? [] : [
           BoxShadow(
               color: Colors.black.withOpacity(0.03),
               blurRadius: 4,
@@ -835,18 +1155,18 @@ class _StatCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(data.title,
-                    style: const TextStyle(
-                        fontSize: 11, color: Color(0xFF6B7280), fontWeight: FontWeight.w500)),
+                    style: TextStyle(
+                        fontSize: 11, color: AppTheme.textSecondaryOf(context), fontWeight: FontWeight.w500)),
               ),
               Icon(data.icon, size: 18, color: data.color),
             ],
           ),
           const Spacer(),
           Text(data.value,
-              style: const TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF111827))),
+              style: TextStyle(
+                  fontSize: 22, fontWeight: FontWeight.w800, color: AppTheme.textPrimaryOf(context))),
           Text(data.subtitle,
-              style: const TextStyle(fontSize: 10, color: Color(0xFF9CA3AF)),
+              style: TextStyle(fontSize: 10, color: AppTheme.textMutedOf(context)),
               maxLines: 1,
               overflow: TextOverflow.ellipsis),
         ],
@@ -866,21 +1186,22 @@ class _TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF0F172A) : Colors.white,
+          color: isSelected ? (isDark ? const Color(0xFF1E293B) : const Color(0xFF0F172A)) : (isDark ? AppTheme.bgCardDark : Colors.white),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-              color: isSelected ? const Color(0xFF0F172A) : const Color(0xFFE5E7EB)),
+              color: isSelected ? (isDark ? const Color(0xFF1E293B) : const Color(0xFF0F172A)) : AppTheme.borderOf(context)),
         ),
         child: Text(label,
             style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: isSelected ? Colors.white : const Color(0xFF6B7280))),
+                color: isSelected ? Colors.white : AppTheme.textSecondaryOf(context))),
       ),
     );
   }
@@ -895,10 +1216,10 @@ class _TableHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(text,
-        style: const TextStyle(
+        style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF6B7280),
+            color: AppTheme.textSecondaryOf(context),
             letterSpacing: 0.4));
   }
 }
@@ -922,15 +1243,17 @@ class _SubmissionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     if (!isWide) {
       return Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? AppTheme.bgCardDark : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-          boxShadow: [
+          border: Border.all(color: AppTheme.borderOf(context)),
+          boxShadow: isDark ? [] : [
             BoxShadow(
               color: Colors.black.withOpacity(0.02),
               blurRadius: 6,
@@ -946,10 +1269,10 @@ class _SubmissionRow extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(submission.clientName,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF111827))),
+                        color: AppTheme.textPrimaryOf(context))),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
@@ -987,7 +1310,7 @@ class _SubmissionRow extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
                       value: submission.progress,
-                      backgroundColor: const Color(0xFFE5E7EB),
+                      backgroundColor: isDark ? AppTheme.borderDark : const Color(0xFFE5E7EB),
                       valueColor:
                           const AlwaysStoppedAnimation<Color>(Color(0xFF00BCD4)),
                       minHeight: 6,
@@ -996,18 +1319,18 @@ class _SubmissionRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 Text('${(submission.progress * 100).toInt()}%',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textSecondaryOf(context))),
               ],
             ),
             const SizedBox(height: 12),
-            const Divider(height: 1, color: Color(0xFFF3F4F6)),
+            Divider(height: 1, color: AppTheme.borderOf(context)),
             const SizedBox(height: 12),
             // Row 4: Submitted Ago + Actions
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Submitted ${submission.submittedAgo}',
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+                    style: TextStyle(fontSize: 11, color: AppTheme.textMutedOf(context))),
                 Row(
                   children: [
                     GestureDetector(
@@ -1042,11 +1365,11 @@ class _SubmissionRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
         border: Border(
-          left: const BorderSide(color: Color(0xFFE5E7EB)),
-          right: const BorderSide(color: Color(0xFFE5E7EB)),
-          bottom: BorderSide(color: isLast ? Colors.transparent : const Color(0xFFE5E7EB)),
+          left: BorderSide(color: AppTheme.borderOf(context)),
+          right: BorderSide(color: AppTheme.borderOf(context)),
+          bottom: BorderSide(color: isLast ? Colors.transparent : AppTheme.borderOf(context)),
         ),
         borderRadius: isLast
             ? const BorderRadius.vertical(bottom: Radius.circular(10))
@@ -1061,10 +1384,10 @@ class _SubmissionRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(submission.clientName,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF111827))),
+                        color: AppTheme.textPrimaryOf(context))),
                 Text(submission.templateName,
                     style: const TextStyle(fontSize: 10, color: Color(0xFF00BCD4)),
                     maxLines: 2,
@@ -1082,7 +1405,7 @@ class _SubmissionRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
                     value: submission.progress,
-                    backgroundColor: const Color(0xFFE5E7EB),
+                    backgroundColor: isDark ? AppTheme.borderDark : const Color(0xFFE5E7EB),
                     valueColor:
                         const AlwaysStoppedAnimation<Color>(Color(0xFF00BCD4)),
                     minHeight: 6,
@@ -1090,7 +1413,7 @@ class _SubmissionRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text('${(submission.progress * 100).toInt()}%',
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF374151))),
+                    style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context))),
               ],
             ),
           ),
@@ -1124,7 +1447,7 @@ class _SubmissionRow extends StatelessWidget {
           Expanded(
             flex: 2,
             child: Text(submission.submittedAgo,
-                style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+                style: TextStyle(fontSize: 11, color: AppTheme.textMutedOf(context))),
           ),
           // Action
           Expanded(
@@ -1148,7 +1471,7 @@ class _SubmissionRow extends StatelessWidget {
                 const SizedBox(width: 8),
                 GestureDetector(
                   onTap: onDelete,
-                  child: const Icon(Icons.delete_outline, size: 16, color: Color(0xFF9CA3AF)),
+                  child: Icon(Icons.delete_outline, size: 16, color: AppTheme.textMutedOf(context)),
                 ),
               ],
             ),
@@ -1166,23 +1489,26 @@ class _TemplateCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onDuplicate;
+  final VoidCallback onSendLink;
 
   const _TemplateCard({
     required this.template,
     required this.onEdit,
     required this.onDelete,
     required this.onDuplicate,
+    required this.onSendLink,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [
+        border: Border.all(color: AppTheme.borderOf(context)),
+        boxShadow: isDark ? [] : [
           BoxShadow(
               color: Colors.black.withOpacity(0.04),
               blurRadius: 6,
@@ -1200,8 +1526,8 @@ class _TemplateCard extends StatelessWidget {
               _AvailabilityBadge(availability: template.availability),
               const Spacer(),
               Text('V${template.version}',
-                  style: const TextStyle(
-                      fontSize: 10, color: Color(0xFF9CA3AF), fontWeight: FontWeight.w600)),
+                  style: TextStyle(
+                      fontSize: 10, color: AppTheme.textMutedOf(context), fontWeight: FontWeight.w600)),
             ],
           ),
           const SizedBox(height: 10),
@@ -1210,16 +1536,16 @@ class _TemplateCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(template.name,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF111827),
+                        color: AppTheme.textPrimaryOf(context),
                         height: 1.3),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
                 Text(template.description,
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280), height: 1.4),
+                    style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context), height: 1.4),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis),
               ],
@@ -1251,25 +1577,25 @@ class _TemplateCard extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                       decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                        border: Border.all(color: AppTheme.borderOf(context)),
                         borderRadius: BorderRadius.circular(7),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: [
                           Text('Edit',
                               style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: Color(0xFF374151))),
-                          SizedBox(width: 4),
-                          Icon(Icons.settings, size: 12, color: Color(0xFF6B7280)),
+                                  color: AppTheme.textPrimaryOf(context))),
+                          const SizedBox(width: 4),
+                          Icon(Icons.settings, size: 12, color: AppTheme.textSecondaryOf(context)),
                         ],
                       ),
                     ),
                   ),
                   const SizedBox(width: 6),
                   GestureDetector(
-                    onTap: () {},
+                    onTap: onSendLink,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                       decoration: BoxDecoration(
@@ -1302,10 +1628,10 @@ class _TemplateCard extends StatelessWidget {
 class _IconActionBtn extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
-  final Color color;
+  final Color? color;
 
   const _IconActionBtn(this.icon,
-      {required this.onTap, this.color = const Color(0xFF6B7280)});
+      {required this.onTap, this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -1314,10 +1640,10 @@ class _IconActionBtn extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          border: Border.all(color: AppTheme.borderOf(context)),
           borderRadius: BorderRadius.circular(6),
         ),
-        child: Icon(icon, size: 14, color: color),
+        child: Icon(icon, size: 14, color: color ?? AppTheme.textSecondaryOf(context)),
       ),
     );
   }
@@ -1501,22 +1827,23 @@ class _FormBuilderPageState extends State<_FormBuilderPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 18, color: Color(0xFF374151)),
+          icon: Icon(Icons.arrow_back_ios_new, size: 18, color: isDark ? Colors.white : const Color(0xFF374151)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Dynamic Onboarding Form Builder',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.textPrimaryOf(context))),
             Text('Design zero-code, fully reusable service questionnaires.',
-                style: TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+                style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context))),
           ],
         ),
         actions: [
@@ -1527,7 +1854,7 @@ class _FormBuilderPageState extends State<_FormBuilderPage> {
               icon: const Icon(Icons.save_outlined, size: 14),
               label: const Text('Save Template Layout', style: TextStyle(fontSize: 12)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0F172A),
+                backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFF0F172A),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1537,7 +1864,7 @@ class _FormBuilderPageState extends State<_FormBuilderPage> {
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: const Color(0xFFE5E7EB)),
+          child: Container(height: 1, color: AppTheme.borderOf(context)),
         ),
       ),
       body: ListView(
@@ -1593,7 +1920,7 @@ class _FormBuilderPageState extends State<_FormBuilderPage> {
                   label: 'Template Name',
                   child: TextFormField(
                     controller: _nameCtrl,
-                    decoration: _inputDec('e.g. Premium Branding Requirements Form'),
+                    decoration: _inputDec(context, 'e.g. Premium Branding Requirements Form'),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -1605,7 +1932,7 @@ class _FormBuilderPageState extends State<_FormBuilderPage> {
                       child: DropdownButtonFormField<ServiceCategory>(
                         value: _category,
                         isExpanded: true,
-                        decoration: _inputDec(''),
+                        decoration: _inputDec(context, ''),
                         items: ServiceCategory.values.map((c) {
                           return DropdownMenuItem(
                             value: c,
@@ -1624,7 +1951,7 @@ class _FormBuilderPageState extends State<_FormBuilderPage> {
                       child: DropdownButtonFormField<TemplateAvailability>(
                         value: _availability,
                         isExpanded: true,
-                        decoration: _inputDec(''),
+                        decoration: _inputDec(context, ''),
                         items: TemplateAvailability.values.map((a) {
                           return DropdownMenuItem(
                             value: a,
@@ -1664,7 +1991,7 @@ class _FormBuilderPageState extends State<_FormBuilderPage> {
                   child: TextFormField(
                     controller: _descCtrl,
                     maxLines: 3,
-                    decoration: _inputDec('Brief directions displayed to clients as they begin requirements submission…'),
+                    decoration: _inputDec(context, 'Brief directions displayed to clients as they begin requirements submission…'),
                   ),
                 ),
               ],
@@ -1739,22 +2066,23 @@ class _FormBuilderPageState extends State<_FormBuilderPage> {
   }
 }
 
-InputDecoration _inputDec(String hint) {
+InputDecoration _inputDec(BuildContext context, String hint) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
   return InputDecoration(
     hintText: hint,
-    hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
+    hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 13),
     border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+        borderSide: BorderSide(color: AppTheme.borderOf(context))),
     enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+        borderSide: BorderSide(color: AppTheme.borderOf(context))),
     focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     filled: true,
-    fillColor: Colors.white,
+    fillColor: isDark ? AppTheme.bgCardDark : Colors.white,
   );
 }
 
@@ -1767,21 +2095,22 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: AppTheme.borderOf(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('$number. $title',
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF111827))),
+                  color: AppTheme.textPrimaryOf(context))),
           const SizedBox(height: 16),
           child,
         ],
@@ -1802,10 +2131,10 @@ class _BuilderField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF374151))),
+                color: AppTheme.textPrimaryOf(context))),
         const SizedBox(height: 5),
         child,
       ],
@@ -1822,12 +2151,13 @@ class _PresetChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: const Color(0xFFF0FDFE),
+          color: isDark ? const Color(0xFF0C2B35) : const Color(0xFFF0FDFE),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: const Color(0xFF00BCD4).withOpacity(0.3)),
         ),
@@ -1837,10 +2167,10 @@ class _PresetChip extends StatelessWidget {
             Text(emoji, style: const TextStyle(fontSize: 12)),
             const SizedBox(width: 5),
             Text(label,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF0284C7))),
+                    color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7))),
           ],
         ),
       ),
@@ -1897,12 +2227,13 @@ class _SectionBuilderState extends State<_SectionBuilder> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: AppTheme.borderOf(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1915,14 +2246,14 @@ class _SectionBuilderState extends State<_SectionBuilder> {
                 Expanded(
                   child: TextFormField(
                     controller: _titleCtrl,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF111827)),
-                    decoration: const InputDecoration(
+                        color: AppTheme.textPrimaryOf(context)),
+                    decoration: InputDecoration(
                       border: InputBorder.none,
                       hintText: 'Section Title',
-                      hintStyle: TextStyle(color: Color(0xFF9CA3AF)),
+                      hintStyle: TextStyle(color: AppTheme.textMutedOf(context)),
                       contentPadding: EdgeInsets.zero,
                       isDense: true,
                     ),
@@ -1930,8 +2261,8 @@ class _SectionBuilderState extends State<_SectionBuilder> {
                 ),
                 GestureDetector(
                   onTap: widget.onDelete,
-                  child: const Icon(Icons.delete_outline,
-                      size: 18, color: Color(0xFF9CA3AF)),
+                  child: Icon(Icons.delete_outline,
+                      size: 18, color: AppTheme.textMutedOf(context)),
                 ),
               ],
             ),
@@ -1940,17 +2271,17 @@ class _SectionBuilderState extends State<_SectionBuilder> {
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
             child: TextFormField(
               controller: _descCtrl,
-              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-              decoration: const InputDecoration(
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondaryOf(context)),
+              decoration: InputDecoration(
                 border: InputBorder.none,
                 hintText: 'Section description…',
-                hintStyle: TextStyle(color: Color(0xFFD1D5DB), fontSize: 12),
+                hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 12),
                 contentPadding: EdgeInsets.zero,
                 isDense: true,
               ),
             ),
           ),
-          const Divider(height: 1, color: Color(0xFFF3F4F6)),
+          Divider(height: 1, color: AppTheme.borderOf(context)),
           // Questions
           ...widget.section.questions.map((q) => _QuestionBuilder(
             key: ValueKey(q.id),
@@ -1970,20 +2301,20 @@ class _SectionBuilderState extends State<_SectionBuilder> {
               margin: const EdgeInsets.all(12),
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB),
+                color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF9FAFB),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                    color: const Color(0xFFE5E7EB), style: BorderStyle.solid),
+                    color: AppTheme.borderOf(context), style: BorderStyle.solid),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.add, size: 14, color: Color(0xFF6B7280)),
-                  SizedBox(width: 6),
+                  Icon(Icons.add, size: 14, color: AppTheme.textSecondaryOf(context)),
+                  const SizedBox(width: 6),
                   Text('Add Dynamic Question Input',
                       style: TextStyle(
                           fontSize: 12,
-                          color: Color(0xFF6B7280),
+                          color: AppTheme.textSecondaryOf(context),
                           fontWeight: FontWeight.w500)),
                 ],
               ),
@@ -2045,17 +2376,17 @@ class _QuestionBuilderState extends State<_QuestionBuilder> {
     final fieldCodeWidget = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('FIELD CODE (UNIQUE ID)',
+        Text('FIELD CODE (UNIQUE ID)',
             style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF6B7280),
+                color: AppTheme.textSecondaryOf(context),
                 letterSpacing: 0.5)),
         const SizedBox(height: 4),
         TextField(
           controller: _codeCtrl,
-          style: const TextStyle(fontSize: 12),
-          decoration: _inputDec('field_code'),
+          style: TextStyle(fontSize: 12, color: AppTheme.textPrimaryOf(context)),
+          decoration: _inputDec(context, 'field_code'),
         ),
       ],
     );
@@ -2063,17 +2394,17 @@ class _QuestionBuilderState extends State<_QuestionBuilder> {
     final questionLabelWidget = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('QUESTION LABEL',
+        Text('QUESTION LABEL',
             style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF6B7280),
+                color: AppTheme.textSecondaryOf(context),
                 letterSpacing: 0.5)),
         const SizedBox(height: 4),
         TextField(
           controller: _labelCtrl,
-          style: const TextStyle(fontSize: 12),
-          decoration: _inputDec('Question Label'),
+          style: TextStyle(fontSize: 12, color: AppTheme.textPrimaryOf(context)),
+          decoration: _inputDec(context, 'Question Label'),
         ),
       ],
     );
@@ -2081,22 +2412,22 @@ class _QuestionBuilderState extends State<_QuestionBuilder> {
     final inputElementTypeWidget = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('INPUT ELEMENT TYPE',
+        Text('INPUT ELEMENT TYPE',
             style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF6B7280),
+                color: AppTheme.textSecondaryOf(context),
                 letterSpacing: 0.5)),
         const SizedBox(height: 4),
         DropdownButtonFormField<FieldType>(
           value: q.fieldType,
-          decoration: _inputDec(''),
+          decoration: _inputDec(context, ''),
           isExpanded: true,
-          style: const TextStyle(fontSize: 12, color: Color(0xFF111827)),
+          style: TextStyle(fontSize: 12, color: AppTheme.textPrimaryOf(context)),
           items: FieldType.values.map((t) {
             return DropdownMenuItem(
               value: t,
-              child: Text(t.label, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+              child: Text(t.label, style: TextStyle(fontSize: 12, color: AppTheme.textPrimaryOf(context)), overflow: TextOverflow.ellipsis),
             );
           }).toList(),
           onChanged: (v) => setState(() => q.fieldType = v!),
@@ -2138,8 +2469,8 @@ class _QuestionBuilderState extends State<_QuestionBuilder> {
                           ),
                         ),
                         const SizedBox(width: 4),
-                        const Text('Required',
-                            style: TextStyle(fontSize: 11, color: Color(0xFF374151))),
+                        Text('Required',
+                            style: TextStyle(fontSize: 11, color: AppTheme.textPrimaryOf(context))),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -2156,15 +2487,15 @@ class _QuestionBuilderState extends State<_QuestionBuilder> {
                           ),
                         ),
                         const SizedBox(width: 4),
-                        const Text('Sensitive Key',
-                            style: TextStyle(fontSize: 11, color: Color(0xFF374151))),
+                        Text('Sensitive Key',
+                            style: TextStyle(fontSize: 11, color: AppTheme.textPrimaryOf(context))),
                       ],
                     ),
                   ],
                 ),
                 IconButton(
-                  icon: const Icon(Icons.delete_outline,
-                      size: 16, color: Color(0xFF9CA3AF)),
+                  icon: Icon(Icons.delete_outline,
+                      size: 16, color: AppTheme.textMutedOf(context)),
                   onPressed: widget.onDelete,
                   padding: const EdgeInsets.only(left: 4),
                   constraints: const BoxConstraints(),
@@ -2197,8 +2528,8 @@ class _QuestionBuilderState extends State<_QuestionBuilder> {
                           ),
                         ),
                         const SizedBox(width: 4),
-                        const Text('Required',
-                            style: TextStyle(fontSize: 11, color: Color(0xFF374151))),
+                        Text('Required',
+                            style: TextStyle(fontSize: 11, color: AppTheme.textPrimaryOf(context))),
                       ],
                     ),
                     const SizedBox(width: 16),
@@ -2216,8 +2547,8 @@ class _QuestionBuilderState extends State<_QuestionBuilder> {
                           ),
                         ),
                         const SizedBox(width: 4),
-                        const Text('Sensitive Key',
-                            style: TextStyle(fontSize: 11, color: Color(0xFF374151))),
+                        Text('Sensitive Key',
+                            style: TextStyle(fontSize: 11, color: AppTheme.textPrimaryOf(context))),
                       ],
                     ),
                     const Spacer(),
@@ -2235,22 +2566,539 @@ class _QuestionBuilderState extends State<_QuestionBuilder> {
           // Choices config
           if (_needsChoices) ...[
             const SizedBox(height: 8),
-            const Text('CHOICES CONFIGURATION (SEPARATED BY COMMAS)',
+            Text('CHOICES CONFIGURATION (SEPARATED BY COMMAS)',
                 style: TextStyle(
                     fontSize: 9,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF6B7280),
+                    color: AppTheme.textSecondaryOf(context),
                     letterSpacing: 0.5)),
             const SizedBox(height: 4),
             TextField(
               controller: _choicesCtrl,
-              style: const TextStyle(fontSize: 12),
-              decoration: _inputDec('Option 1, Option 2, Option 3'),
+              style: TextStyle(fontSize: 12, color: AppTheme.textPrimaryOf(context)),
+              decoration: _inputDec(context, 'Option 1, Option 2, Option 3'),
             ),
           ],
           const SizedBox(height: 8),
-          const Divider(color: Color(0xFFF3F4F6)),
+          Divider(color: AppTheme.borderOf(context)),
         ],
+      ),
+    );
+  }
+}
+
+class _GenerateLinkDialog extends StatefulWidget {
+  final OnboardingTemplate template;
+
+  const _GenerateLinkDialog({required this.template});
+
+  @override
+  State<_GenerateLinkDialog> createState() => _GenerateLinkDialogState();
+}
+
+class _GenerateLinkDialogState extends State<_GenerateLinkDialog> {
+  bool _isGenerated = false;
+  bool _isLoading = false;
+  late String _portalUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _portalUrl = 'https://crm-dusky-two-65.vercel.app/crm/onboarding/portal/${widget.template.id}';
+  }
+
+  Future<void> _generateAndCopy() async {
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      final res = await SupabaseService.client.from('form_submissions').insert({
+        'template_id': widget.template.id,
+        'organization_id': '00000000-0000-0000-0000-000000000000',
+        'status': 'draft',
+        'completion_rate': 0.0,
+        'current_step': 0,
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).select('id').single();
+
+      final submissionId = res['id'] as String;
+      _portalUrl = 'https://crm-dusky-two-65.vercel.app/crm/onboarding/portal/$submissionId';
+
+      await Clipboard.setData(ClipboardData(text: _portalUrl));
+
+      if (mounted) {
+        context.read<OnboardingBloc>().add(LoadSubmissionsEvent());
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Portal link generated and copied to clipboard!'),
+            backgroundColor: Color(0xFF10B981),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      setState(() {
+        _isGenerated = true;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to generate intake link: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _shareViaWhatsApp() async {
+    final message = Uri.encodeComponent('Here is your client requirement onboarding portal link: $_portalUrl');
+    final whatsappUri = Uri.parse('https://wa.me/?text=$message');
+    try {
+      await launchUrl(whatsappUri, mode: LaunchMode.externalNonBrowserApplication);
+    } catch (_) {
+      try {
+        await launchUrl(whatsappUri, mode: LaunchMode.externalApplication);
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not launch WhatsApp. Please copy the link instead.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _shareViaEmail() async {
+    final subject = Uri.encodeComponent('Client Requirement Onboarding Form');
+    final body = Uri.encodeComponent('Dear Client,\n\nPlease fill out the client requirement onboarding form at your earliest convenience:\n$_portalUrl\n\nBest regards,\nEcraftz Team');
+    final emailUri = Uri.parse('mailto:?subject=$subject&body=$body');
+    try {
+      await launchUrl(emailUri, mode: LaunchMode.externalNonBrowserApplication);
+    } catch (_) {
+      try {
+        await launchUrl(emailUri, mode: LaunchMode.externalApplication);
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not launch Email client. Please copy the link instead.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _previewPortal() async {
+    final previewUri = Uri.parse(_portalUrl);
+    try {
+      await launchUrl(previewUri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not preview portal link.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Dialog(
+      backgroundColor: isDark ? AppTheme.bgCardDark : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: AppTheme.borderOf(context), width: 1.5),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 450),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00BCD4).withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.send_rounded,
+                        color: Color(0xFF00BCD4),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Generate Onboarding Portal',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.textPrimaryOf(context),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Create and share a secure, dynamic client intake path.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppTheme.textSecondaryOf(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.close,
+                          size: 16,
+                          color: AppTheme.textSecondaryOf(context),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // Template Info Card
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFF1F5F9),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: widget.template.category.color.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              widget.template.category.label,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: widget.template.category.color,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'V${widget.template.version}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textMutedOf(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        widget.template.name,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textPrimaryOf(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Conditional view for Generate / Success states
+                if (!_isGenerated) ...[
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00BCD4),
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      elevation: 0,
+                    ),
+                    onPressed: _isLoading ? null : _generateAndCopy,
+                    icon: _isLoading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Icon(Icons.link_rounded, size: 18),
+                    label: Text(
+                      _isLoading ? 'Generating Link...' : 'Generate & Copy Intake Link',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ] else ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF064E3B) : const Color(0xFFECFDF5),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF047857) : const Color(0xFFA7F3D0),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          color: Color(0xFF10B981),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Secure Portal Link Generated!',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? const Color(0xFF34D399) : const Color(0xFF065F46),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Successfully copied to your clipboard. Send this to the client to begin intake onboarding.',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark ? const Color(0xFFA7F3D0) : const Color(0xFF047857),
+                                  height: 1.4,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'INTAKE PORTAL URL:',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textSecondaryOf(context),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: AppTheme.borderOf(context),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Text(
+                              _portalUrl,
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppTheme.textPrimaryOf(context),
+                                  decoration: TextDecoration.underline),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () async {
+                            await Clipboard.setData(ClipboardData(text: _portalUrl));
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Copied to clipboard!'),
+                                  backgroundColor: Color(0xFF10B981),
+                                  duration: Duration(seconds: 1),
+                                ),
+                              );
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF0F172A),
+                              borderRadius: BorderRadius.only(
+                                topRight: Radius.circular(7),
+                                bottomRight: Radius.circular(7),
+                              ),
+                            ),
+                            child: const Text(
+                              'Copy',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton.icon(
+                          onPressed: _previewPortal,
+                          icon: const Icon(Icons.open_in_new_rounded, size: 14, color: Color(0xFF00BCD4)),
+                          label: const Text(
+                            'Preview Portal',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF00BCD4)),
+                          ),
+                          style: TextButton.styleFrom(
+                            alignment: Alignment.centerLeft,
+                            padding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0F172A),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _isGenerated = false;
+                          });
+                        },
+                        child: const Text(
+                          'Generate Another Portal',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Divider(color: AppTheme.borderOf(context)),
+                  const SizedBox(height: 12),
+                  Text(
+                    'SHARE INTAKE PORTAL LINK:',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textSecondaryOf(context),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF25D366),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          onPressed: _shareViaWhatsApp,
+                          icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+                          label: const Text(
+                            'WhatsApp',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0A84FF),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          onPressed: _shareViaEmail,
+                          icon: const Icon(Icons.email_outlined, size: 16),
+                          label: const Text(
+                            'Email Link',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
