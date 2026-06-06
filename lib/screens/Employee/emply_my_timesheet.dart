@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../models/bde_report_model.dart';
+import '../../services/bde_report_service.dart';
 import '../../theme/app_theme.dart';
 
 class MyTimesheetScreen extends StatefulWidget {
@@ -9,48 +12,38 @@ class MyTimesheetScreen extends StatefulWidget {
 }
 
 class _MyTimesheetScreenState extends State<MyTimesheetScreen> {
-  String _selectedPeriod = 'Today';
+  final TextEditingController _staffNameController = TextEditingController(text: 'Tony Stark');
+  final TextEditingController _databasePlannedController = TextEditingController();
+  final TextEditingController _databaseCountController = TextEditingController();
+  final TextEditingController _socialMediaController = TextEditingController();
+  final TextEditingController _justDialController = TextEditingController();
+  final TextEditingController _otherPlatformsController = TextEditingController();
+  final TextEditingController _meetingsScheduledController = TextEditingController();
+  final TextEditingController _meetingsAttendedController = TextEditingController();
+  final TextEditingController _callsConnectedController = TextEditingController();
+  final TextEditingController _amountCollectedController = TextEditingController();
+  final TextEditingController _remarksController = TextEditingController();
 
-  final List<Map<String, dynamic>> _sessions = [
-    {
-      'date': 'Wednesday, May 27th, 2026',
-      'status': 'ACTIVE',
-      'statusColor': const Color(0xFF4CAF50),
-      'total': '0h 10m total',
-      'signIn': '02:08 PM',
-      'signOff': null,
-      'breaks': [],
-      'tasks': [
-        {'name': 'Ui designing', 'type': 'SELF TASK', 'taskStatus': 'PENDING'},
-        {
-          'name': 'decvelop hello',
-          'type': 'ASSIGNED TO ME',
-          'taskStatus': 'PENDING'
-        },
-      ],
-    },
-    {
-      'date': 'Wednesday, May 27th, 2026',
-      'status': 'COMPLETED',
-      'statusColor': const Color(0xFF2196F3),
-      'total': '0h 1m total',
-      'signIn': '01:50 PM',
-      'signOff': '01:53 PM',
-      'breaks': [],
-      'tasks': [
-        {'name': 'Ui designing', 'type': 'SELF TASK', 'taskStatus': 'PENDING'},
-        {
-          'name': 'decvelop hello',
-          'type': 'ASSIGNED TO ME',
-          'taskStatus': 'PENDING'
-        },
-      ],
-    },
-  ];
+  DateTime _reportDate = DateTime.now();
+  String _selectedPeriod = 'Today';
+  DateTimeRange? _selectedRange;
+  final _service = BdeReportService.instance;
+
+  List<BdeReportEntry> get _historyReports {
+    if (_selectedRange != null) {
+      return _service.filterByRange(_selectedRange!.start, _selectedRange!.end);
+    }
+    return _service.filterByPeriod(_selectedPeriod);
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final reports = _historyReports;
+    final totalReports = reports.length;
+    final meetingsScheduled = reports.fold<int>(0, (sum, entry) => sum + entry.login.meetingsScheduled);
+    final amountCollected = reports.fold<double>(0.0, (sum, entry) => sum + (entry.logout?.amountCollected ?? 0.0));
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: null,
@@ -67,19 +60,443 @@ class _MyTimesheetScreenState extends State<MyTimesheetScreen> {
                     fontWeight: FontWeight.bold,
                     color: isDark ? Colors.white : const Color(0xFF1A1A2E))),
             Text(
-                'Evaluate your daily sign-ins, breaks, and completed tasks.',
+                'Submit your daily login and logout self-report. All entries are stored dynamically and can be reviewed with filters.',
                 style: TextStyle(
                     fontSize: 13, color: isDark ? const Color(0xFF8E9CB8) : Colors.grey[600])),
-            const SizedBox(height: 16),
-            _buildPeriodSelector(),
-            const SizedBox(height: 16),
-            _buildSummaryCards(),
-            const SizedBox(height: 16),
-            ..._sessions.map((s) => _buildSessionCard(s)).toList(),
+            const SizedBox(height: 20),
+            _buildSummaryCards(totalReports, meetingsScheduled, amountCollected),
+            const SizedBox(height: 20),
+            LayoutBuilder(builder: (context, constraints) {
+              if (constraints.maxWidth > 900) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: _buildReportForms()),
+                    const SizedBox(width: 16),
+                    Expanded(child: _buildHistoryPanel()),
+                  ],
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildReportForms(),
+                  const SizedBox(height: 16),
+                  _buildHistoryPanel(),
+                ],
+              );
+            }),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildReportForms() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('Login Report', 'Capture planned leads and scheduled meetings before the shift.'),
+        const SizedBox(height: 12),
+        _buildLoginForm(),
+        const SizedBox(height: 20),
+        _buildSectionHeader('Logout Report', 'Record meetings, calls, collection and remarks after the shift.'),
+        const SizedBox(height: 12),
+        _buildLogoutForm(),
+      ],
+    );
+  }
+
+  Widget _buildHistoryPanel() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('Report History', 'Filter your entries by period or date range and view details in one place.'),
+        const SizedBox(height: 12),
+        _buildFilterRow(),
+        const SizedBox(height: 12),
+        _buildHistoryList(),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(String title, String subtitle) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1A1A2E))),
+        const SizedBox(height: 4),
+        Text(subtitle,
+            style: TextStyle(fontSize: 12, color: isDark ? const Color(0xFF94A3B8) : Colors.grey[600])),
+      ],
+    );
+  }
+
+  Widget _buildFilterRow() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: ['Today', 'This Week', 'This Month', 'All'].map((period) {
+            final selected = _selectedPeriod == period && _selectedRange == null;
+            return ChoiceChip(
+              label: Text(period),
+              selected: selected,
+              onSelected: (_) {
+                setState(() {
+                  _selectedRange = null;
+                  _selectedPeriod = period;
+                });
+              },
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _pickDateRange,
+                icon: const Icon(Icons.date_range_outlined, size: 16),
+                label: Text(_selectedRange == null
+                    ? 'Choose date range'
+                    : '${DateFormat.yMMMd().format(_selectedRange!.start)} - ${DateFormat.yMMMd().format(_selectedRange!.end)}'),
+              ),
+            ),
+            if (_selectedRange != null) ...[
+              const SizedBox(width: 10),
+              IconButton(
+                icon: Icon(Icons.close, color: isDark ? Colors.white : Colors.black87),
+                onPressed: () => setState(() => _selectedRange = null),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final result = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 1),
+      initialDateRange: _selectedRange ?? DateTimeRange(start: now.subtract(const Duration(days: 7)), end: now),
+    );
+    if (result != null) {
+      setState(() {
+        _selectedRange = result;
+      });
+    }
+  }
+
+  Widget _buildHistoryList() {
+    final reports = _historyReports;
+    if (reports.isEmpty) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: isDark ? AppTheme.bgCardDark : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.borderOf(context)),
+        ),
+        child: Center(
+          child: Text('No self-report history found for this range.',
+              style: TextStyle(fontSize: 13, color: isDark ? const Color(0xFF8E9CB8) : Colors.grey[600])),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: reports.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        final report = reports[index];
+        return GestureDetector(
+          onTap: () => _showReportDetails(report),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).brightness == Brightness.dark ? AppTheme.bgCardDark : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.borderOf(context)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(report.staffName,
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: report.isComplete ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(report.isComplete ? 'COMPLETE' : 'INCOMPLETE',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: report.isComplete ? const Color(0xFF166534) : const Color(0xFF92400E))),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(DateFormat.yMMMMd().format(report.reportDate),
+                    style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF94A3B8) : Colors.grey[600], fontSize: 12)),
+                const SizedBox(height: 12),
+                Wrap(spacing: 12, runSpacing: 8, children: [
+                  _smallStat(label: 'Planned', value: '${report.login.databasePlanned}'),
+                  _smallStat(label: 'DB Count', value: '${report.login.databaseCount}'),
+                  _smallStat(label: 'Social', value: '${report.login.socialMediaLeads}'),
+                  _smallStat(label: 'Just Dial', value: '${report.login.justDialLeads}'),
+                  _smallStat(label: 'Meetings', value: '${report.login.meetingsScheduled}'),
+                  _smallStat(label: 'Collected', value: '₹${(report.logout?.amountCollected ?? 0).toStringAsFixed(0)}'),
+                ]),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _smallStat({required String label, required String value}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+      ),
+      child: Text('$label: $value', style: TextStyle(fontSize: 11, color: isDark ? Colors.white : const Color(0xFF334155))),
+    );
+  }
+
+  void _showReportDetails(BdeReportEntry report) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Report Details — ${DateFormat.yMMMd().format(report.reportDate)}'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _detailRow('Staff', report.staffName),
+              const SizedBox(height: 8),
+              _detailRow('Database Planned', report.login.databasePlanned.toString()),
+              _detailRow('Database Count', report.login.databaseCount.toString()),
+              _detailRow('Social Media Leads', report.login.socialMediaLeads.toString()),
+              _detailRow('Just Dial Leads', report.login.justDialLeads.toString()),
+              _detailRow('Other Platforms', report.login.otherPlatformLeads.toString()),
+              _detailRow('Meetings Scheduled', report.login.meetingsScheduled.toString()),
+              const Divider(height: 24),
+              _detailRow('Meetings Attended', '${report.logout?.meetingsAttended ?? 0}'),
+              _detailRow('Calls Connected', '${report.logout?.callsConnected ?? 0}'),
+              _detailRow('Amount Collected', '₹${(report.logout?.amountCollected ?? 0).toStringAsFixed(0)}'),
+              const SizedBox(height: 8),
+              Text('Remarks', style: TextStyle(fontWeight: FontWeight.w700, color: Theme.of(context).brightness == Brightness.dark ? Colors.white : const Color(0xFF1A1A2E))),
+              const SizedBox(height: 4),
+              Text(report.logout?.remarks ?? 'No remarks provided', style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF94A3B8) : Colors.grey[700])),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
+          Text(value, style: const TextStyle(fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoginForm() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).brightness == Brightness.dark ? AppTheme.bgCardDark : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.borderOf(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildTextField(_staffNameController, 'Staff Name', helper: 'Employee name or auto-detected user'),
+          const SizedBox(height: 12),
+          _buildDatePicker(),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: _buildTextField(_databasePlannedController, 'Database Planned', keyboardType: TextInputType.number)),
+            const SizedBox(width: 12),
+            Expanded(child: _buildTextField(_databaseCountController, 'Database Count', keyboardType: TextInputType.number)),
+          ]),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: _buildTextField(_socialMediaController, 'Social Media Leads', keyboardType: TextInputType.number)),
+            const SizedBox(width: 12),
+            Expanded(child: _buildTextField(_justDialController, 'Just Dial Leads', keyboardType: TextInputType.number)),
+          ]),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: _buildTextField(_otherPlatformsController, 'Other Platforms', keyboardType: TextInputType.number)),
+            const SizedBox(width: 12),
+            Expanded(child: _buildTextField(_meetingsScheduledController, 'Meetings Scheduled', keyboardType: TextInputType.number)),
+          ]),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton(
+              onPressed: _saveLoginReport,
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2196F3)),
+              child: const Text('Save Login Report'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLogoutForm() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).brightness == Brightness.dark ? AppTheme.bgCardDark : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.borderOf(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Expanded(child: _buildTextField(_meetingsAttendedController, 'Meetings Attended', keyboardType: TextInputType.number)),
+            const SizedBox(width: 12),
+            Expanded(child: _buildTextField(_callsConnectedController, 'Calls Connected', keyboardType: TextInputType.number)),
+          ]),
+          const SizedBox(height: 12),
+          _buildTextField(_amountCollectedController, 'Amount Collected', keyboardType: TextInputType.number),
+          const SizedBox(height: 12),
+          _buildTextField(_remarksController, 'Remarks', maxLines: 4),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton(
+              onPressed: _saveLogoutReport,
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
+              child: const Text('Save Logout Report'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDatePicker() {
+    return GestureDetector(
+      onTap: _pickReportDate,
+      child: AbsorbPointer(
+        child: TextField(
+          controller: TextEditingController(text: DateFormat.yMMMMd().format(_reportDate)),
+          decoration: InputDecoration(
+            labelText: 'Report Date',
+            suffixIcon: const Icon(Icons.calendar_today_outlined),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label,
+      {String? helper, TextInputType keyboardType = TextInputType.text, int maxLines = 1}) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        helperText: helper,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  Future<void> _pickReportDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _reportDate,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 1),
+    );
+    if (picked != null) {
+      setState(() => _reportDate = picked);
+    }
+  }
+
+  void _saveLoginReport() {
+    final staffName = _staffNameController.text.trim();
+    if (staffName.isEmpty) {
+      _showMessage('Please enter the staff name.');
+      return;
+    }
+    final login = BdeLoginDetails(
+      staffName: staffName,
+      reportDate: _reportDate,
+      databasePlanned: int.tryParse(_databasePlannedController.text.trim()) ?? 0,
+      databaseCount: int.tryParse(_databaseCountController.text.trim()) ?? 0,
+      socialMediaLeads: int.tryParse(_socialMediaController.text.trim()) ?? 0,
+      justDialLeads: int.tryParse(_justDialController.text.trim()) ?? 0,
+      otherPlatformLeads: int.tryParse(_otherPlatformsController.text.trim()) ?? 0,
+      meetingsScheduled: int.tryParse(_meetingsScheduledController.text.trim()) ?? 0,
+    );
+    _service.addOrUpdateLogin(login);
+    _showMessage('Login report saved successfully.');
+    setState(() {});
+  }
+
+  void _saveLogoutReport() {
+    final staffName = _staffNameController.text.trim();
+    if (staffName.isEmpty) {
+      _showMessage('Please enter the staff name before saving logout data.');
+      return;
+    }
+    final logout = BdeLogoutDetails(
+      meetingsAttended: int.tryParse(_meetingsAttendedController.text.trim()) ?? 0,
+      callsConnected: int.tryParse(_callsConnectedController.text.trim()) ?? 0,
+      amountCollected: double.tryParse(_amountCollectedController.text.trim()) ?? 0.0,
+      remarks: _remarksController.text.trim(),
+    );
+    _service.addOrUpdateLogout(staffName, _reportDate, logout);
+    _showMessage('Logout report saved successfully.');
+    setState(() {});
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).removeCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   PreferredSizeWidget _buildAppBar() {
@@ -171,40 +588,63 @@ class _MyTimesheetScreenState extends State<MyTimesheetScreen> {
     );
   }
 
-  Widget _buildSummaryCards() {
+  Widget _buildSummaryCards(int totalReports, int meetingsScheduled, double amountCollected) {
     return LayoutBuilder(builder: (ctx, c) {
-      if (c.maxWidth < 600) {
+      if (c.maxWidth < 720) {
         return Column(
           children: [
-            _summaryCard(
-                Icons.access_time_outlined,
-                'PRODUCTIVE TIME',
-                '2h 47m',
-                const Color(0xFF2196F3)),
+            _statCard(Icons.list_alt_rounded, 'REPORTS SUBMITTED', '$totalReports', const Color(0xFF2196F3)),
             const SizedBox(height: 10),
-            _summaryCard(Icons.check_box_outlined, 'TASKS DONE',
-                '0', const Color(0xFF4CAF50)),
+            _statCard(Icons.meeting_room_rounded, 'MEETINGS SCHEDULED', '$meetingsScheduled', const Color(0xFF4CAF50)),
+            const SizedBox(height: 10),
+            _statCard(Icons.currency_rupee, 'AMOUNT COLLECTED', '₹${amountCollected.toStringAsFixed(0)}', const Color(0xFF10B981)),
           ],
         );
       }
       return Row(
         children: [
-          Expanded(
-              child: _summaryCard(
-                  Icons.access_time_outlined,
-                  'PRODUCTIVE TIME',
-                  '2h 47m',
-                  const Color(0xFF2196F3))),
+          Expanded(child: _statCard(Icons.list_alt_rounded, 'REPORTS SUBMITTED', '$totalReports', const Color(0xFF2196F3))),
           const SizedBox(width: 12),
-          Expanded(
-              child: _summaryCard(
-                  Icons.check_box_outlined,
-                  'TASKS DONE',
-                  '0',
-                  const Color(0xFF4CAF50))),
+          Expanded(child: _statCard(Icons.meeting_room_rounded, 'MEETINGS SCHEDULED', '$meetingsScheduled', const Color(0xFF4CAF50))),
+          const SizedBox(width: 12),
+          Expanded(child: _statCard(Icons.currency_rupee, 'AMOUNT COLLECTED', '₹${amountCollected.toStringAsFixed(0)}', const Color(0xFF10B981))),
         ],
       );
     });
+  }
+
+  Widget _statCard(IconData icon, String title, String value, Color color) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.borderOf(context)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: color.withOpacity(0.14), shape: BoxShape.circle),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: TextStyle(fontSize: 12, color: isDark ? const Color(0xFF94A3B8) : Colors.grey[600], fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Text(value,
+                    style: TextStyle(fontSize: 20, color: isDark ? Colors.white : const Color(0xFF1A1A2E), fontWeight: FontWeight.w700)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _summaryCard(

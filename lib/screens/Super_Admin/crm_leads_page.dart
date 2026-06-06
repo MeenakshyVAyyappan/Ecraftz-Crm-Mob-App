@@ -1,11 +1,81 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/app_drawer.dart';
 import '../../models/lead_model.dart';
 import '../../blocs/lead/lead_bloc.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
+
+Future<void> _launchUrl(Uri uri, BuildContext context, {String failureMessage = 'Could not open link'}) async {
+  try {
+    await launchUrl(uri, mode: LaunchMode.externalNonBrowserApplication);
+  } catch (_) {
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(failureMessage), backgroundColor: Colors.red),
+      );
+    }
+  }
+}
+
+String _normalizePhone(String phone) {
+  return phone.replaceAll(RegExp(r'[^0-9+]'), '');
+}
+
+Future<void> _callPhone(String phone, BuildContext context) async {
+  final normalized = _normalizePhone(phone);
+  if (normalized.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Phone number not available'), backgroundColor: Colors.red),
+    );
+    return;
+  }
+  final uri = Uri(scheme: 'tel', path: normalized);
+  await _launchUrl(uri, context, failureMessage: 'Could not place the call.');
+}
+
+Future<void> _sendSms(String phone, BuildContext context) async {
+  final normalized = _normalizePhone(phone);
+  if (normalized.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Phone number not available'), backgroundColor: Colors.red),
+    );
+    return;
+  }
+  final body = Uri.encodeComponent('Hi, I wanted to follow up regarding your lead status.');
+  final uri = Uri.parse('sms:$normalized?body=$body');
+  await _launchUrl(uri, context, failureMessage: 'Could not send SMS.');
+}
+
+Future<void> _sendWhatsApp(String phone, BuildContext context) async {
+  final normalized = _normalizePhone(phone).replaceAll('+', '');
+  if (normalized.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Phone number not available'), backgroundColor: Colors.red),
+    );
+    return;
+  }
+  final text = Uri.encodeComponent('Hello, I wanted to follow up regarding your lead status.');
+  final uri = Uri.parse('https://wa.me/$normalized?text=$text');
+  await _launchUrl(uri, context, failureMessage: 'Could not launch WhatsApp.');
+}
+
+Future<void> _sendEmail(String email, BuildContext context) async {
+  if (email.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Email address not available'), backgroundColor: Colors.red),
+    );
+    return;
+  }
+  final subject = Uri.encodeComponent('Follow-up from Ecraftz CRM');
+  final body = Uri.encodeComponent('Hello,\n\nI am reaching out regarding your lead. Please let me know when you are available to discuss.\n\nRegards,\nEcraftz Team');
+  final uri = Uri.parse('mailto:$email?subject=$subject&body=$body');
+  await _launchUrl(uri, context, failureMessage: 'Could not launch the email client.');
+}
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
@@ -906,6 +976,41 @@ class _LeadDetailSheet extends StatelessWidget {
                 ],
               ),
             ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _ContactActionButton(
+                    icon: Icons.phone_outlined,
+                    label: 'Call',
+                    color: const Color(0xFF2563EB),
+                    onTap: lead.phone.isNotEmpty ? () => _callPhone(lead.phone, context) : null,
+                  ),
+                  _ContactActionButton(
+                    icon: Icons.message_outlined,
+                    label: 'SMS',
+                    color: const Color(0xFF0EA5E9),
+                    onTap: lead.phone.isNotEmpty ? () => _sendSms(lead.phone, context) : null,
+                  ),
+                  _ContactActionButton(
+                    icon: Icons.chat_bubble_outline,
+                    label: 'WhatsApp',
+                    color: const Color(0xFF22C55E),
+                    onTap: lead.phone.isNotEmpty ? () => _sendWhatsApp(lead.phone, context) : null,
+                  ),
+                  _ContactActionButton(
+                    icon: Icons.email_outlined,
+                    label: 'Email',
+                    color: const Color(0xFFEF4444),
+                    onTap: lead.email.isNotEmpty ? () => _sendEmail(lead.email, context) : null,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             Divider(height: 24, color: border),
             Expanded(
               child: ListView(
@@ -1060,6 +1165,51 @@ class _DetailRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ContactActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback? onTap;
+
+  const _ContactActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDisabled = onTap == null;
+    return GestureDetector(
+      onTap: onTap,
+      child: Opacity(
+        opacity: isDisabled ? 0.5 : 1,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withOpacity(0.2)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 8),
+              Text(label,
+                  style: TextStyle(
+                      color: color,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
       ),
     );
   }

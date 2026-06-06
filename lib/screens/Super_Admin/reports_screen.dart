@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../widgets/app_drawer.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
+import '../../services/supabase_service.dart';
 // ─── THEME ────────────────────────────────────────────────────────────────────
 
 class RTheme {
@@ -55,108 +56,7 @@ class ReportItem {
 }
 
 // ─── SAMPLE DATA ──────────────────────────────────────────────────────────────
-
-// Employee Directory
-final empDirStats = {'workforce': 9, 'operators': 8, 'admins': 1, 'avgRate': 0.0};
-final List<Map<String, dynamic>> empDirData = [
-  {'initials': 'HI', 'name': 'hina', 'email': 'HANNA.ECRAFTZ@GMAIL.COM', 'role': 'MANAGER', 'rate': 0.0, 'status': 'ACTIVE'},
-  {'initials': 'RO', 'name': 'Roronoa', 'email': 'RORONOAZORO8025@GMAIL.COM', 'role': 'EMPLOYEE', 'rate': 0.0, 'status': 'ACTIVE'},
-  {'initials': 'FA', 'name': 'Fathima Safa', 'email': 'FATHIMASAFA.WORK@GMAIL.COM', 'role': 'EMPLOYEE', 'rate': 0.0, 'status': 'ACTIVE'},
-  {'initials': 'TO', 'name': 'Tony Stark', 'email': 'VISWAJITH.ECRAFTZ@GMAIL.COM', 'role': 'EMPLOYEE', 'rate': 0.0, 'status': 'ACTIVE'},
-  {'initials': 'CH', 'name': 'Chimbu', 'email': 'HACKERHACKER0424@GMAIL.COM', 'role': 'EMPLOYEE', 'rate': 0.0, 'status': 'ACTIVE'},
-  {'initials': 'RO', 'name': 'Roopesh', 'email': 'LIVEIN@JANANILIFESTYLE.IN', 'role': 'EMPLOYEE', 'rate': 0.0, 'status': 'DENIED'},
-];
-
-// Attendance Logs
-final attStats = {'sessions': 4, 'onTime': 100.0, 'late': 0, 'break': 94.0};
-final List<Map<String, dynamic>> attData = [
-  {'name': 'Sasi', 'date': '2026-05-12', 'in': '02:52 PM', 'out': '---', 'duration': '---', 'status': 'PRESENT'},
-  {'name': 'viswajith e', 'date': '2026-05-12', 'in': '05:53 PM', 'out': '05:53 PM', 'duration': '0h 0m', 'status': 'PRESENT'},
-  {'name': 'viswajith e', 'date': '2026-05-09', 'in': '12:21 PM', 'out': '12:21 PM', 'duration': '0h 0m', 'status': 'PRESENT'},
-  {'name': 'viswajith e', 'date': '2026-05-09', 'in': '12:21 PM', 'out': '12:21 PM', 'duration': '0h 0m', 'status': 'PRESENT'},
-];
-
-// Leave Management
-final leaveStats = {'total': 2, 'approved': 1, 'pending': 0, 'rejRate': 0.0};
-final List<Map<String, dynamic>> leaveData = [
-  {'name': 'Chimbu', 'start': 'May 20, 2026', 'end': 'May 21, 2026', 'reason': 'High fever', 'status': 'APPROVED'},
-  {'name': 'Tony Stark', 'start': 'May 19, 2026', 'end': 'May 19, 2026', 'reason': 'brother wedding', 'status': 'CLARIFICATION_REQUIRED'},
-];
-
-// Invoice Audit
-final invAuditStats = {'total': 17, 'reconciled': 12, 'voided': 0, 'integrity': 71.0};
-final List<Map<String, dynamic>> invAuditData = [
-  {'inv': 'INV-701', 'client': 'janani', 'id': 'ID: 005A6216...', 'date': 'May 23, 2026 16:59', 'face': '\$0', 'rec': '\$0', 'status': 'PAID'},
-  {'inv': 'INV-432', 'client': 'janani', 'id': 'ID: 005A6216...', 'date': 'May 23, 2026 14:32', 'face': '\$0', 'rec': '\$0', 'status': 'SENT'},
-  {'inv': 'INV-3762', 'client': 'Steve rogers', 'id': 'ID: 3DC5E428...', 'date': 'May 12, 2026 11:24', 'face': '\$0', 'rec': '\$0', 'status': 'SENT'},
-  {'inv': 'INV-5446', 'client': 'Steve rogers', 'id': 'ID: 3DC5E428...', 'date': 'May 12, 2026 11:22', 'face': '\$0', 'rec': '\$0', 'status': 'PAID'},
-  {'inv': 'INV-5904', 'client': 'shock stark', 'id': 'ID: 352864A8...', 'date': 'May 12, 2026 11:18', 'face': '\$0', 'rec': '\$0', 'status': 'PAID'},
-];
-
-// Financial Invoices
-final finInvStats = {'total': 17, 'verified': '₹0', 'awaiting': '₹0', 'overdue': 0};
-final List<Map<String, dynamic>> finInvData = [
-  {'inv': 'INV-701', 'client': 'janani', 'due': 'May 23, 2026', 'amount': '₹0', 'paid': '₹0', 'status': 'PAID'},
-  {'inv': 'INV-432', 'client': 'janani', 'due': 'May 23, 2026', 'amount': '₹0', 'paid': '₹0', 'status': 'SENT'},
-  {'inv': 'INV-3762', 'client': 'Steve rogers', 'due': 'May 12, 2026', 'amount': '₹0', 'paid': '₹0', 'status': 'SENT'},
-  {'inv': 'INV-5446', 'client': 'Steve rogers', 'due': 'May 12, 2026', 'amount': '₹0', 'paid': '₹0', 'status': 'PAID'},
-  {'inv': 'INV-5904', 'client': 'shock stark', 'due': 'May 12, 2026', 'amount': '₹0', 'paid': '₹0', 'status': 'PAID'},
-  {'inv': 'INV-7344', 'client': 'meethu', 'due': 'May 12, 2026', 'amount': '₹0', 'paid': '₹0', 'status': 'SENT'},
-];
-
-// Expense Report
-final expStats = {'outflow': '\$50', 'volume': 1, 'awaiting': '\$50', 'deviation': 2.1};
-final List<Map<String, dynamic>> expData = [
-  {'date': 'May 26, 2026', 'desc': 'asdfghjkfghjukilo', 'project': 'JANANI - WEB DEVELOPMENT DYNAMIC SPECIFICATION V1', 'amount': '-\$50', 'cat': 'HOSTING', 'status': 'PENDING'},
-];
-
-// Payment Records
-final payStats = {'collected': '₹0', 'transit': '₹0', 'attempts': 0, 'failed': 0};
-final List<Map<String, dynamic>> payData = [];
-
-// Client Insights
-final clientStats = {'portfolio': 11, 'active': 11, 'footprint': 5, 'velocity': '98%'};
-final List<Map<String, dynamic>> clientData = [
-  {'name': 'Asgti Glo', 'industry': 'GENERAL INDUSTRY', 'email': 'asgtglobal@gmail.com', 'phone': '9874563210', 'location': 'calicut', 'joined': 'May 26, 2026', 'status': 'ACTIVE'},
-  {'name': 'arsenal', 'industry': 'GENERAL INDUSTRY', 'email': 'arsenal@gmail.com', 'phone': '1234567895', 'location': 'hello 1234', 'joined': 'May 21, 2026', 'status': 'ACTIVE'},
-  {'name': 'janani', 'industry': 'GENERAL INDUSTRY', 'email': 'livein@janani.in', 'phone': '', 'location': 'Global', 'joined': 'May 20, 2026', 'status': 'ACTIVE'},
-  {'name': 'ecocraft', 'industry': 'GENERAL INDUSTRY', 'email': '', 'phone': '', 'location': 'Global', 'joined': 'May 20, 2026', 'status': 'ACTIVE'},
-  {'name': 'Steve rogers', 'industry': 'GENERAL INDUSTRY', 'email': 'viswajith.ecraftz@gmail.com', 'phone': '+917736958025', 'location': 'Global', 'joined': 'May 6, 2026', 'status': 'ACTIVE'},
-];
-
-// Project Lifecycle
-final projStats = {'portfolio': 13, 'active': 3, 'value': '₹72,446', 'delivery': '15%'};
-final List<Map<String, dynamic>> projData = [
-  {'name': 'arsenal - Digital Marketing Premium Intake v1', 'client': 'ARSENAL', 'timeline': 'May 21, 26 - Cont.', 'budget': '₹30,000', 'stage': 'PLANNING'},
-  {'name': 'janani - Web Development Dynamic Specification v1', 'client': 'JANANI', 'timeline': 'May 20, 26 - Cont.', 'budget': '₹20,000', 'stage': 'PLANNING'},
-  {'name': 'janani', 'client': 'JANANI', 'timeline': 'May 20, 26 - May 21, 26', 'budget': '₹0', 'stage': 'PLANNING'},
-  {'name': 'ecocraft', 'client': 'ECOCRAFT', 'timeline': 'May 4, 26 - Cont.', 'budget': '₹100', 'stage': 'IN PROGRESS'},
-];
-
-// Task Performance
-final taskStats = {'total': 6, 'velocity': '67%', 'overdue': 1, 'backlog': 0};
-final List<Map<String, dynamic>> taskData = [
-  {'task': 'develop ecraftz', 'project': 'JANANI - WEB DEVELOPMENT DYNAMIC SPECIFICATION V1', 'assignee': 'hina', 'due': 'May 28, 2026', 'priority': 'URGENT', 'status': 'REVIEW', 'overdue': false},
-  {'task': 'design this', 'project': 'JANANI - WEB DEVELOPMENT DYNAMIC SPECIFICATION V1', 'assignee': 'Fathima Safa', 'due': 'May 27, 2026', 'priority': 'URGENT', 'status': 'DONE', 'overdue': false},
-  {'task': 'landing page', 'project': 'ARSENAL - DIGITAL MARKETING PREMIUM INTAKE V1', 'assignee': 'Chimbu', 'due': 'May 27, 2026', 'priority': 'LOW', 'status': 'IN PROGRESS', 'overdue': true},
-  {'task': 'hello brooo', 'project': 'ARSENAL - DIGITAL MARKETING PREMIUM INTAKE V1', 'assignee': 'Tony Stark', 'due': 'May 28, 2026', 'priority': 'MEDIUM', 'status': 'DONE', 'overdue': false},
-  {'task': 'design dashboard', 'project': 'ARSENAL - DIGITAL MARKETING PREMIUM INTAKE V1', 'assignee': 'Chimbu', 'due': 'May 23, 2026', 'priority': 'HIGH', 'status': 'DONE', 'overdue': false},
-  {'task': 'develop this', 'project': 'JANANI - WEB DEVELOPMENT DYNAMIC SPECIFICATION V1', 'assignee': 'Chimbu', 'due': 'May 22, 2026', 'priority': 'HIGH', 'status': 'DONE', 'overdue': false},
-];
-
-// Renewals Matrix
-final renewStats = {'matrix': 1, 'pipeline': '₹0', 'critical': 0, 'collection': '0%'};
-final List<Map<String, dynamic>> renewData = [
-  {'service': 'swderfssdd', 'client': 'CHIMBU • JANANI', 'category': 'HOSTING & DOMAIN', 'expiry': 'May 15, 2026', 'value': '₹50', 'reminders': '2 SENT', 'status': 'PAID'},
-];
-
-// Sales Pipeline Leads
-final leadsStats = {'velocity': 0, 'pipeline': '₹0', 'conversion': '0%', 'avgAge': '12 DAYS'};
-final List<Map<String, dynamic>> leadsData = [];
-
-// System Activity Feed
-final sysStats = {'events': 0, 'alerts': 0, 'users': 0, 'integrity': '100%'};
-final List<Map<String, dynamic>> sysData = [];
+// Hardcoded dummy data removed. Connecting directly to Supabase.
 
 // ─── REPORT CATEGORIES DATA ───────────────────────────────────────────────────
 
@@ -471,27 +371,321 @@ class ReportDetailScreen extends StatefulWidget {
 }
 
 class _ReportDetailScreenState extends State<ReportDetailScreen> {
+  bool _isLoading = true;
+  String _error = '';
+  List<Map<String, dynamic>> _data = [];
   String _search = '';
   String _statusFilter = 'ALL';
   int _page = 1;
   final int _perPage = 10;
 
-  List<Map<String, dynamic>> get _rawData {
-    switch (widget.route) {
-      case 'emp_dir': return empDirData;
-      case 'att_logs': return attData;
-      case 'leave_mgmt': return leaveData;
-      case 'inv_audit': return invAuditData;
-      case 'income': case 'payments': return payData;
-      case 'expense': return expData;
-      case 'clients': return clientData;
-      case 'projects': return projData;
-      case 'tasks': return taskData;
-      case 'renewals': return renewData;
-      case 'leads': return leadsData;
-      default: return finInvData;
+  @override
+  void initState() {
+    super.initState();
+    _fetchReportData();
+  }
+
+  Future<void> _fetchReportData() async {
+    setState(() {
+      _isLoading = true;
+      _error = '';
+    });
+    try {
+      final client = SupabaseService.client;
+      List<Map<String, dynamic>> loadedData = [];
+      switch (widget.route) {
+        case 'emp_dir':
+          final res = await client.from('profiles').select();
+          loadedData = (res as List).map((row) {
+            final name = row['full_name']?.toString() ?? row['username']?.toString() ?? 'Unknown';
+            final email = row['email']?.toString() ?? '';
+            final role = row['role']?.toString().toUpperCase() ?? 'EMPLOYEE';
+            final status = row['status']?.toString().toUpperCase() ?? 'ACTIVE';
+            final nameParts = name.trim().split(' ');
+            final initials = nameParts.length >= 2
+                ? '${nameParts.first[0]}${nameParts.last[0]}'.toUpperCase()
+                : (name.isNotEmpty ? name[0].toUpperCase() : '?');
+            return {
+              'initials': initials,
+              'name': name,
+              'email': email,
+              'role': role,
+              'rate': 0.0,
+              'status': status,
+            };
+          }).toList();
+          break;
+
+        case 'att_logs':
+          final res = await client.from('attendance').select('*, profiles(full_name)');
+          loadedData = (res as List).map((row) {
+            final profile = row['profiles'] as Map?;
+            final name = profile?['full_name']?.toString() ?? 'Unknown';
+            final date = row['date']?.toString() ?? '';
+            final clockIn = row['clock_in']?.toString() ?? '---';
+            final clockOut = row['clock_out']?.toString() ?? '---';
+            final status = row['status']?.toString().toUpperCase() ?? 'PRESENT';
+            return {
+              'name': name,
+              'date': date,
+              'in': clockIn,
+              'out': clockOut,
+              'duration': '---',
+              'status': status,
+            };
+          }).toList();
+          break;
+
+        case 'leave_mgmt':
+          final res = await client.from('leave_requests').select('*, profiles!user_id(full_name)');
+          loadedData = (res as List).map((row) {
+            final profile = (row['profiles'] ?? row['profiles!user_id']) as Map?;
+            final name = profile?['full_name']?.toString() ?? 'Unknown';
+            final start = row['start_date']?.toString() ?? '';
+            final end = row['end_date']?.toString() ?? '';
+            final reason = row['reason']?.toString() ?? '';
+            final status = row['status']?.toString().toUpperCase() ?? 'PENDING';
+            return {
+              'name': name,
+              'start': start,
+              'end': end,
+              'reason': reason,
+              'status': status,
+            };
+          }).toList();
+          break;
+
+        case 'inv_audit':
+          final res = await client.from('invoices').select('*, clients(name)').isFilter('deleted_at', null);
+          loadedData = (res as List).map((row) {
+            final clientMap = row['clients'] as Map?;
+            final clientName = clientMap?['name']?.toString() ?? 'Unknown';
+            final inv = row['invoice_number']?.toString() ?? 'INV-?';
+            final id = row['id']?.toString() ?? '';
+            final date = row['created_at']?.toString() ?? row['date']?.toString() ?? '';
+            final face = (row['grand_total'] ?? 0.0).toDouble();
+            final rec = (row['amount_paid'] ?? 0.0).toDouble();
+            final status = row['status']?.toString().toUpperCase() ?? 'DRAFT';
+            return {
+              'inv': inv,
+              'client': clientName,
+              'id': 'ID: ${id.length > 8 ? id.substring(0, 8) : id}...',
+              'date': date,
+              'face': '\$${face.toStringAsFixed(0)}',
+              'rec': '\$${rec.toStringAsFixed(0)}',
+              'status': status,
+            };
+          }).toList();
+          break;
+
+        case 'expense':
+          final res = await client.from('project_expenses').select('*, projects(name)');
+          loadedData = (res as List).map((row) {
+            final project = row['projects'] as Map?;
+            final projectName = project?['name']?.toString() ?? 'Independent Expense';
+            final desc = row['description']?.toString() ?? '';
+            final date = row['expense_date']?.toString() ?? '';
+            final amount = (row['amount'] ?? 0.0).toDouble();
+            final cat = row['category']?.toString().toUpperCase() ?? 'OTHER';
+            return {
+              'date': date,
+              'desc': desc,
+              'project': projectName.toUpperCase(),
+              'amount': '-\$${amount.toStringAsFixed(0)}',
+              'cat': cat,
+              'status': 'PENDING',
+            };
+          }).toList();
+          break;
+
+        case 'income':
+        case 'payments':
+          final res = await client.from('payments').select('*, clients(name)').isFilter('deleted_at', null);
+          loadedData = (res as List).map((row) {
+            final clientMap = row['clients'] as Map?;
+            final clientName = clientMap?['name']?.toString() ?? 'Unknown';
+            final paymentNumber = row['payment_number']?.toString() ?? '';
+            final date = row['date']?.toString() ?? '';
+            final amount = (row['amount'] ?? 0.0).toDouble();
+            final mode = row['payment_mode']?.toString() ?? '';
+            final status = row['status']?.toString().toUpperCase() ?? 'PENDING';
+            return {
+              'date': date,
+              'ref': paymentNumber,
+              'client': clientName,
+              'amount': '₹${amount.toStringAsFixed(0)}',
+              'method': mode.toUpperCase(),
+              'status': status,
+            };
+          }).toList();
+          break;
+
+        case 'clients':
+          final res = await client.from('clients').select().isFilter('deleted_at', null);
+          loadedData = (res as List).map((row) {
+            final name = row['name']?.toString() ?? '';
+            final email = row['email']?.toString() ?? '';
+            final phone = row['phone']?.toString() ?? '';
+            final location = row['address']?.toString() ?? '';
+            final joined = row['created_at']?.toString() ?? '';
+            return {
+              'name': name,
+              'industry': 'GENERAL INDUSTRY',
+              'email': email,
+              'phone': phone,
+              'location': location.contains('METADATA_FALLBACK') ? 'Global' : (location.isEmpty ? 'Global' : location),
+              'joined': joined.split('T')[0],
+              'status': 'ACTIVE',
+            };
+          }).toList();
+          break;
+
+        case 'projects':
+          final res = await client.from('projects').select('*, clients(name)').isFilter('deleted_at', null);
+          loadedData = (res as List).map((row) {
+            final clientMap = row['clients'] as Map?;
+            final clientName = clientMap?['name']?.toString() ?? '';
+            final name = row['name']?.toString() ?? '';
+            final start = row['start_date']?.toString() ?? '';
+            final end = row['end_date']?.toString() ?? 'Cont.';
+            final budget = (row['budget'] ?? 0.0).toDouble();
+            final stage = row['status']?.toString().toUpperCase() ?? 'PLANNING';
+            return {
+              'name': name,
+              'client': clientName.toUpperCase(),
+              'timeline': '$start - $end',
+              'budget': '₹${budget.toStringAsFixed(0)}',
+              'stage': stage,
+            };
+          }).toList();
+          break;
+
+        case 'tasks':
+          final res = await client.from('tasks').select('*, projects(name, clients(name))').isFilter('deleted_at', null);
+          final profilesRes = await client.from('profiles').select('id, full_name');
+          final profileMap = {
+            for (final p in profilesRes as List) p['id']?.toString(): p['full_name']?.toString()
+          };
+          loadedData = (res as List).map((row) {
+            final title = row['title']?.toString() ?? '';
+            final project = row['projects'] as Map?;
+            final projectName = project?['name']?.toString() ?? '';
+            final clientMap = project?['clients'] as Map?;
+            final clientName = clientMap?['name']?.toString() ?? '';
+            final projectLabel = clientName.isNotEmpty && projectName.isNotEmpty
+                ? '${clientName.toUpperCase()} - ${projectName.toUpperCase()}'
+                 : (projectName.isNotEmpty ? projectName : 'Independent Task');
+            final assigneeId = row['assigned_to']?.toString();
+            final assignee = profileMap[assigneeId] ?? 'Unassigned';
+            final due = row['due_date']?.toString() ?? '';
+            final priority = row['priority']?.toString().toUpperCase() ?? 'MEDIUM';
+            final status = row['status']?.toString().toUpperCase() ?? 'TODO';
+            final isOverdue = row['is_overdue_completion'] == true;
+            return {
+              'task': title,
+              'project': projectLabel,
+              'assignee': assignee,
+              'due': due,
+              'priority': priority,
+              'status': status,
+              'overdue': isOverdue,
+            };
+          }).toList();
+          break;
+
+        case 'renewals':
+          final res = await client.from('renewals').select('*, clients(name), projects(name)');
+          loadedData = (res as List).map((row) {
+            final clientMap = row['clients'] as Map?;
+            final clientName = clientMap?['name']?.toString() ?? '';
+            final service = row['description']?.toString() ?? row['category']?.toString().toUpperCase() ?? '';
+            final cat = row['category']?.toString().toUpperCase() ?? 'HOSTING';
+            final expiry = row['expiry_date']?.toString() ?? '';
+            final amount = (row['amount'] ?? 0.0).toDouble();
+            final reminders = '${row['reminders_sent'] ?? 0} SENT';
+            final status = row['status']?.toString().toUpperCase() ?? 'PENDING';
+            return {
+              'service': service,
+              'client': clientName,
+              'category': cat,
+              'expiry': expiry,
+              'value': '₹${amount.toStringAsFixed(0)}',
+              'reminders': reminders,
+              'status': status,
+            };
+          }).toList();
+          break;
+
+        case 'leads':
+          final res = await client.from('leads').select().isFilter('deleted_at', null);
+          loadedData = (res as List).map((row) {
+            final name = '${row['first_name'] ?? ''} ${row['last_name'] ?? ''}'.trim();
+            final company = row['company']?.toString() ?? '';
+            final email = row['email']?.toString() ?? '';
+            final value = (row['value'] ?? 0.0).toDouble();
+            final status = row['status']?.toString().toUpperCase() ?? 'NEW';
+            final created = row['created_at']?.toString() ?? '';
+            return {
+              'name': name.isEmpty ? 'Unknown' : name,
+              'company': company,
+              'email': email,
+              'value': '₹${value.toStringAsFixed(0)}',
+              'status': status,
+              'created': created.split('T')[0],
+            };
+          }).toList();
+          break;
+
+        case 'system':
+          final res = await client.from('activities').select().order('created_at', ascending: false);
+          loadedData = (res as List).map((row) {
+            final action = row['action']?.toString() ?? '';
+            final target = row['target_name']?.toString() ?? '';
+            final created = row['created_at']?.toString() ?? '';
+            final user = 'Viswajith E'; 
+            return {
+              'timestamp': created.replaceFirst('T', ' ').split('.')[0],
+              'action': action.toUpperCase(),
+              'target': target,
+              'user': user,
+              'status': 'ACTIVE',
+            };
+          }).toList();
+          break;
+
+        default: // billing invoices
+          final res = await client.from('invoices').select('*, clients(name)').isFilter('deleted_at', null);
+          loadedData = (res as List).map((row) {
+            final clientMap = row['clients'] as Map?;
+            final clientName = clientMap?['name']?.toString() ?? '';
+            final invNumber = row['invoice_number']?.toString() ?? '';
+            final dueDate = row['due_date']?.toString() ?? '';
+            final grandTotal = (row['grand_total'] ?? 0.0).toDouble();
+            final amountPaid = (row['amount_paid'] ?? 0.0).toDouble();
+            final status = row['status']?.toString().toUpperCase() ?? 'DRAFT';
+            return {
+              'inv': invNumber,
+              'client': clientName,
+              'due': dueDate,
+              'amount': '₹${grandTotal.toStringAsFixed(0)}',
+              'paid': '₹${amountPaid.toStringAsFixed(0)}',
+              'status': status,
+            };
+          }).toList();
+      }
+      setState(() {
+        _data = loadedData;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
     }
   }
+
+  List<Map<String, dynamic>> get _rawData => _data;
 
   List<Map<String, dynamic>> get _filtered {
     return _rawData.where((row) {
@@ -513,18 +707,187 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
 
   Map<String, dynamic> get _stats {
     switch (widget.route) {
-      case 'emp_dir': return empDirStats;
-      case 'att_logs': return attStats;
-      case 'leave_mgmt': return leaveStats;
-      case 'inv_audit': return invAuditStats;
-      case 'expense': return expStats;
-      case 'payments': case 'income': return payStats;
-      case 'clients': return clientStats;
-      case 'projects': return projStats;
-      case 'tasks': return taskStats;
-      case 'renewals': return renewStats;
-      case 'leads': return leadsStats;
-      default: return finInvStats;
+      case 'emp_dir':
+        final workforce = _data.length;
+        final operators = _data.where((e) => e['role']?.toString().toLowerCase() != 'admin' && e['role']?.toString().toLowerCase() != 'super admin').length;
+        final admins = _data.where((e) => e['role']?.toString().toLowerCase() == 'admin' || e['role']?.toString().toLowerCase() == 'super admin').length;
+        return {
+          'workforce': workforce,
+          'operators': operators,
+          'admins': admins,
+          'avgRate': 0.0,
+        };
+      case 'att_logs':
+        final sessions = _data.length;
+        final presentCount = _data.where((e) => e['status']?.toString().toUpperCase() == 'PRESENT').length;
+        final onTime = sessions == 0 ? 0.0 : (presentCount / sessions * 100.0);
+        final lateCount = _data.where((e) => e['status']?.toString().toUpperCase() == 'LATE').length;
+        return {
+          'sessions': sessions,
+          'onTime': onTime,
+          'late': lateCount,
+          'break': 0.0,
+        };
+      case 'leave_mgmt':
+        final total = _data.length;
+        final approved = _data.where((e) => e['status']?.toString().toUpperCase() == 'APPROVED').length;
+        final pending = _data.where((e) => e['status']?.toString().toUpperCase() == 'PENDING').length;
+        final rejected = _data.where((e) => e['status']?.toString().toUpperCase() == 'REJECTED').length;
+        final rejRate = total == 0 ? 0.0 : (rejected / total * 100.0);
+        return {
+          'total': total,
+          'approved': approved,
+          'pending': pending,
+          'rejRate': rejRate,
+        };
+      case 'inv_audit':
+        final total = _data.length;
+        final reconciled = _data.where((e) => e['status']?.toString().toUpperCase() == 'PAID').length;
+        final voided = _data.where((e) => e['status']?.toString().toUpperCase() == 'CANCELLED' || e['status']?.toString().toUpperCase() == 'VOIDED').length;
+        final integrity = total == 0 ? 0.0 : (reconciled / total * 100.0);
+        return {
+          'total': total,
+          'reconciled': reconciled,
+          'voided': voided,
+          'integrity': integrity,
+        };
+      case 'expense':
+        double outflowSum = 0.0;
+        for (final e in _data) {
+          final amtStr = e['amount']?.toString().replaceAll('-\$', '') ?? '0';
+          outflowSum += double.tryParse(amtStr) ?? 0.0;
+        }
+        final volume = _data.length;
+        final pendingSum = _data
+            .where((e) => e['status']?.toString().toUpperCase() == 'PENDING')
+            .fold<double>(0.0, (sum, e) => sum + (double.tryParse(e['amount']?.toString().replaceAll('-\$', '') ?? '0') ?? 0.0));
+        return {
+          'outflow': '\$${outflowSum.toStringAsFixed(0)}',
+          'volume': volume,
+          'awaiting': '\$${pendingSum.toStringAsFixed(0)}',
+          'deviation': 0.0,
+        };
+      case 'payments':
+      case 'income':
+        double collected = 0.0;
+        double transit = 0.0;
+        int failed = 0;
+        for (final e in _data) {
+          final amtStr = e['amount']?.toString().replaceAll('₹', '') ?? '0';
+          final amt = double.tryParse(amtStr) ?? 0.0;
+          final status = e['status']?.toString().toUpperCase();
+          if (status == 'VERIFIED' || status == 'PAID' || status == 'SUCCESS') {
+            collected += amt;
+          } else if (status == 'PENDING' || status == 'TRANSIT') {
+            transit += amt;
+          } else if (status == 'FAILED') {
+            failed++;
+          }
+        }
+        return {
+          'collected': '₹${collected.toStringAsFixed(0)}',
+          'transit': '₹${transit.toStringAsFixed(0)}',
+          'attempts': _data.length,
+          'failed': failed,
+        };
+      case 'clients':
+        final portfolio = _data.length;
+        final active = _data.where((e) => e['status']?.toString().toUpperCase() == 'ACTIVE').length;
+        return {
+          'portfolio': portfolio,
+          'active': active,
+          'footprint': 1,
+          'velocity': '100%',
+        };
+      case 'projects':
+        final portfolio = _data.length;
+        final active = _data.where((e) => e['stage']?.toString().toUpperCase() == 'IN PROGRESS' || e['stage']?.toString().toUpperCase() == 'PLANNING').length;
+        double valueSum = 0.0;
+        for (final p in _data) {
+          final budgetStr = p['budget']?.toString().replaceAll('₹', '') ?? '0';
+          valueSum += double.tryParse(budgetStr) ?? 0.0;
+        }
+        final completed = _data.where((e) => e['stage']?.toString().toUpperCase() == 'COMPLETED').length;
+        final delivery = portfolio == 0 ? '0%' : '${(completed / portfolio * 100.0).toStringAsFixed(0)}%';
+        return {
+          'portfolio': portfolio,
+          'active': active,
+          'value': '₹${valueSum.toStringAsFixed(0)}',
+          'delivery': delivery,
+        };
+      case 'tasks':
+        final total = _data.length;
+        final doneCount = _data.where((e) => e['status']?.toString().toUpperCase() == 'DONE').length;
+        final velocity = total == 0 ? '0%' : '${(doneCount / total * 100.0).toStringAsFixed(0)}%';
+        final overdue = _data.where((e) => e['overdue'] == true).length;
+        final backlog = _data.where((e) => e['status']?.toString().toUpperCase() == 'TODO').length;
+        return {
+          'total': total,
+          'velocity': velocity,
+          'overdue': overdue,
+          'backlog': backlog,
+        };
+      case 'renewals':
+        final matrix = _data.length;
+        double pipe = 0.0;
+        for (final r in _data) {
+          final valStr = r['value']?.toString().replaceAll('₹', '') ?? '0';
+          pipe += double.tryParse(valStr) ?? 0.0;
+        }
+        final critical = _data.where((e) => e['status']?.toString().toUpperCase() == 'OVERDUE').length;
+        return {
+          'matrix': matrix,
+          'pipeline': '₹${pipe.toStringAsFixed(0)}',
+          'critical': critical,
+          'collection': '100%',
+        };
+      case 'leads':
+        final velocity = _data.length;
+        double pipe = 0.0;
+        for (final l in _data) {
+          final valStr = l['value']?.toString().replaceAll('₹', '') ?? '0';
+          pipe += double.tryParse(valStr) ?? 0.0;
+        }
+        return {
+          'velocity': velocity,
+          'pipeline': '₹${pipe.toStringAsFixed(0)}',
+          'conversion': '0%',
+          'avgAge': '---',
+        };
+      case 'system':
+        final total = _data.length;
+        final statusChanges = _data.where((e) => e['action']?.toString().contains('STATUS') == true).length;
+        final databaseMutations = _data.where((e) => e['action']?.toString().contains('DELETE') == true || e['action']?.toString().contains('UPDATE') == true || e['action']?.toString().contains('CREATE') == true).length;
+        return {
+          'total': total,
+          'statusChanges': statusChanges,
+          'mutations': databaseMutations,
+          'integrity': '100%',
+        };
+      default:
+        final total = _data.length;
+        double verified = 0.0;
+        double awaiting = 0.0;
+        int overdue = 0;
+        for (final inv in _data) {
+          final amtStr = inv['amount']?.toString().replaceAll('₹', '') ?? '0';
+          final amt = double.tryParse(amtStr) ?? 0.0;
+          final paidStr = inv['paid']?.toString().replaceAll('₹', '') ?? '0';
+          final paid = double.tryParse(paidStr) ?? 0.0;
+          final status = inv['status']?.toString().toUpperCase();
+          if (status == 'PAID') {
+            verified += paid;
+          } else {
+            awaiting += (amt - paid);
+            if (status == 'OVERDUE') overdue++;
+          }
+        }
+        return {
+          'total': total,
+          'verified': '₹${verified.toStringAsFixed(0)}',
+          'awaiting': '₹${awaiting.toStringAsFixed(0)}',
+          'overdue': overdue,
+        };
     }
   }
 
@@ -607,6 +970,13 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           _StatCard('PIPELINE VALUE', '${s['pipeline']}', 'PROJECTED REVENUE', Icons.trending_up_rounded),
           _StatCard('CONVERSION RATE', '${s['conversion']}', 'LEAD TO CLIENT SUCCESS', Icons.people_rounded),
           _StatCard('AVERAGE AGE', '${s['avgAge']}', 'RESPONSE LATENCY', Icons.pending_rounded),
+        ];
+      case 'system':
+        return [
+          _StatCard('TOTAL ACTIVITIES', '${s['total']}', 'AGGREGATE ACTIVITY COUNT', Icons.shield_rounded),
+          _StatCard('STATUS UPDATES', '${s['statusChanges']}', 'WORKFLOW TRANSITIONS', Icons.rule_rounded),
+          _StatCard('DATA MUTATIONS', '${s['mutations']}', 'DATABASE WRITE ACTIONS', Icons.edit_note_rounded),
+          _StatCard('SYSTEM HEALTH', '${s['integrity']}', 'AUDIT LOG INTEGRITY', Icons.verified_rounded),
         ];
       default:
         return [
@@ -711,19 +1081,64 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           children: [
             _buildDetailHeader(isTablet),
             Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.all(isTablet ? 16 : 12),
-                child: Column(
-                  children: [
-                    _buildStatGrid(isTablet),
-                    const SizedBox(height: 14),
-                    _buildSearchBar(isTablet),
-                    const SizedBox(height: 10),
-                    _buildTable(isTablet),
-                    const SizedBox(height: 10),
-                    _buildPagination(),
-                  ],
-                ),
+              child: RefreshIndicator(
+                onRefresh: _fetchReportData,
+                color: RTheme.primary,
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(RTheme.primary),
+                        ),
+                      )
+                    : _error.isNotEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24.0),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.error_outline_rounded, size: 48, color: RTheme.danger),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'Failed to load report data',
+                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _textPrimary),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    _error,
+                                    style: TextStyle(fontSize: 13, color: _textSecondary),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 20),
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: RTheme.primary,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    onPressed: _fetchReportData,
+                                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                                    label: const Text('Retry'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: EdgeInsets.all(isTablet ? 16 : 12),
+                            child: Column(
+                              children: [
+                                _buildStatGrid(isTablet),
+                                const SizedBox(height: 14),
+                                _buildSearchBar(isTablet),
+                                const SizedBox(height: 10),
+                                _buildTable(isTablet),
+                                const SizedBox(height: 10),
+                                _buildPagination(),
+                              ],
+                            ),
+                          ),
               ),
             ),
           ],
@@ -931,12 +1346,13 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       case 'leave_mgmt': return ['EMPLOYEE', 'START DATE', 'END DATE', 'REASON', 'STATUS'];
       case 'inv_audit': return ['INVOICE #', 'CLIENT PORTFOLIO', 'AUDIT DATE', 'FACE VALUE', 'RECONCILED', 'STATUS'];
       case 'expense': return ['DATE', 'DESCRIPTION', 'AMOUNT', 'CATEGORY', 'STATUS'];
-      case 'payments': case 'income': return ['PAYMENT DATE', 'REFERENCE', 'AMOUNT', 'METHOD', 'STATUS'];
+      case 'payments': case 'income': return ['PAYMENT DATE', 'REFERENCE', 'CLIENT', 'AMOUNT', 'METHOD', 'STATUS'];
       case 'clients': return ['CLIENT / COMPANY', 'CONTACT INFO', 'LOCATION', 'JOINED DATE', 'STATUS'];
       case 'projects': return ['PROJECT NAME', 'TIMELINE', 'BUDGET ALLOCATION', 'STAGE'];
       case 'tasks': return ['TASK / PROJECT', 'ASSIGNEE', 'DUE DATE', 'PRIORITY', 'STATUS'];
       case 'renewals': return ['SERVICE DETAIL', 'CATEGORY', 'EXPIRY DATE', 'VALUE', 'REMINDERS', 'STATUS'];
       case 'leads': return ['LEAD / COMPANY', 'EMAIL', 'VALUE', 'STATUS', 'CREATED'];
+      case 'system': return ['TIMESTAMP', 'ACTION', 'TARGET', 'PERFORMED BY'];
       default: return ['INVOICE #', 'CLIENT', 'DUE DATE', 'TOTAL AMOUNT', 'PAID', 'STATUS'];
     }
   }
@@ -1039,6 +1455,58 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                   fontWeight: (row['overdue'] == true) ? FontWeight.w700 : FontWeight.normal)),
             ]),
             _statusChip(row['priority'] ?? ''),
+          ]),
+        ]);
+      case 'payments':
+      case 'income':
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Text(row['client'] ?? '', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary))),
+            Text(row['amount'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: RTheme.success)),
+          ]),
+          const SizedBox(height: 3),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('Ref: ${row['ref']}', style: TextStyle(fontSize: 11, color: _textSecondary)),
+            Text(row['date'] ?? '', style: TextStyle(fontSize: 11, color: _textSecondary)),
+          ]),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, children: [
+            _statusChip(row['method'] ?? ''),
+            _statusChip(row['status'] ?? ''),
+          ]),
+        ]);
+      case 'leads':
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Text(row['name'] ?? '', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary))),
+            Text(row['value'] ?? '', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary)),
+          ]),
+          if ((row['company'] ?? '').isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(row['company'] ?? '', style: TextStyle(fontSize: 11, color: _textSecondary)),
+          ],
+          if ((row['email'] ?? '').isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(row['email'] ?? '', style: TextStyle(fontSize: 11, color: _textSecondary)),
+          ],
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, children: [
+            _statusChip(row['status'] ?? ''),
+            Text(row['created'] ?? '', style: TextStyle(fontSize: 11, color: _textSecondary)),
+          ]),
+        ]);
+      case 'system':
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Text(row['action'] ?? '', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary))),
+            Text(row['timestamp'] ?? '', style: TextStyle(fontSize: 11, color: _textSecondary)),
+          ]),
+          const SizedBox(height: 3),
+          Text('Target: ${row['target']}', style: TextStyle(fontSize: 11, color: _textSecondary)),
+          const SizedBox(height: 6),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('By: ${row['user']}', style: TextStyle(fontSize: 11, color: _textSecondary, fontWeight: FontWeight.w600)),
+            _statusChip('ACTIVE'),
           ]),
         ]);
       default:
@@ -1165,6 +1633,37 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           _CellData.text(row['value'] ?? '', bold: true),
           _CellData.chip(row['reminders'] ?? ''),
           _CellData.chip(row['status'] ?? ''),
+        ];
+      case 'payments':
+      case 'income':
+        return [
+          _CellData.text(row['date'] ?? ''),
+          _CellData.text(row['ref'] ?? '', bold: true),
+          _CellData.text(row['client'] ?? ''),
+          _CellData.text(row['amount'] ?? '', color: RTheme.success, bold: true),
+          _CellData.chip(row['method'] ?? ''),
+          _CellData.chip(row['status'] ?? ''),
+        ];
+      case 'leads':
+        return [
+          _CellData.widget(Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(row['name'] ?? '', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _textPrimary), overflow: TextOverflow.ellipsis),
+              if ((row['company'] ?? '').isNotEmpty) Text(row['company'] ?? '', style: TextStyle(fontSize: 10, color: _textSecondary), overflow: TextOverflow.ellipsis),
+            ],
+          )),
+          _CellData.text(row['email'] ?? ''),
+          _CellData.text(row['value'] ?? '', bold: true),
+          _CellData.chip(row['status'] ?? ''),
+          _CellData.text(row['created'] ?? ''),
+        ];
+      case 'system':
+        return [
+          _CellData.text(row['timestamp'] ?? ''),
+          _CellData.chip(row['action'] ?? ''),
+          _CellData.text(row['target'] ?? ''),
+          _CellData.text(row['user'] ?? ''),
         ];
       default:
         return [

@@ -4,15 +4,17 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
 import '../../widgets/app_drawer.dart';
+import '../../services/supabase_service.dart';
 
 // ─── MODELS ───────────────────────────────────────────────────────────────────
 
-enum PayrollStatus { draft, approved, paid }
 
 class Employee {
   final String id;
+  final String profileId;
   final String name;
   final String department;
+  final String departmentId;
   final String role;
   final DateTime joinDate;
   final double kpiScore;
@@ -20,13 +22,50 @@ class Employee {
 
   const Employee({
     required this.id,
+    required this.profileId,
     required this.name,
     required this.department,
+    required this.departmentId,
     required this.role,
     required this.joinDate,
     required this.kpiScore,
     required this.baseSalary,
   });
+
+  factory Employee.fromSupabase(Map<String, dynamic> map) {
+    final profile = map['profiles'] as Map<String, dynamic>? ?? {};
+    final dept = map['departments'] as Map<String, dynamic>? ?? {};
+    final payrolls = profile['payroll'] as List? ?? [];
+    final payroll = payrolls.isNotEmpty ? payrolls.first as Map<String, dynamic> : {};
+
+    double baseSal = 0.0;
+    if (payroll['net_pay'] != null) {
+      baseSal = (payroll['net_pay'] is num)
+          ? (payroll['net_pay'] as num).toDouble()
+          : double.tryParse(payroll['net_pay'].toString()) ?? 0.0;
+    }
+
+    final String fullName = profile['full_name']?.toString() ?? 'Unknown';
+    final String role = profile['role']?.toString() ?? 'Employee';
+    final String deptName = dept['name']?.toString() ?? 'None';
+    final String deptId = dept['id']?.toString() ?? '';
+    final String profId = profile['id']?.toString() ?? '';
+    final String dmId = map['id']?.toString() ?? '';
+    final String joinDateStr = profile['created_at']?.toString() ?? '';
+    final DateTime joinDate = joinDateStr.isNotEmpty ? DateTime.parse(joinDateStr) : DateTime.now();
+
+    return Employee(
+      id: dmId,
+      profileId: profId,
+      name: fullName,
+      department: deptName,
+      departmentId: deptId,
+      role: role,
+      joinDate: joinDate,
+      kpiScore: 100.0,
+      baseSalary: baseSal,
+    );
+  }
 }
 
 class AttendanceRecord {
@@ -50,79 +89,60 @@ class AttendanceRecord {
 class LeaveRequest {
   final String id;
   final String employeeName;
+  final String profileId;
   final String leaveType;
   final DateTime startDate;
   final DateTime endDate;
   final String reason;
   final String status; // pending, approved, rejected
+  final String? rejectionNote;
 
   const LeaveRequest({
     required this.id,
     required this.employeeName,
+    required this.profileId,
     required this.leaveType,
     required this.startDate,
     required this.endDate,
     required this.reason,
     required this.status,
+    this.rejectionNote,
   });
+
+  factory LeaveRequest.fromSupabase(Map<String, dynamic> map, {String? rejectionNote}) {
+    final profile = (map['profiles!user_id'] as Map<String, dynamic>?) ?? (map['profiles'] as Map<String, dynamic>?) ?? (map['profiles!leave_requests_user_profile_fk_v2'] as Map<String, dynamic>?) ?? {};
+    final String fullName = profile['full_name']?.toString() ?? 'Unknown';
+    final String profId = profile['id']?.toString() ?? '';
+    final String id = map['id']?.toString() ?? '';
+    
+    final leaveTypes = map['leave_types'] as Map<String, dynamic>?;
+    final String leaveType = leaveTypes?['name']?.toString() ?? map['leave_type']?.toString() ?? 'Annual Leave';
+    
+    final String reason = map['reason']?.toString() ?? '';
+    final String status = map['status']?.toString() ?? 'pending';
+
+    final String startStr = map['start_date']?.toString() ?? '';
+    final String endStr = map['end_date']?.toString() ?? '';
+    final DateTime startDate = startStr.isNotEmpty ? DateTime.parse(startStr) : DateTime.now();
+    final DateTime endDate = endStr.isNotEmpty ? DateTime.parse(endStr) : DateTime.now();
+
+    return LeaveRequest(
+      id: id,
+      employeeName: fullName,
+      profileId: profId,
+      leaveType: leaveType,
+      startDate: startDate,
+      endDate: endDate,
+      reason: reason,
+      status: status,
+      rejectionNote: rejectionNote,
+    );
+  }
 }
 
-class PayrollRecord {
-  final String id;
-  final String employeeName;
-  final String period;
-  final double basicSalary;
-  final double allowances;
-  final double deductions;
-  final double netPay;
-  final PayrollStatus status;
-
-  const PayrollRecord({
-    required this.id,
-    required this.employeeName,
-    required this.period,
-    required this.basicSalary,
-    required this.allowances,
-    required this.deductions,
-    required this.netPay,
-    required this.status,
-  });
-}
-
-// ─── SAMPLE DATA ──────────────────────────────────────────────────────────────
-
-final List<Employee> sampleEmployees = [
-  Employee(id: '1', name: 'Sasi Kumar', department: 'Engineering', role: 'Senior Developer',
-      joinDate: DateTime(2023, 3, 15), kpiScore: 92, baseSalary: 75000),
-  Employee(id: '2', name: 'Viswajith E', department: 'Design', role: 'UI/UX Designer',
-      joinDate: DateTime(2022, 8, 1), kpiScore: 88, baseSalary: 65000),
-  Employee(id: '3', name: 'Priya R', department: 'HR', role: 'HR Manager',
-      joinDate: DateTime(2021, 5, 20), kpiScore: 95, baseSalary: 70000),
-  Employee(id: '4', name: 'Arjun M', department: 'Marketing', role: 'Marketing Lead',
-      joinDate: DateTime(2024, 1, 10), kpiScore: 80, baseSalary: 60000),
-];
-
-final List<AttendanceRecord> sampleAttendance = [
-  AttendanceRecord(id: 'a1', employeeName: 'Sasi Kumar', date: DateTime(2026, 5, 12),
-      clockIn: '2:52 PM', clockOut: null, isPresent: false),
-  AttendanceRecord(id: 'a2', employeeName: 'Viswajith E', date: DateTime(2026, 5, 12),
-      clockIn: '5:53 PM', clockOut: '5:53 PM', isPresent: true),
-  AttendanceRecord(id: 'a3', employeeName: 'Viswajith E', date: DateTime(2026, 5, 9),
-      clockIn: '12:21 PM', clockOut: '12:21 PM', isPresent: true),
-  AttendanceRecord(id: 'a4', employeeName: 'Priya R', date: DateTime(2026, 5, 9),
-      clockIn: '9:00 AM', clockOut: '6:00 PM', isPresent: true),
-];
 
 List<LeaveRequest> sampleLeaves = [];
 
-final List<PayrollRecord> samplePayroll = [
-  PayrollRecord(id: 'p1', employeeName: 'Viswajith E', period: 'MAY 2026',
-      basicSalary: 65000, allowances: 0, deductions: 0, netPay: 0, status: PayrollStatus.draft),
-  PayrollRecord(id: 'p2', employeeName: 'Sasi Kumar', period: 'MAY 2026',
-      basicSalary: 75000, allowances: 5000, deductions: 8000, netPay: 72000, status: PayrollStatus.approved),
-  PayrollRecord(id: 'p3', employeeName: 'Priya R', period: 'APR 2026',
-      basicSalary: 70000, allowances: 3000, deductions: 7000, netPay: 66000, status: PayrollStatus.paid),
-];
 
 // ─── THEME ────────────────────────────────────────────────────────────────────
 
@@ -165,21 +185,6 @@ class HRTheme {
     }
   }
 
-  static Color payrollStatusColor(PayrollStatus s) {
-    switch (s) {
-      case PayrollStatus.draft: return warning;
-      case PayrollStatus.approved: return success;
-      case PayrollStatus.paid: return primary;
-    }
-  }
-
-  static String payrollStatusLabel(PayrollStatus s) {
-    switch (s) {
-      case PayrollStatus.draft: return 'DRAFT';
-      case PayrollStatus.approved: return 'APPROVED';
-      case PayrollStatus.paid: return 'PAID';
-    }
-  }
 }
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────────────────────
@@ -204,24 +209,141 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
   late TabController _tabController;
   int _activeTab = 0;
   String _searchQuery = '';
-  String _payrollSearch = '';
   final _currencyFmt = NumberFormat('#,##0', 'en_IN');
+
+  final _client = SupabaseService.client;
+  List<Employee> _employees = [];
+  List<LeaveRequest> _leaves = [];
+  List<Map<String, dynamic>> _departments = [];
+  List<Map<String, dynamic>> _profiles = [];
+  List<Map<String, dynamic>> _leaveTypes = [];
+  bool _isLoadingEmployees = true;
+  bool _isLoadingLeaves = true;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
         setState(() => _activeTab = _tabController.index);
       }
     });
+    _fetchDepartments();
+    _fetchEmployees();
+    _fetchLeaves();
+    _fetchProfiles();
+    _fetchLeaveTypes();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchProfiles() async {
+    try {
+      final res = await _client.from('profiles').select('id, full_name, role');
+      setState(() {
+        _profiles = (res as List).map((x) => x as Map<String, dynamic>).toList();
+      });
+    } catch (e) {
+      debugPrint('Error fetching profiles: $e');
+    }
+  }
+
+  Future<void> _fetchLeaveTypes() async {
+    try {
+      final res = await _client.from('leave_types').select('id, name');
+      setState(() {
+        _leaveTypes = (res as List).map((x) => x as Map<String, dynamic>).toList();
+      });
+    } catch (e) {
+      debugPrint('Error fetching leave types: $e');
+    }
+  }
+
+  Future<void> _fetchDepartments() async {
+    try {
+      final res = await _client.from('departments').select('id, name');
+      setState(() {
+        _departments = (res as List).map((x) => x as Map<String, dynamic>).toList();
+      });
+    } catch (e) {
+      debugPrint('Error fetching departments: $e');
+    }
+  }
+
+  Future<void> _fetchEmployees() async {
+    setState(() => _isLoadingEmployees = true);
+    try {
+      final res = await _client
+          .from('department_members')
+          .select('*, profiles(id, full_name, email, role, status, payroll(net_pay)), departments(id, name)');
+      final list = (res as List)
+          .where((x) {
+            final profile = x['profiles'] as Map<String, dynamic>? ?? {};
+            final status = profile['status']?.toString().toLowerCase() ?? 'active';
+            return status != 'archived' && status != 'inactive';
+          })
+          .map((x) => Employee.fromSupabase(x as Map<String, dynamic>))
+          .toList();
+      setState(() {
+        _employees = list;
+        _isLoadingEmployees = false;
+      });
+    } catch (e) {
+      setState(() => _isLoadingEmployees = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load employees: $e'), backgroundColor: HRTheme.danger),
+      );
+    }
+  }
+
+  Future<void> _fetchLeaves() async {
+    setState(() => _isLoadingLeaves = true);
+    try {
+      final resLeaves = await _client
+          .from('leave_requests')
+          .select('*, profiles!user_id(id, full_name), leave_types(name)');
+      final resActions = await _client
+          .from('leave_request_actions')
+          .select('*');
+
+      final actionsList = List<Map<String, dynamic>>.from(resActions as List);
+      // Sort by created_at ascending so that the latest action is stored last
+      actionsList.sort((a, b) {
+        final aTime = DateTime.tryParse(a['created_at']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime = DateTime.tryParse(b['created_at']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return aTime.compareTo(bTime);
+      });
+
+      final actionsMap = <String, Map<String, dynamic>>{};
+      for (final act in actionsList) {
+        final leaveId = act['leave_request_id']?.toString() ?? '';
+        actionsMap[leaveId] = act;
+      }
+
+      final list = (resLeaves as List).map((x) {
+        final map = x as Map<String, dynamic>;
+        final String id = map['id']?.toString() ?? '';
+        final actionData = actionsMap[id];
+        final String? rejectionNote = actionData != null ? actionData['note']?.toString() : null;
+
+        return LeaveRequest.fromSupabase(map, rejectionNote: rejectionNote);
+      }).toList();
+
+      setState(() {
+        _leaves = list;
+        _isLoadingLeaves = false;
+      });
+    } catch (e) {
+      setState(() => _isLoadingLeaves = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load leaves: $e'), backgroundColor: HRTheme.danger),
+      );
+    }
   }
 
   String _fmt(double v) => '₹${_currencyFmt.format(v)}';
@@ -238,15 +360,13 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
         onItemSelected: widget.onItemSelected,
       ),
       backgroundColor: HRTheme.backgroundOf(context),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: HRTheme.primary,
-        onPressed: () {
-          if (_activeTab == 0) _showAddEmployeeSheet();
-          else if (_activeTab == 1) _showLeaveRequestSheet();
-          else _showRunPayrollDialog();
-        },
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
+      floatingActionButton: _activeTab == 1
+          ? FloatingActionButton(
+              backgroundColor: HRTheme.primary,
+              onPressed: _showLeaveRequestSheet,
+              child: const Icon(Icons.add, color: Colors.white),
+            )
+          : null,
       body: SafeArea(
         child: Column(
           children: [
@@ -257,28 +377,23 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
                 controller: _tabController,
                 children: [
                   _DirectoryTab(
-                    employees: sampleEmployees,
+                    employees: _employees,
                     searchQuery: _searchQuery,
                     onSearchChanged: (v) => setState(() => _searchQuery = v),
                     isTablet: isTablet,
                     fmtSalary: _fmt,
-                    onRefresh: () => setState(() {}),
+                    onRefresh: _fetchEmployees,
+                    onEdit: _showEditEmployeeSheet,
+                    onDelete: _confirmDeleteEmployee,
+                    isLoading: _isLoadingEmployees,
                   ),
                   _TimeLeaveTab(
-                    attendance: sampleAttendance,
-                    leaves: sampleLeaves,
+                    leaves: _leaves,
                     isTablet: isTablet,
-                    onClockIn: _handleClockIn,
                     onRequestLeave: _showLeaveRequestSheet,
-                  ),
-                  _PayrollTab(
-                    records: samplePayroll,
-                    searchQuery: _payrollSearch,
-                    onSearchChanged: (v) => setState(() => _payrollSearch = v),
-                    isTablet: isTablet,
-                    fmtSalary: _fmt,
-                    onRunPayroll: _showRunPayrollDialog,
-                    onDownloadPayslip: _downloadPayslip,
+                    onApproveLeave: (lr) => _updateLeaveStatus(lr, 'approved'),
+                    onRejectLeave: _showRejectionDialog,
+                    isLoading: _isLoadingLeaves,
                   ),
                 ],
               ),
@@ -340,7 +455,7 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
           Text('HR & Employee Management',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _textPrimary)),
           const SizedBox(height: 3),
-          Text('Manage your team, track attendance, approve leaves, and generate payroll.',
+          Text('Manage your team, track attendance, and approve leaves.',
               style: TextStyle(fontSize: 12, color: _textSecondary)),
         ],
       ),
@@ -365,7 +480,6 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
     final tabs = [
       _TabItem(Icons.people_alt_rounded, 'Directory'),
       _TabItem(Icons.access_time_rounded, 'Time & Leave'),
-      _TabItem(Icons.attach_money_rounded, 'Payroll'),
     ];
     return Container(
       color: _cardBg,
@@ -417,13 +531,102 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
     );
   }
 
+  Future<void> _updateLeaveStatus(LeaveRequest lr, String newStatus, {String? note}) async {
+    try {
+      await _client.from('leave_requests').update({
+        'status': newStatus,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', lr.id);
+
+      final currentUserId = _client.auth.currentUser?.id;
+      await _client.from('leave_request_actions').insert({
+        'leave_request_id': lr.id,
+        'actor_id': currentUserId ?? '00000000-0000-0000-0000-000000000000',
+        'action': newStatus,
+        'note': note ?? (newStatus == 'approved' ? 'Approved by HR' : 'Rejected by HR'),
+      });
+
+      _fetchLeaves();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Leave request $newStatus!'), backgroundColor: HRTheme.success),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update leave status: $e'), backgroundColor: HRTheme.danger),
+      );
+    }
+  }
+
+  void _showRejectionDialog(LeaveRequest lr) {
+    final noteCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final _cardBg = HRTheme.cardBgOf(ctx);
+        final _textPrimary = HRTheme.textPrimaryOf(ctx);
+        final _textSecondary = HRTheme.textSecondaryOf(ctx);
+        final _border = HRTheme.borderOf(ctx);
+
+        return AlertDialog(
+          backgroundColor: _cardBg,
+          title: Text('Reject Leave Request', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Please enter the reason for rejecting this leave request:', style: TextStyle(color: _textSecondary, fontSize: 13)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: noteCtrl,
+                maxLines: 3,
+                style: TextStyle(color: _textPrimary, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Enter rejection reason...',
+                  hintStyle: TextStyle(color: _textSecondary, fontSize: 12),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: _border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: HRTheme.danger, width: 1.5),
+                  ),
+                  contentPadding: const EdgeInsets.all(10),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel', style: TextStyle(color: _textSecondary)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: HRTheme.danger),
+              onPressed: () {
+                if (noteCtrl.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter a rejection reason'), backgroundColor: HRTheme.danger),
+                  );
+                  return;
+                }
+                Navigator.pop(ctx);
+                _updateLeaveStatus(lr, 'rejected', note: noteCtrl.text.trim());
+              },
+              child: const Text('Reject Request', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _showLeaveRequestSheet() {
-    String leaveType = 'Annual Leave';
     DateTime startDate = DateTime.now();
     DateTime endDate = DateTime.now().add(const Duration(days: 1));
     final reasonCtrl = TextEditingController();
-
-    final leaveTypes = ['Annual Leave', 'Sick Leave', 'Casual Leave', 'Maternity Leave', 'Paternity Leave', 'Unpaid Leave'];
+    String? selectedUserId = _profiles.isNotEmpty ? _profiles.first['id']?.toString() : null;
+    String? selectedLeaveTypeId = _leaveTypes.isNotEmpty ? _leaveTypes.first['id']?.toString() : null;
 
     showModalBottomSheet(
       context: context,
@@ -449,12 +652,37 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _sheetHandle(ctx),
-                    Text('Submit Leave Request',
+                    Text('Apply Leave (On Behalf)',
                         style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _textPrimaryModal)),
                     const SizedBox(height: 4),
-                    Text('Request time off for approval by HR.',
+                    Text('Directly apply leave on behalf of an employee or boss.',
                         style: TextStyle(fontSize: 12, color: _textSecondaryModal)),
                     const SizedBox(height: 18),
+                    _fieldLabel(ctx, 'Employee / Boss'),
+                    Container(
+                      decoration: BoxDecoration(
+                          border: Border.all(color: _borderModal),
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: selectedUserId,
+                          isExpanded: true,
+                          dropdownColor: _cardBgModal,
+                          items: _profiles.map((p) {
+                            final name = p['full_name']?.toString() ?? 'Unknown';
+                            final role = p['role']?.toString() ?? '';
+                            final label = role.isNotEmpty ? '$name ($role)' : name;
+                            return DropdownMenuItem(
+                              value: p['id']?.toString(),
+                              child: Text(label, style: TextStyle(color: _textPrimaryModal, fontSize: 13)),
+                            );
+                          }).toList(),
+                          onChanged: (v) => setModalState(() => selectedUserId = v),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
                     _fieldLabel(ctx, 'Leave Type'),
                     Container(
                       decoration: BoxDecoration(
@@ -463,13 +691,14 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
-                          value: leaveType,
+                          value: selectedLeaveTypeId,
                           isExpanded: true,
                           dropdownColor: _cardBgModal,
                           style: TextStyle(fontSize: 14, color: _textPrimaryModal),
-                          items: leaveTypes.map((t) => DropdownMenuItem(value: t,
-                              child: Text(t, style: TextStyle(color: _textPrimaryModal)))).toList(),
-                          onChanged: (v) => setModalState(() => leaveType = v!),
+                          items: _leaveTypes.map((t) => DropdownMenuItem(
+                              value: t['id']?.toString(),
+                              child: Text(t['name']?.toString() ?? '', style: TextStyle(color: _textPrimaryModal)))).toList(),
+                          onChanged: (v) => setModalState(() => selectedLeaveTypeId = v),
                         ),
                       ),
                     ),
@@ -492,7 +721,7 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
                       maxLines: 3,
                       style: TextStyle(color: _textPrimaryModal),
                       decoration: InputDecoration(
-                        hintText: 'Explain your reason for leave...',
+                        hintText: 'Explain the reason for leave...',
                         hintStyle: TextStyle(color: _textSecondaryModal, fontSize: 13),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
@@ -516,25 +745,41 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                        onPressed: () {
-                          setState(() {
-                            sampleLeaves.add(LeaveRequest(
-                              id: 'lr${sampleLeaves.length + 1}',
-                              employeeName: 'Current User',
-                              leaveType: leaveType,
-                              startDate: startDate,
-                              endDate: endDate,
-                              reason: reasonCtrl.text,
-                              status: 'pending',
-                            ));
-                          });
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Leave request submitted!'),
-                                backgroundColor: HRTheme.success),
-                          );
+                        onPressed: () async {
+                          if (selectedUserId == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Please select an employee'), backgroundColor: HRTheme.danger),
+                            );
+                            return;
+                          }
+                          if (selectedLeaveTypeId == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Please select a leave type'), backgroundColor: HRTheme.danger),
+                            );
+                            return;
+                          }
+                          try {
+                            await _client.from('leave_requests').insert({
+                              'user_id': selectedUserId,
+                              'leave_type_id': selectedLeaveTypeId,
+                              'start_date': DateFormat('yyyy-MM-dd').format(startDate),
+                              'end_date': DateFormat('yyyy-MM-dd').format(endDate),
+                              'reason': reasonCtrl.text,
+                              'status': 'approved',
+                              'organization_id': '00000000-0000-0000-0000-000000000000',
+                            });
+                            Navigator.pop(ctx);
+                            _fetchLeaves();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Leave applied successfully!'), backgroundColor: HRTheme.success),
+                            );
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Failed to apply leave: $e'), backgroundColor: HRTheme.danger),
+                            );
+                          }
                         },
-                        child: const Text('Submit Leave Request',
+                        child: const Text('Apply Leave',
                             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
                       ),
                     ),
@@ -596,116 +841,377 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
 
   void _showAddEmployeeSheet() {
     final nameCtrl = TextEditingController();
-    final deptCtrl = TextEditingController();
-    final roleCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    String selectedRole = 'employee';
     final salaryCtrl = TextEditingController();
+    String? selectedDeptId = _departments.isNotEmpty ? _departments.first['id']?.toString() : null;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        final _cardBgModal = HRTheme.cardBgOf(ctx);
-        final _textPrimaryModal = HRTheme.textPrimaryOf(ctx);
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final _cardBgModal = HRTheme.cardBgOf(context);
+            final _textPrimaryModal = HRTheme.textPrimaryOf(context);
+            final _borderModal = HRTheme.borderOf(context);
 
-        return Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-          child: Container(
-            decoration: BoxDecoration(
-                color: _cardBgModal,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20))),
-            padding: const EdgeInsets.all(20),
-            child: SingleChildScrollView(
-              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                _sheetHandle(ctx),
-                Text('Add Employee',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _textPrimaryModal)),
-                const SizedBox(height: 16),
-                _inputField(ctx, nameCtrl, 'Full Name', Icons.person_rounded),
-                const SizedBox(height: 10),
-                _inputField(ctx, deptCtrl, 'Department', Icons.business_rounded),
-                const SizedBox(height: 10),
-                _inputField(ctx, roleCtrl, 'Role / Designation', Icons.work_rounded),
-                const SizedBox(height: 10),
-                _inputField(ctx, salaryCtrl, 'Base Salary (₹)', Icons.currency_rupee, isNumber: true),
-                const SizedBox(height: 18),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: HRTheme.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            return Padding(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              child: Container(
+                decoration: BoxDecoration(
+                    color: _cardBgModal,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20))),
+                padding: const EdgeInsets.all(20),
+                child: SingleChildScrollView(
+                  child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    _sheetHandle(context),
+                    Text('Add Employee',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _textPrimaryModal)),
+                    const SizedBox(height: 16),
+                    _inputField(context, nameCtrl, 'Full Name', Icons.person_rounded),
+                    const SizedBox(height: 10),
+                    _inputField(context, emailCtrl, 'Email Address', Icons.email_rounded),
+                    const SizedBox(height: 10),
+                    _fieldLabel(context, 'Department'),
+                    Container(
+                      decoration: BoxDecoration(
+                          border: Border.all(color: _borderModal),
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: selectedDeptId,
+                          isExpanded: true,
+                          dropdownColor: _cardBgModal,
+                          items: _departments.map((d) => DropdownMenuItem(
+                            value: d['id']?.toString(),
+                            child: Text(d['name']?.toString() ?? '', style: TextStyle(color: _textPrimaryModal)),
+                          )).toList(),
+                          onChanged: (v) => setModalState(() => selectedDeptId = v),
+                        ),
+                      ),
                     ),
-                    onPressed: () {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Employee added successfully!'),
-                            backgroundColor: HRTheme.success),
-                      );
-                    },
-                    child: const Text('Add Employee',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
-                  ),
+                    const SizedBox(height: 10),
+                    _fieldLabel(context, 'Role'),
+                    Container(
+                      decoration: BoxDecoration(
+                          border: Border.all(color: _borderModal),
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: selectedRole,
+                          isExpanded: true,
+                          dropdownColor: _cardBgModal,
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'employee',
+                              child: Text('Employee', style: TextStyle(fontSize: 13)),
+                            ),
+                            DropdownMenuItem(
+                              value: 'admin',
+                              child: Text('Admin', style: TextStyle(fontSize: 13)),
+                            ),
+                          ],
+                          onChanged: (v) {
+                            if (v != null) {
+                              setModalState(() => selectedRole = v);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _inputField(context, salaryCtrl, 'Base Salary (₹)', Icons.currency_rupee, isNumber: true),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: HRTheme.primary,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () async {
+                          if (nameCtrl.text.isEmpty || selectedDeptId == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Please enter name and select a department'), backgroundColor: HRTheme.danger),
+                            );
+                            return;
+                          }
+                          Navigator.pop(context);
+                          final double sal = double.tryParse(salaryCtrl.text) ?? 0.0;
+                          await _addEmployee(nameCtrl.text, emailCtrl.text, selectedRole, sal, selectedDeptId!);
+                        },
+                        child: const Text('Add Employee',
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+                      ),
+                    ),
+                  ]),
                 ),
-              ]),
-            ),
-          ),
+              ),
+            );
+          }
         );
       },
     );
   }
 
-  void _showRunPayrollDialog() {
-    final _cardBg = HRTheme.cardBgOf(context);
-    final _textPrimary = HRTheme.textPrimaryOf(context);
-    final _textSecondary = HRTheme.textSecondaryOf(context);
+  Future<void> _addEmployee(String name, String email, String role, double salary, String deptId) async {
+    try {
+      final profileRes = await _client.from('profiles').insert({
+        'full_name': name,
+        'email': email.isEmpty ? '${name.toLowerCase().replaceAll(' ', '')}@ecraftz.com' : email,
+        'role': role,
+        'status': 'active',
+        'organization_id': '00000000-0000-0000-0000-000000000000',
+      }).select();
+      
+      if ((profileRes as List).isEmpty) {
+        throw Exception('Failed to create user profile');
+      }
+      final newProfileId = profileRes.first['id'];
 
-    showDialog(
+      await _client.from('department_members').insert({
+        'profile_id': newProfileId,
+        'department_id': deptId,
+      });
+
+      final now = DateTime.now();
+      final currentMonth = DateFormat('MMMM').format(now);
+      final currentYear = now.year;
+
+      await _client.from('payroll').insert({
+        'user_id': newProfileId,
+        'net_pay': salary,
+        'allowances': 0,
+        'deductions': 0,
+        'status': 'draft',
+        'month': currentMonth,
+        'year': currentYear,
+        'organization_id': '00000000-0000-0000-0000-000000000000',
+      });
+
+      _fetchEmployees();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Employee added successfully!'), backgroundColor: HRTheme.success),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to add employee: $e'), backgroundColor: HRTheme.danger),
+      );
+    }
+  }
+
+  void _showEditEmployeeSheet(Employee emp) {
+    final nameCtrl = TextEditingController(text: emp.name);
+    String selectedRole = emp.role.toLowerCase() == 'admin' ? 'admin' : 'employee';
+    final salaryCtrl = TextEditingController(text: emp.baseSalary.toStringAsFixed(0));
+    String? selectedDeptId = emp.departmentId.isNotEmpty ? emp.departmentId : (_departments.isNotEmpty ? _departments.first['id']?.toString() : null);
+
+    showModalBottomSheet(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: _cardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: HRTheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-            child: const Icon(Icons.attach_money_rounded, color: HRTheme.primary, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Text('Run May Payroll', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _textPrimary)),
-        ]),
-        content: Text(
-            'This will generate payroll records for all active employees for May 2026. Continue?',
-            style: TextStyle(fontSize: 13, color: _textSecondary)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: TextStyle(color: _textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: HRTheme.primary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Payroll generated for May 2026!'),
-                    backgroundColor: HRTheme.success),
-              );
-            },
-            child: const Text('Run Payroll', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final _cardBgModal = HRTheme.cardBgOf(context);
+            final _textPrimaryModal = HRTheme.textPrimaryOf(context);
+            final _borderModal = HRTheme.borderOf(context);
+
+            return Padding(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              child: Container(
+                decoration: BoxDecoration(
+                    color: _cardBgModal,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20))),
+                padding: const EdgeInsets.all(20),
+                child: SingleChildScrollView(
+                  child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    _sheetHandle(context),
+                    Text('Edit Employee',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _textPrimaryModal)),
+                    const SizedBox(height: 16),
+                    _inputField(context, nameCtrl, 'Full Name', Icons.person_rounded),
+                    const SizedBox(height: 10),
+                    _fieldLabel(context, 'Department'),
+                    Container(
+                      decoration: BoxDecoration(
+                          border: Border.all(color: _borderModal),
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: selectedDeptId,
+                          isExpanded: true,
+                          dropdownColor: _cardBgModal,
+                          items: _departments.map((d) => DropdownMenuItem(
+                            value: d['id']?.toString(),
+                            child: Text(d['name']?.toString() ?? '', style: TextStyle(color: _textPrimaryModal)),
+                          )).toList(),
+                          onChanged: (v) => setModalState(() => selectedDeptId = v),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _fieldLabel(context, 'Role'),
+                    Container(
+                      decoration: BoxDecoration(
+                          border: Border.all(color: _borderModal),
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: selectedRole,
+                          isExpanded: true,
+                          dropdownColor: _cardBgModal,
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'employee',
+                              child: Text('Employee', style: TextStyle(fontSize: 13)),
+                            ),
+                            DropdownMenuItem(
+                              value: 'admin',
+                              child: Text('Admin', style: TextStyle(fontSize: 13)),
+                            ),
+                          ],
+                          onChanged: (v) {
+                            if (v != null) {
+                              setModalState(() => selectedRole = v);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _inputField(context, salaryCtrl, 'Base Salary (₹)', Icons.currency_rupee, isNumber: true),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: HRTheme.primary,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () async {
+                          Navigator.pop(context);
+                          final double sal = double.tryParse(salaryCtrl.text) ?? 0.0;
+                          await _editEmployee(emp, nameCtrl.text, selectedRole, sal, selectedDeptId);
+                        },
+                        child: const Text('Update Employee',
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+            );
+          }
+        );
+      },
     );
   }
 
-  void _downloadPayslip(PayrollRecord r) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Downloading payslip for ${r.employeeName}...'),
-          backgroundColor: HRTheme.primary),
+  Future<void> _editEmployee(Employee emp, String name, String role, double salary, String? deptId) async {
+    try {
+      await _client.from('profiles').update({
+        'full_name': name,
+        'role': role,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', emp.profileId);
+
+      if (deptId != null) {
+        await _client.from('department_members').update({
+          'department_id': deptId,
+        }).eq('id', emp.id);
+      }
+
+      final now = DateTime.now();
+      final currentMonth = DateFormat('MMMM').format(now);
+      final currentYear = now.year;
+
+      final payrolls = await _client.from('payroll').select().eq('user_id', emp.profileId);
+      if ((payrolls as List).isEmpty) {
+        await _client.from('payroll').insert({
+          'user_id': emp.profileId,
+          'net_pay': salary,
+          'allowances': 0,
+          'deductions': 0,
+          'status': 'draft',
+          'month': currentMonth,
+          'year': currentYear,
+          'organization_id': '00000000-0000-0000-0000-000000000000',
+        });
+      } else {
+        final payId = payrolls.first['id'];
+        await _client.from('payroll').update({
+          'net_pay': salary,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }).eq('id', payId);
+      }
+
+      _fetchEmployees();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Employee updated successfully!'), backgroundColor: HRTheme.success),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update employee: $e'), backgroundColor: HRTheme.danger),
+      );
+    }
+  }
+
+  void _confirmDeleteEmployee(Employee emp) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final _cardBg = HRTheme.cardBgOf(ctx);
+        final _textPrimary = HRTheme.textPrimaryOf(ctx);
+        final _textSecondary = HRTheme.textSecondaryOf(ctx);
+
+        return AlertDialog(
+          backgroundColor: _cardBg,
+          title: Text('Delete Employee', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.bold)),
+          content: Text('Are you sure you want to remove ${emp.name} from the directory?', style: TextStyle(color: _textSecondary)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel', style: TextStyle(color: _textSecondary)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: HRTheme.danger),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _deleteEmployee(emp);
+              },
+              child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
     );
+  }
+
+  Future<void> _deleteEmployee(Employee emp) async {
+    try {
+      await _client.from('profiles').update({
+        'status': 'archived',
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', emp.profileId);
+
+      _fetchEmployees();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Employee deleted successfully!'), backgroundColor: HRTheme.success),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete employee: $e'), backgroundColor: HRTheme.danger),
+      );
+    }
   }
 
   // ── HELPERS ─────────────────────────────────────────────────────────────────
@@ -768,6 +1274,9 @@ class _DirectoryTab extends StatelessWidget {
   final bool isTablet;
   final String Function(double) fmtSalary;
   final VoidCallback onRefresh;
+  final Function(Employee) onEdit;
+  final Function(Employee) onDelete;
+  final bool isLoading;
 
   const _DirectoryTab({
     required this.employees,
@@ -776,6 +1285,9 @@ class _DirectoryTab extends StatelessWidget {
     required this.isTablet,
     required this.fmtSalary,
     required this.onRefresh,
+    required this.onEdit,
+    required this.onDelete,
+    required this.isLoading,
   });
 
   List<Employee> get filtered => employees.where((e) =>
@@ -841,7 +1353,17 @@ class _DirectoryTab extends StatelessWidget {
             ],
           ),
         ),
-        isTablet ? _buildTable(context) : _buildCards(context),
+        Expanded(
+          child: isLoading
+              ? const Center(
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(HRTheme.primary),
+                  ),
+                )
+              : isTablet
+                  ? _buildTable(context)
+                  : _buildCards(context),
+        ),
       ],
     );
   }
@@ -854,49 +1376,47 @@ class _DirectoryTab extends StatelessWidget {
     final _textSecondary = HRTheme.textSecondaryOf(context);
     final _border = HRTheme.borderOf(context);
 
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: _cardBg,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _border),
-        ),
-        child: Column(
-          children: [
-            // Table Header
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-              ),
-              child: Row(
-                children: cols.asMap().entries.map((e) => Expanded(
-                  flex: flexes[e.key],
-                  child: Text(e.value,
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
-                          color: _textSecondary, letterSpacing: 0.5)),
-                )).toList(),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: _cardBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        children: [
+          // Table Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            ),
+            child: Row(
+              children: cols.asMap().entries.map((e) => Expanded(
+                flex: flexes[e.key],
+                child: Text(e.value,
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
+                        color: _textSecondary, letterSpacing: 0.5)),
+              )).toList(),
+            ),
+          ),
+          Divider(height: 1, color: _border),
+          if (filtered.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 40),
+              child: Text('No employees found matching your search.',
+                  style: TextStyle(fontSize: 13, color: _textSecondary)),
+            )
+          else
+            Expanded(
+              child: ListView.separated(
+                itemCount: filtered.length,
+                separatorBuilder: (_, __) => Divider(height: 1, color: _border),
+                itemBuilder: (ctx, i) => _tableRow(ctx, filtered[i], flexes),
               ),
             ),
-            Divider(height: 1, color: _border),
-            if (filtered.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 40),
-                child: Text('No employees found matching your search.',
-                    style: TextStyle(fontSize: 13, color: _textSecondary)),
-              )
-            else
-              Expanded(
-                child: ListView.separated(
-                  itemCount: filtered.length,
-                  separatorBuilder: (_, __) => Divider(height: 1, color: _border),
-                  itemBuilder: (ctx, i) => _tableRow(ctx, filtered[i], flexes),
-                ),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -925,9 +1445,9 @@ class _DirectoryTab extends StatelessWidget {
           Expanded(flex: flexes[4], child: Text(fmtSalary(emp.baseSalary),
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _textPrimary))),
           Expanded(flex: flexes[5], child: Row(children: [
-            _iconBtn(Icons.edit_rounded, HRTheme.primary, () {}),
+            _iconBtn(Icons.edit_rounded, HRTheme.primary, () => onEdit(emp)),
             const SizedBox(width: 6),
-            _iconBtn(Icons.delete_rounded, HRTheme.danger, () {}),
+            _iconBtn(Icons.delete_rounded, HRTheme.danger, () => onDelete(emp)),
           ])),
         ],
       ),
@@ -938,24 +1458,20 @@ class _DirectoryTab extends StatelessWidget {
     final _textSecondary = HRTheme.textSecondaryOf(context);
 
     if (filtered.isEmpty) {
-      return Expanded(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Text('No employees found matching your search.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: _textSecondary)),
-          ),
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text('No employees found matching your search.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: _textSecondary)),
         ),
       );
     }
-    return Expanded(
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        itemCount: filtered.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
-        itemBuilder: (ctx, i) => _employeeCard(ctx, filtered[i]),
-      ),
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      itemCount: filtered.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (ctx, i) => _employeeCard(ctx, filtered[i]),
     );
   }
 
@@ -995,9 +1511,9 @@ class _DirectoryTab extends StatelessWidget {
             ]),
           ),
           Column(children: [
-            _iconBtn(Icons.edit_rounded, HRTheme.primary, () {}),
+            _iconBtn(Icons.edit_rounded, HRTheme.primary, () => onEdit(emp)),
             const SizedBox(height: 6),
-            _iconBtn(Icons.delete_rounded, HRTheme.danger, () {}),
+            _iconBtn(Icons.delete_rounded, HRTheme.danger, () => onDelete(emp)),
           ]),
         ],
       ),
@@ -1050,152 +1566,27 @@ class _DirectoryTab extends StatelessWidget {
 // ─── TAB 2: TIME & LEAVE ─────────────────────────────────────────────────────
 
 class _TimeLeaveTab extends StatelessWidget {
-  final List<AttendanceRecord> attendance;
   final List<LeaveRequest> leaves;
   final bool isTablet;
-  final Function(AttendanceRecord) onClockIn;
   final VoidCallback onRequestLeave;
+  final Function(LeaveRequest) onApproveLeave;
+  final Function(LeaveRequest) onRejectLeave;
+  final bool isLoading;
 
   const _TimeLeaveTab({
-    required this.attendance,
     required this.leaves,
     required this.isTablet,
-    required this.onClockIn,
     required this.onRequestLeave,
+    required this.onApproveLeave,
+    required this.onRejectLeave,
+    required this.isLoading,
   });
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       padding: EdgeInsets.all(isTablet ? 16 : 12),
-      child: isTablet
-          ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(child: _attendanceSection(context)),
-              const SizedBox(width: 12),
-              Expanded(child: _leaveSection(context)),
-            ])
-          : Column(children: [
-              _attendanceSection(context),
-              const SizedBox(height: 12),
-              _leaveSection(context),
-            ]),
-    );
-  }
-
-  Widget _attendanceSection(BuildContext ctx) {
-    final _cardBg = HRTheme.cardBgOf(ctx);
-    final _textPrimary = HRTheme.textPrimaryOf(ctx);
-    final _textSecondary = HRTheme.textSecondaryOf(ctx);
-    final _border = HRTheme.borderOf(ctx);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: _cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _border),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(children: [
-              Container(
-                padding: const EdgeInsets.all(7),
-                decoration: BoxDecoration(color: HRTheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.access_time_rounded, color: HRTheme.primary, size: 16),
-              ),
-              const SizedBox(width: 8),
-              Expanded(child: Text('Daily Attendance',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _textPrimary))),
-              GestureDetector(
-                onTap: () {},
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [HRTheme.primary, HRTheme.primaryDark]),
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: [BoxShadow(color: HRTheme.primary.withOpacity(0.3), blurRadius: 6, offset: const Offset(0, 2))],
-                  ),
-                  child: const Text('Clock In',
-                      style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w700)),
-                ),
-              ),
-            ]),
-          ),
-          Divider(height: 1, color: _border),
-          if (attendance.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 32),
-              child: Text('No attendance records today.',
-                  style: TextStyle(fontSize: 13, color: _textSecondary)),
-            )
-          else
-            ...attendance.map((rec) => _attendanceRow(ctx, rec)),
-        ],
-      ),
-    );
-  }
-
-  Widget _attendanceRow(BuildContext ctx, AttendanceRecord rec) {
-    final initials = rec.employeeName.trim().split(' ').take(2).map((w) => w[0].toUpperCase()).join();
-    final hasClockOut = rec.clockOut != null;
-    final _textPrimary = HRTheme.textPrimaryOf(ctx);
-    final _textSecondary = HRTheme.textSecondaryOf(ctx);
-    final _border = HRTheme.borderOf(ctx);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: _border))),
-      child: Row(
-        children: [
-          Container(
-            width: 34, height: 34,
-            decoration: BoxDecoration(color: HRTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
-            child: Center(child: Text(initials,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: HRTheme.primary))),
-          ),
-          const SizedBox(width: 10),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(rec.employeeName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _textPrimary)),
-            Text(DateFormat('MMM d, yyyy').format(rec.date),
-                style: TextStyle(fontSize: 11, color: _textSecondary)),
-          ])),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('IN: ${rec.clockIn ?? '----'}',
-                style: const TextStyle(fontSize: 11, color: HRTheme.success, fontWeight: FontWeight.w600)),
-            Text('OUT: ${rec.clockOut ?? '----'}',
-                style: TextStyle(fontSize: 11,
-                    color: hasClockOut ? HRTheme.danger : _textSecondary,
-                    fontWeight: FontWeight.w600)),
-          ]),
-          const SizedBox(width: 8),
-          if (!hasClockOut)
-            GestureDetector(
-              onTap: () => onClockIn(rec),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                decoration: BoxDecoration(
-                    border: Border.all(color: _border),
-                    borderRadius: BorderRadius.circular(6)),
-                child: Text('Clock Out',
-                    style: TextStyle(fontSize: 10, color: _textSecondary, fontWeight: FontWeight.w600)),
-              ),
-            )
-          else
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                  color: HRTheme.success.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-              child: const Text('PRESENT',
-                  style: TextStyle(fontSize: 9, color: HRTheme.success, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
-            ),
-        ],
-      ),
+      child: _leaveSection(context),
     );
   }
 
@@ -1225,21 +1616,19 @@ class _TimeLeaveTab extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(child: Text('Leave Requests',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _textPrimary))),
-              GestureDetector(
-                onTap: onRequestLeave,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                      border: Border.all(color: HRTheme.primary),
-                      borderRadius: BorderRadius.circular(8)),
-                  child: const Text('Request Leave',
-                      style: TextStyle(fontSize: 11, color: HRTheme.primary, fontWeight: FontWeight.w600)),
-                ),
-              ),
             ]),
           ),
           Divider(height: 1, color: _border),
-          if (leaves.isEmpty)
+          if (isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(HRTheme.purple),
+                ),
+              ),
+            )
+          else if (leaves.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
               child: Column(children: [
@@ -1286,308 +1675,67 @@ class _TimeLeaveTab extends StatelessWidget {
           Text(lr.reason, style: TextStyle(fontSize: 11, color: _textSecondary),
               maxLines: 2, overflow: TextOverflow.ellipsis),
         ],
-      ]),
-    );
-  }
-}
-
-// ─── TAB 3: PAYROLL ──────────────────────────────────────────────────────────
-
-class _PayrollTab extends StatelessWidget {
-  final List<PayrollRecord> records;
-  final String searchQuery;
-  final ValueChanged<String> onSearchChanged;
-  final bool isTablet;
-  final String Function(double) fmtSalary;
-  final VoidCallback onRunPayroll;
-  final Function(PayrollRecord) onDownloadPayslip;
-
-  const _PayrollTab({
-    required this.records,
-    required this.searchQuery,
-    required this.onSearchChanged,
-    required this.isTablet,
-    required this.fmtSalary,
-    required this.onRunPayroll,
-    required this.onDownloadPayslip,
-  });
-
-  List<PayrollRecord> get filtered => records.where((r) =>
-      r.employeeName.toLowerCase().contains(searchQuery.toLowerCase()) ||
-      r.period.toLowerCase().contains(searchQuery.toLowerCase())).toList();
-
-  @override
-  Widget build(BuildContext context) {
-    final _cardBg = HRTheme.cardBgOf(context);
-    final _textPrimary = HRTheme.textPrimaryOf(context);
-    final _textSecondary = HRTheme.textSecondaryOf(context);
-    final _border = HRTheme.borderOf(context);
-
-    return Column(
-      children: [
-        Padding(
-          padding: EdgeInsets.all(isTablet ? 16 : 12),
-          child: Row(children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: _cardBg,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _border),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6)],
-                ),
-                child: TextField(
-                  onChanged: onSearchChanged,
-                  style: TextStyle(color: _textPrimary, fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'Search payroll records...',
-                    hintStyle: TextStyle(fontSize: 12, color: _textSecondary),
-                    prefixIcon: Icon(Icons.search_rounded, size: 18, color: _textSecondary),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Row(children: [
-              GestureDetector(
-                onTap: () {},
-                child: Container(
-                  padding: const EdgeInsets.all(11),
-                  decoration: BoxDecoration(
-                      color: _cardBg,
-                      border: Border.all(color: _border),
-                      borderRadius: BorderRadius.circular(10)),
-                  child: Icon(Icons.filter_list_rounded, size: 16, color: _textSecondary),
-                ),
-              ),
-              const SizedBox(width: 6),
-              GestureDetector(
-                onTap: onRunPayroll,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [HRTheme.primary, HRTheme.primaryDark]),
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [BoxShadow(color: HRTheme.primary.withOpacity(0.3), blurRadius: 6, offset: const Offset(0, 2))],
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.play_arrow_rounded, size: 16, color: Colors.white),
-                    const SizedBox(width: 4),
-                    Text(isTablet ? 'Run May Payroll' : 'Run Payroll',
-                        style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w700)),
-                  ]),
-                ),
-              ),
-            ]),
-          ]),
-        ),
-        isTablet ? _buildTable(context) : _buildCards(context),
-      ],
-    );
-  }
-
-  Widget _buildTable(BuildContext context) {
-    final cols = ['EMPLOYEE', 'PERIOD', 'BASIC + ALLOWANCES', 'DEDUCTIONS', 'NET PAY', 'STATUS', 'PAYSLIP'];
-    final flexes = [3, 2, 3, 2, 2, 2, 1];
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final _cardBg = HRTheme.cardBgOf(context);
-    final _textSecondary = HRTheme.textSecondaryOf(context);
-    final _border = HRTheme.borderOf(context);
-
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: _cardBg,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _border),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-              ),
-              child: Row(
-                children: cols.asMap().entries.map((e) => Expanded(
-                  flex: flexes[e.key],
-                  child: Text(e.value,
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
-                          color: _textSecondary, letterSpacing: 0.5)),
-                )).toList(),
-              ),
-            ),
-            Divider(height: 1, color: _border),
-            Expanded(
-              child: filtered.isEmpty
-                  ? Center(child: Text('No payroll records found.',
-                      style: TextStyle(fontSize: 13, color: _textSecondary)))
-                  : ListView.separated(
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, __) => Divider(height: 1, color: _border),
-                      itemBuilder: (ctx, i) => _tableRow(ctx, filtered[i], flexes),
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _tableRow(BuildContext ctx, PayrollRecord r, List<int> flexes) {
-    final statusColor = HRTheme.payrollStatusColor(r.status);
-    final initials = r.employeeName.trim().split(' ').take(2).map((w) => w[0].toUpperCase()).join();
-    final _textPrimary = HRTheme.textPrimaryOf(ctx);
-    final _textSecondary = HRTheme.textSecondaryOf(ctx);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Expanded(flex: flexes[0], child: Row(children: [
-            Container(
-              width: 30, height: 30,
-              decoration: BoxDecoration(color: HRTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(7)),
-              child: Center(child: Text(initials,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: HRTheme.primary))),
-            ),
-            const SizedBox(width: 8),
-            Expanded(child: Text(r.employeeName,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textPrimary),
-                overflow: TextOverflow.ellipsis)),
-          ])),
-          Expanded(flex: flexes[1], child: Text(r.period,
-              style: TextStyle(fontSize: 12, color: _textSecondary))),
-          Expanded(flex: flexes[2], child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(fmtSalary(r.basicSalary + r.allowances),
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _textPrimary)),
-            Text('+${fmtSalary(r.allowances)}',
-                style: const TextStyle(fontSize: 10, color: HRTheme.success)),
-          ])),
-          Expanded(flex: flexes[3], child: Text('-${fmtSalary(r.deductions)}',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: HRTheme.danger))),
-          Expanded(flex: flexes[4], child: Text(fmtSalary(r.netPay),
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _textPrimary))),
-          Expanded(flex: flexes[5], child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        if (lr.rejectionNote != null && lr.rejectionNote!.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-            child: Text(HRTheme.payrollStatusLabel(r.status),
-                style: TextStyle(fontSize: 10, color: statusColor, fontWeight: FontWeight.w700),
-                textAlign: TextAlign.center),
-          )),
-          Expanded(flex: flexes[6], child: GestureDetector(
-            onTap: () => onDownloadPayslip(r),
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                  color: HRTheme.primary.withOpacity(0.08), borderRadius: BorderRadius.circular(6)),
-              child: const Icon(Icons.download_rounded, size: 16, color: HRTheme.primary),
+              color: statusColor.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: statusColor.withOpacity(0.15)),
             ),
-          )),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCards(BuildContext context) {
-    final _textSecondary = HRTheme.textSecondaryOf(context);
-    return Expanded(
-      child: filtered.isEmpty
-          ? Center(child: Text('No payroll records found.',
-              style: TextStyle(fontSize: 13, color: _textSecondary)))
-          : ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              itemCount: filtered.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (ctx, i) => _payrollCard(ctx, filtered[i]),
-            ),
-    );
-  }
-
-  Widget _payrollCard(BuildContext ctx, PayrollRecord r) {
-    final statusColor = HRTheme.payrollStatusColor(r.status);
-    final initials = r.employeeName.trim().split(' ').take(2).map((w) => w[0].toUpperCase()).join();
-    final _cardBg = HRTheme.cardBgOf(ctx);
-    final _textPrimary = HRTheme.textPrimaryOf(ctx);
-    final _textSecondary = HRTheme.textSecondaryOf(ctx);
-    final _border = HRTheme.borderOf(ctx);
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _border),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6)],
-      ),
-      child: Column(
-        children: [
-          Row(children: [
-            Container(
-              width: 38, height: 38,
-              decoration: BoxDecoration(color: HRTheme.primary.withOpacity(0.12), borderRadius: BorderRadius.circular(9)),
-              child: Center(child: Text(initials,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: HRTheme.primary))),
-            ),
-            const SizedBox(width: 10),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(r.employeeName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _textPrimary)),
-              Text(r.period, style: TextStyle(fontSize: 11, color: _textSecondary)),
-            ])),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-              child: Text(HRTheme.payrollStatusLabel(r.status),
-                  style: TextStyle(fontSize: 10, color: statusColor, fontWeight: FontWeight.w700)),
-            ),
-          ]),
-          const SizedBox(height: 12),
-          Divider(height: 1, color: _border),
-          const SizedBox(height: 10),
-          Row(children: [
-            Expanded(child: _payrollStat(ctx, 'Basic + Allow.', fmtSalary(r.basicSalary + r.allowances), _textPrimary)),
-            Expanded(child: _payrollStat(ctx, 'Deductions', '-${fmtSalary(r.deductions)}', HRTheme.danger)),
-            Expanded(child: _payrollStat(ctx, 'Net Pay', fmtSalary(r.netPay), HRTheme.success)),
-          ]),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: GestureDetector(
-              onTap: () => onDownloadPayslip(r),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                    border: Border.all(color: HRTheme.primary),
-                    borderRadius: BorderRadius.circular(8)),
-                child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.download_rounded, size: 14, color: HRTheme.primary),
-                  SizedBox(width: 6),
-                  Text('Download Payslip',
-                      style: TextStyle(fontSize: 12, color: HRTheme.primary, fontWeight: FontWeight.w600)),
-                ]),
-              ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  lr.status.toLowerCase() == 'rejected' ? Icons.info_outline_rounded : Icons.check_circle_outline_rounded,
+                  size: 13,
+                  color: statusColor,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    'Note: ${lr.rejectionNote}',
+                    style: TextStyle(fontSize: 10.5, color: statusColor, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
-      ),
+        if (lr.status.toLowerCase() == 'pending') ...[
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                onPressed: () => onRejectLeave(lr),
+                icon: const Icon(Icons.close_rounded, size: 14, color: HRTheme.danger),
+                label: const Text('Reject', style: TextStyle(fontSize: 11, color: HRTheme.danger, fontWeight: FontWeight.w600)),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: () => onApproveLeave(lr),
+                icon: const Icon(Icons.check_rounded, size: 14, color: Colors.white),
+                label: const Text('Approve', style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: HRTheme.success,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  elevation: 0,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ]),
     );
-  }
-
-  Widget _payrollStat(BuildContext ctx, String label, String value, Color valueColor) {
-    final _textSecondary = HRTheme.textSecondaryOf(ctx);
-    return Column(children: [
-      Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: valueColor)),
-      const SizedBox(height: 2),
-      Text(label, style: TextStyle(fontSize: 10, color: _textSecondary)),
-    ]);
   }
 }
 

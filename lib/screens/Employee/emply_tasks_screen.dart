@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/task/task_bloc.dart';
 import '../../models/task_model.dart';
+import '../../services/supabase_service.dart';
 
 class EmployeeTasksScreen extends StatefulWidget {
   const EmployeeTasksScreen({super.key});
@@ -17,6 +19,33 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
   int _viewMode = 2; // Default to list view (0=kanban, 1=grid, 2=list)
   final _searchController = TextEditingController();
   String _searchQuery = '';
+  User? _currentUser;
+  Map<String, dynamic>? _profile;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final user = SupabaseService.currentUser;
+      _currentUser = user;
+      if (user != null) {
+        final profileRows = await SupabaseService.client
+            .from('profiles')
+            .select()
+            .eq('id', user.id)
+            .limit(1);
+        if (profileRows.isNotEmpty) {
+          setState(() {
+            _profile = Map<String, dynamic>.from(profileRows.first as Map);
+          });
+        }
+      }
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -31,7 +60,28 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: BlocBuilder<TaskBloc, TaskState>(
         builder: (context, state) {
-          final filteredTasks = state.tasks.where((t) {
+          final currentId = _currentUser?.id.toString().trim().toLowerCase() ?? '';
+          final currentFullName = _profile?['full_name']?.toString().trim().toLowerCase() ?? '';
+          final currentEmail = _currentUser?.email?.toString().trim().toLowerCase() ?? '';
+
+          bool containsValue(String source, String value) {
+            return value.isNotEmpty && source.contains(value);
+          }
+
+          final myTasks = state.tasks.where((task) {
+            final ownerRaw = task.owner?.toString().trim().toLowerCase() ?? '';
+            if (ownerRaw.isNotEmpty) {
+              final matchesOwner = ownerRaw == currentId ||
+                  ownerRaw == currentFullName ||
+                  ownerRaw == currentEmail ||
+                  containsValue(ownerRaw, currentFullName) ||
+                  containsValue(ownerRaw, currentEmail);
+              if (!matchesOwner) return false;
+            }
+            return true;
+          }).toList();
+
+          final filteredTasks = myTasks.where((t) {
             final matchesSearch = t.summary.toLowerCase().contains(_searchQuery.toLowerCase()) ||
                 (t.parentProject != null && t.parentProject!.toLowerCase().contains(_searchQuery.toLowerCase()));
             if (!matchesSearch) return false;
@@ -617,13 +667,14 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
                           ? TaskStatus.done
                           : (status == 'In Progress' ? TaskStatus.inProgress : TaskStatus.toDo);
 
+                      final ownerName = _profile?['full_name']?.toString() ?? _currentUser?.email ?? 'Chimbu';
                       context.read<TaskBloc>().add(
                         AddTaskEvent(
                           TaskItem(
                             id: DateTime.now().millisecondsSinceEpoch.toString(),
                             summary: nameCtrl.text,
                             parentProject: projCtrl.text,
-                            owner: 'Chimbu',
+                            owner: ownerName.isNotEmpty ? ownerName : null,
                             dueDate: DateTime.now(),
                             status: tStatus,
                             priority: tPriority,

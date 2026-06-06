@@ -78,7 +78,10 @@ class TaskItem {
 
   factory TaskItem.fromJson(Map<String, dynamic> json) {
     String desc = json['description']?.toString() ?? '';
-    String? ownerVal;
+    String? ownerVal = json['owner']?.toString()
+        ?? json['assignee']?.toString()
+        ?? json['assigned_to']?.toString()
+        ?? json['assigned_user_id']?.toString();
     
     // Parse fallback metadata from description
     final fallbackRegex = RegExp(r'\[METADATA_FALLBACK:\s*(\{.*\})\]');
@@ -86,7 +89,7 @@ class TaskItem {
     if (match != null) {
       try {
         final fallbackJson = jsonDecode(match.group(1)!);
-        ownerVal = fallbackJson['owner']?.toString();
+        ownerVal = ownerVal ?? fallbackJson['owner']?.toString();
         desc = desc.replaceAll(fallbackRegex, '').trim();
       } catch (_) {}
     }
@@ -112,7 +115,7 @@ class TaskItem {
       description: desc,
       parentProject: pName.isNotEmpty ? pName : (json['project_id']?.toString() ?? ''),
       owner: ownerVal,
-      dueDate: json['due_date'] != null ? DateTime.tryParse(json['due_date'].toString()) : null,
+      dueDate: json['due_date'] != null ? DateTime.tryParse(json['due_date'].toString())?.toLocal() : null,
       status: _parseTaskStatus(json['status']?.toString()),
       priority: _parseTaskPriority(json['priority']?.toString()),
     );

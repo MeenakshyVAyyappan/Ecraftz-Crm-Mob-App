@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../widgets/app_drawer.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
+import '../../services/supabase_service.dart';
 
 
 // ─── Data Models ────────────────────────────────────────────────────────────
@@ -40,132 +41,75 @@ class TimesheetEntry {
     required this.status,
     required this.department,
   });
+
+  factory TimesheetEntry.fromSupabase(Map<String, dynamic> row, {Map<String, dynamic>? profile, int breakMinutes = 0}) {
+    final fullName = (profile != null && profile['full_name'] != null)
+        ? profile['full_name'].toString()
+        : (row['employee_name']?.toString() ?? row['full_name']?.toString() ?? '');
+    final role = (profile != null && profile['role'] != null) ? profile['role'].toString() : (row['role']?.toString() ?? 'EMPLOYEE');
+    final department = (profile != null && profile['department'] != null) ? profile['department'].toString() : (row['department']?.toString() ?? 'Unknown');
+
+    DateTime? startedAt;
+    DateTime? endedAt;
+
+    // CORRECTED: Actual columns are start_time and end_time (not started_at/ended_at)
+    if (row['start_time'] != null) {
+      try { startedAt = DateTime.parse(row['start_time'].toString()); } catch (_) {}
+    }
+    if (row['end_time'] != null) {
+      try { endedAt = DateTime.parse(row['end_time'].toString()); } catch (_) {}
+    }
+
+    TimeOfDay? signIn = startedAt != null ? TimeOfDay(hour: startedAt.hour, minute: startedAt.minute) : null;
+    TimeOfDay? signOut = endedAt != null ? TimeOfDay(hour: endedAt.hour, minute: endedAt.minute) : null;
+
+    Duration duration = Duration.zero;
+    if (startedAt != null && endedAt != null) {
+      duration = endedAt.difference(startedAt);
+    } else if (startedAt != null && endedAt == null) {
+      // Active session: duration is from start until now
+      duration = DateTime.now().difference(startedAt);
+    }
+
+    // Use the status from DB if available, otherwise derive it
+    final dbStatus = (row['status']?.toString() ?? '').toLowerCase();
+    final TimesheetStatus status;
+    
+    if (startedAt == null) {
+      status = TimesheetStatus.absent;
+    } else if (dbStatus == 'completed' && endedAt != null) {
+      status = TimesheetStatus.completed;
+    } else if (endedAt != null) {
+      status = TimesheetStatus.completed;
+    } else {
+      status = TimesheetStatus.inProgress;
+    }
+
+    final avatarInitials = (fullName.isNotEmpty ? fullName.split(' ').map((s) => s.isNotEmpty ? s[0] : '').take(2).join() : null);
+
+    print('✓ Loaded: $fullName | $startedAt → $endedAt | status=$status | breaks=$breakMinutes min');
+
+    return TimesheetEntry(
+      employeeName: fullName.isNotEmpty ? fullName : 'Unknown',
+      role: role.toUpperCase(),
+      avatarInitials: avatarInitials,
+      avatarColor: Colors.blueGrey,
+      date: startedAt ?? DateTime.now(),
+      signIn: signIn,
+      signOut: signOut,
+      duration: duration,
+      breakMinutes: breakMinutes,
+      tasksDone: 0,
+      tasksTotal: 0,
+      status: status,
+      department: department,
+    );
+  }
 }
 
 // ─── Sample Data ─────────────────────────────────────────────────────────────
 
-final List<TimesheetEntry> sampleTimesheets = [
-  TimesheetEntry(
-    employeeName: 'Roronoa',
-    role: 'EMPLOYEE',
-    avatarInitials: 'RO',
-    avatarColor: Colors.indigo,
-    date: DateTime(2026, 5, 26),
-    signIn: const TimeOfDay(hour: 17, minute: 34),
-    signOut: const TimeOfDay(hour: 9, minute: 33),
-    duration: const Duration(hours: 15, minutes: 58),
-    breakMinutes: 0,
-    tasksDone: 0,
-    tasksTotal: 0,
-    status: TimesheetStatus.completed,
-    department: 'Web Developing',
-  ),
-  TimesheetEntry(
-    employeeName: 'Hina',
-    role: 'MANAGER',
-    avatarInitials: 'HI',
-    avatarColor: Colors.teal,
-    date: DateTime(2026, 5, 26),
-    signIn: const TimeOfDay(hour: 16, minute: 39),
-    signOut: const TimeOfDay(hour: 16, minute: 39),
-    duration: const Duration(hours: 0, minutes: 0),
-    breakMinutes: 0,
-    tasksDone: 0,
-    tasksTotal: 1,
-    status: TimesheetStatus.completed,
-    department: 'CRM',
-  ),
-  TimesheetEntry(
-    employeeName: 'Tony Stark',
-    role: 'EMPLOYEE',
-    avatarInitials: 'TS',
-    avatarColor: Colors.red,
-    date: DateTime(2026, 5, 26),
-    signIn: const TimeOfDay(hour: 16, minute: 28),
-    signOut: const TimeOfDay(hour: 9, minute: 33),
-    duration: const Duration(hours: 17, minutes: 5),
-    breakMinutes: 6,
-    tasksDone: 1,
-    tasksTotal: 1,
-    status: TimesheetStatus.completed,
-    department: 'BDE',
-  ),
-  TimesheetEntry(
-    employeeName: 'Fathima Safa',
-    role: 'EMPLOYEE',
-    avatarInitials: 'FS',
-    avatarColor: Colors.purple,
-    date: DateTime(2026, 5, 26),
-    signIn: const TimeOfDay(hour: 16, minute: 4),
-    signOut: const TimeOfDay(hour: 16, minute: 21),
-    duration: const Duration(hours: 0, minutes: 16),
-    breakMinutes: 12,
-    tasksDone: 1,
-    tasksTotal: 1,
-    status: TimesheetStatus.completed,
-    department: 'Content Writer',
-  ),
-  TimesheetEntry(
-    employeeName: 'Chimbu',
-    role: 'EMPLOYEE',
-    avatarInitials: 'CH',
-    avatarColor: Colors.orange,
-    date: DateTime(2026, 5, 26),
-    signIn: const TimeOfDay(hour: 9, minute: 54),
-    signOut: const TimeOfDay(hour: 9, minute: 58),
-    duration: const Duration(hours: 24, minutes: 4),
-    breakMinutes: 173,
-    tasksDone: 0,
-    tasksTotal: 1,
-    status: TimesheetStatus.completed,
-    department: 'Graphic Designing',
-  ),
-  TimesheetEntry(
-    employeeName: 'Tony Stark',
-    role: 'EMPLOYEE',
-    avatarInitials: 'TS',
-    avatarColor: Colors.red,
-    date: DateTime(2026, 5, 26),
-    signIn: const TimeOfDay(hour: 9, minute: 54),
-    signOut: const TimeOfDay(hour: 16, minute: 28),
-    duration: const Duration(hours: 6, minutes: 33),
-    breakMinutes: 66,
-    tasksDone: 1,
-    tasksTotal: 1,
-    status: TimesheetStatus.completed,
-    department: 'BDE',
-  ),
-  TimesheetEntry(
-    employeeName: 'Tony Stark',
-    role: 'EMPLOYEE',
-    avatarInitials: 'TS',
-    avatarColor: Colors.red,
-    date: DateTime(2026, 5, 23),
-    signIn: const TimeOfDay(hour: 17, minute: 44),
-    signOut: const TimeOfDay(hour: 9, minute: 54),
-    duration: const Duration(hours: 64, minutes: 9),
-    breakMinutes: 0,
-    tasksDone: 0,
-    tasksTotal: 0,
-    status: TimesheetStatus.completed,
-    department: 'BDE',
-  ),
-  TimesheetEntry(
-    employeeName: 'Chimbu',
-    role: 'EMPLOYEE',
-    avatarInitials: 'CH',
-    avatarColor: Colors.orange,
-    date: DateTime(2026, 5, 21),
-    signIn: const TimeOfDay(hour: 12, minute: 3),
-    signOut: const TimeOfDay(hour: 9, minute: 54),
-    duration: const Duration(hours: 117, minutes: 50),
-    breakMinutes: 44,
-    tasksDone: 1,
-    tasksTotal: 1,
-    status: TimesheetStatus.completed,
-    department: 'Graphic Designing',
-  ),
-];
+// Data will be loaded from Supabase `work_sessions` and `break_sessions` tables.
 
 final List<String> departments = [
   'All Departments',
@@ -200,8 +144,19 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedDepartment = 'All Departments';
   String? _selectedStatus;
-  DateTimeRange? _selectedDateRange;
+  late DateTime _selectedDate;
   String _searchQuery = '';
+  List<TimesheetEntry> _entries = [];
+  bool _isLoading = false;
+  String? _loadError;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize to today's date
+    _selectedDate = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    _loadSessions();
+  }
 
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
   Color get _bg => Theme.of(context).scaffoldBackgroundColor;
@@ -218,7 +173,7 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
   }
 
   List<TimesheetEntry> get _filteredEntries {
-    return sampleTimesheets.where((e) {
+    return _entries.where((e) {
       final matchesSearch =
           _searchQuery.isEmpty ||
           e.employeeName.toLowerCase().contains(_searchQuery.toLowerCase());
@@ -231,12 +186,77 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
               e.status == TimesheetStatus.completed) ||
           (_selectedStatus == 'In Progress' &&
               e.status == TimesheetStatus.inProgress);
-      final matchesDate =
-          _selectedDateRange == null ||
-          (!e.date.isBefore(_selectedDateRange!.start) &&
-              !e.date.isAfter(_selectedDateRange!.end));
+      // Filter by selected date (compare only date part, not time)
+      final entryDate = DateTime(e.date.year, e.date.month, e.date.day);
+      final matchesDate = entryDate == _selectedDate;
       return matchesSearch && matchesDept && matchesStatus && matchesDate;
     }).toList();
+  }
+
+  Future<void> _loadSessions() async {
+    setState(() { _isLoading = true; _loadError = null; });
+    try {
+      final client = SupabaseService.client;
+      
+      // Query work_sessions with full record to see actual schema
+      final rowsRaw = await client.from('work_sessions').select();
+      final rows = (rowsRaw as List).cast<Map<String, dynamic>>();
+
+      print('SCHEMA: work_sessions found ${rows.length} rows');
+      if (rows.isNotEmpty) {
+        print('SCHEMA: First row keys = ${rows.first.keys.toList()}');
+      }
+      
+      if (rows.isEmpty) {
+        setState(() { _entries = []; _isLoading = false; });
+        return;
+      }
+
+      // Fetch and join profiles
+      final profileIds = rows.map((r) => r['user_id']?.toString()).where((id) => id != null).cast<String>().toSet().toList();
+      Map<String, Map<String, dynamic>> profileMap = {};
+      if (profileIds.isNotEmpty) {
+        final profRaw = await client.from('profiles').select();
+        final profiles = (profRaw as List).cast<Map<String, dynamic>>();
+        for (final p in profiles) {
+          final uid = p['id']?.toString();
+          if (uid != null) profileMap[uid] = p;
+        }
+      }
+
+      // Fetch and aggregate break sessions
+      final sessionIds = rows.map((r) => r['id']?.toString()).where((id) => id != null).cast<String>().toList();
+      Map<String, int> breakMap = {};
+      if (sessionIds.isNotEmpty) {
+        final brRaw = await client.from('break_sessions').select();
+        final breaksAll = (brRaw as List).cast<Map<String, dynamic>>();
+        for (final b in breaksAll) {
+          final sid = b['work_session_id']?.toString() ?? '';
+          if (sessionIds.contains(sid)) {
+            int minutes = 0;
+            if (b.containsKey('duration_minutes')) minutes = (b['duration_minutes'] is num) ? (b['duration_minutes'] as num).toInt() : int.tryParse(b['duration_minutes'].toString()) ?? 0;
+            else if (b.containsKey('minutes')) minutes = (b['minutes'] is num) ? (b['minutes'] as num).toInt() : int.tryParse(b['minutes'].toString()) ?? 0;
+            else if (b.containsKey('duration')) minutes = (b['duration'] is num) ? (b['duration'] as num).toInt() : int.tryParse(b['duration'].toString()) ?? 0;
+            breakMap[sid] = (breakMap[sid] ?? 0) + minutes;
+          }
+        }
+      }
+
+      // Map rows to TimesheetEntry, passing profile data
+      final mapped = rows.map((r) {
+        final id = r['id']?.toString() ?? '';
+        final uid = r['user_id']?.toString() ?? '';
+        final profile = profileMap[uid];
+        final bm = breakMap[id] ?? 0;
+        return TimesheetEntry.fromSupabase(r, profile: profile, breakMinutes: bm);
+      }).toList();
+
+      setState(() { _entries = mapped; _isLoading = false; });
+    } catch (e, st) {
+      print('ERROR loading sessions: $e');
+      print(st);
+      setState(() { _isLoading = false; _loadError = e.toString(); });
+    }
   }
 
   String _formatDuration(Duration d) {
@@ -252,12 +272,12 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
     return '$h:$m';
   }
 
-  Future<void> _pickDateRange() async {
-    final picked = await showDateRangePicker(
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
       context: context,
+      initialDate: _selectedDate,
       firstDate: DateTime(2024),
       lastDate: DateTime(2027),
-      initialDateRange: _selectedDateRange,
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -272,7 +292,7 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
       },
     );
     if (picked != null) {
-      setState(() => _selectedDateRange = picked);
+      setState(() => _selectedDate = DateTime(picked.year, picked.month, picked.day));
     }
   }
 
@@ -363,6 +383,11 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
             },
           ),
           IconButton(
+            icon: const Icon(Icons.refresh, size: 22),
+            color: _textSecondary,
+            onPressed: _loadSessions,
+          ),
+          IconButton(
             icon: const Icon(Icons.notifications_none_rounded, size: 24),
             color: _textSecondary,
             onPressed: () {},
@@ -433,12 +458,10 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
                       ),
                       const SizedBox(width: 8),
                       _FilterChip(
-                        icon: Icons.date_range_outlined,
-                        label: _selectedDateRange == null
-                            ? 'Date Range'
-                            : '${DateFormat('MMM d').format(_selectedDateRange!.start)} – ${DateFormat('MMM d').format(_selectedDateRange!.end)}',
-                        onTap: _pickDateRange,
-                        active: _selectedDateRange != null,
+                        icon: Icons.calendar_today_outlined,
+                        label: DateFormat('MMM d, yyyy').format(_selectedDate),
+                        onTap: _pickDate,
+                        active: true,
                       ),
                       const SizedBox(width: 8),
                       _FilterChip(
@@ -448,13 +471,11 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
                         active: _selectedStatus != null,
                       ),
                       if (_selectedDepartment != 'All Departments' ||
-                          _selectedDateRange != null ||
                           _selectedStatus != null) ...[
                         const SizedBox(width: 8),
                         GestureDetector(
                           onTap: () => setState(() {
                             _selectedDepartment = 'All Departments';
-                            _selectedDateRange = null;
                             _selectedStatus = null;
                           }),
                           child: Container(
@@ -467,7 +488,7 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Text(
-                              'Clear',
+                              'Reset',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Color(0xFFDC2626),
@@ -484,11 +505,28 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
             ),
           ),
           // ── Summary bar ──
+          if (_loadError != null)
+            Container(
+              width: double.infinity,
+              color: Colors.red.shade50,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('Failed to load timesheets: $_loadError', style: const TextStyle(color: Colors.red))),
+                  TextButton(onPressed: _loadSessions, child: const Text('Retry')),
+                ],
+              ),
+            ),
           _SummaryBar(entries: filtered),
           // ── List ──
           Expanded(
-            child: filtered.isEmpty
-                ? Center(
+            child: Builder(
+              builder: (ctx) {
+                if (_isLoading) return const Center(child: CircularProgressIndicator());
+                if (filtered.isEmpty) {
+                  return Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -507,35 +545,43 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
                         ),
                       ],
                     ),
-                  )
-                : isTablet
-                    ? GridView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 12,
-                          crossAxisSpacing: 12,
-                          childAspectRatio: ((w - 32 - 12) / 2) / 210.0,
-                        ),
-                        itemCount: filtered.length,
-                        itemBuilder: (ctx, i) => _TimesheetCard(
-                          entry: filtered[i],
-                          formatDuration: _formatDuration,
-                          formatTime: _formatTime,
-                          onEvaluate: () => _showEvaluateMenu(ctx, filtered[i]),
-                        ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-                        itemCount: filtered.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (ctx, i) => _TimesheetCard(
-                          entry: filtered[i],
-                          formatDuration: _formatDuration,
-                          formatTime: _formatTime,
-                          onEvaluate: () => _showEvaluateMenu(ctx, filtered[i]),
-                        ),
-                      ),
+                  );
+                }
+                // Main list (wrap with RefreshIndicator for pull-to-refresh)
+                if (isTablet) {
+                  return GridView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: ((w - 32 - 12) / 2) / 210.0,
+                    ),
+                    itemCount: filtered.length,
+                    itemBuilder: (ctx, i) => _TimesheetCard(
+                      entry: filtered[i],
+                      formatDuration: _formatDuration,
+                      formatTime: _formatTime,
+                      onEvaluate: () => _showEvaluateMenu(ctx, filtered[i]),
+                    ),
+                  );
+                }
+                return RefreshIndicator(
+                  onRefresh: _loadSessions,
+                  child: ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (ctx, i) => _TimesheetCard(
+                    entry: filtered[i],
+                    formatDuration: _formatDuration,
+                    formatTime: _formatTime,
+                    onEvaluate: () => _showEvaluateMenu(ctx, filtered[i]),
+                  ),
+                  ),
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -569,7 +615,6 @@ class _SummaryBar extends StatelessWidget {
     final withTasks = entries.where((e) => e.tasksDone > 0).length;
     final w = MediaQuery.of(context).size.width;
     final cardBg = Theme.of(context).colorScheme.surface;
-    final border = AppTheme.borderOf(context);
 
     return Container(
       color: cardBg,
