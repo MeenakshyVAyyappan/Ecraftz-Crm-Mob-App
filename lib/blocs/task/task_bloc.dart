@@ -73,15 +73,15 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
       try {
         final res = await _client
             .from('tasks')
-            .select('*, projects(name, client_id, clients(name))')
-            .isFilter('deleted_at', null)
+            .select()
             .order('created_at', ascending: false);
         final list = (res as List).map((x) => TaskItem.fromJson(x)).toList();
         emit(TaskState(
           tasks: list,
           members: _recomputeMembers(list),
         ));
-      } catch (e) {
+      } catch (e, stackTrace) {
+        print('Error loading tasks: $e\n$stackTrace');
         emit(state.copyWith());
       }
     });

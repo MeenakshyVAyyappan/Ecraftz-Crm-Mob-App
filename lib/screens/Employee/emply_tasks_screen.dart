@@ -16,7 +16,7 @@ class EmployeeTasksScreen extends StatefulWidget {
 
 class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
   String _selectedStatus = 'All Status';
-  int _viewMode = 2; // Default to list view (0=kanban, 1=grid, 2=list)
+  int _viewMode = 0; // Default to Kanban view (0=kanban, 1=grid, 2=list)
   final _searchController = TextEditingController();
   String _searchQuery = '';
   User? _currentUser;
@@ -26,6 +26,7 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
   void initState() {
     super.initState();
     _loadProfile();
+    context.read<TaskBloc>().add(LoadTasksEvent());
   }
 
   Future<void> _loadProfile() async {
@@ -184,7 +185,9 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
                         );
                       }),
                       Divider(height: 16, color: isDark ? AppTheme.borderDark : Colors.grey[200]),
-                      filteredTasks.isEmpty ? _buildEmptyState() : _buildTasksContent(filteredTasks),
+                      _viewMode == 0 
+                          ? _buildKanbanView(filteredTasks) 
+                          : (filteredTasks.isEmpty ? _buildEmptyState() : _buildTasksContent(filteredTasks)),
                     ],
                   ),
                 ),
@@ -192,12 +195,6 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
             ),
           );
         },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddTaskDialog(),
-        backgroundColor: const Color(0xFF2196F3),
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('New Task', style: TextStyle(color: Colors.white)),
       ),
     );
   }
@@ -264,6 +261,7 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
   Widget _viewBtn(IconData icon, int mode) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => setState(() => _viewMode = mode),
       child: Container(
         padding: const EdgeInsets.all(6),
@@ -288,18 +286,6 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          GestureDetector(
-            onTap: () => _showAddTaskDialog(),
-            child: Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                color: const Color(0xFF2196F3).withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.add, color: Color(0xFF2196F3), size: 30),
-            ),
-          ),
           const SizedBox(height: 14),
           Text(
             'No tasks found',
@@ -347,88 +333,117 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
   }
 
   Widget _buildKanbanView(List<TaskItem> tasks) {
-    final pending = tasks.where((t) => t.status == TaskStatus.toDo || t.status == TaskStatus.review).toList();
+    final todo = tasks.where((t) => t.status == TaskStatus.toDo).toList();
     final inProgress = tasks.where((t) => t.status == TaskStatus.inProgress).toList();
-    final completed = tasks.where((t) => t.status == TaskStatus.done).toList();
+    final review = tasks.where((t) => t.status == TaskStatus.review).toList();
+    final done = tasks.where((t) => t.status == TaskStatus.done).toList();
 
-    return LayoutBuilder(builder: (ctx, constraints) {
-      if (constraints.maxWidth < 600) {
-        return Column(
-          children: [
-            _kanbanColumn('PENDING', pending),
-            const SizedBox(height: 16),
-            _kanbanColumn('IN PROGRESS', inProgress),
-            const SizedBox(height: 16),
-            _kanbanColumn('COMPLETED', completed),
-          ],
-        );
-      }
-      return Row(
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: _kanbanColumn('PENDING', pending)),
+          _kanbanColumn('TO DO', todo, TaskStatus.toDo),
           const SizedBox(width: 12),
-          Expanded(child: _kanbanColumn('IN PROGRESS', inProgress)),
+          _kanbanColumn('IN PROGRESS', inProgress, TaskStatus.inProgress),
           const SizedBox(width: 12),
-          Expanded(child: _kanbanColumn('COMPLETED', completed)),
+          _kanbanColumn('REVIEW', review, TaskStatus.review),
+          const SizedBox(width: 12),
+          _kanbanColumn('DONE', done, TaskStatus.done),
         ],
-      );
-    });
+      ),
+    );
   }
 
-  Widget _kanbanColumn(String title, List<TaskItem> list) {
+  Widget _kanbanColumn(String title, List<TaskItem> list, TaskStatus targetStatus) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8F9FA),
-        borderRadius: BorderRadius.circular(10),
-        border: isDark ? Border.all(color: AppTheme.borderDark) : null,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return DragTarget<TaskItem>(
+      onWillAccept: (data) => data != null && data.status != targetStatus,
+      onAccept: (task) {
+        context.read<TaskBloc>().add(UpdateTaskStatusEvent(task.id, targetStatus));
+      },
+      builder: (context, candidateData, rejectedData) {
+        final isHovered = candidateData.isNotEmpty;
+        return Container(
+          width: 260, // Fixed width for columns
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: isHovered 
+                ? (isDark ? Colors.white10 : const Color(0xFF2196F3).withOpacity(0.05))
+                : (isDark ? AppTheme.bgBaseDark : const Color(0xFFF8F9FA)),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+                color: isHovered 
+                    ? const Color(0xFF2196F3) 
+                    : (isDark ? AppTheme.borderDark : Colors.grey[200]!),
+                width: isHovered ? 2 : 1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1A1A2E)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.white : const Color(0xFF1A1A2E)),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppTheme.bgCardDark : Colors.grey[200],
+                      borderRadius: BorderRadius.circular(10),
+                      border: isDark ? Border.all(color: AppTheme.borderDark) : null,
+                    ),
+                    child: Text(
+                      '${list.length}',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black),
+                    ),
+                  ),
+                ],
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isDark ? AppTheme.bgCardDark : Colors.grey[200],
-                  borderRadius: BorderRadius.circular(10),
-                  border: isDark ? Border.all(color: AppTheme.borderDark) : null,
+              const SizedBox(height: 12),
+              if (list.isEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 30),
+                  alignment: Alignment.center,
+                  child: Text(
+                    'Empty',
+                    style: TextStyle(fontSize: 12, color: isDark ? const Color(0xFF596780) : Colors.grey[400]),
+                  ),
+                )
+              else
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: list.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (ctx, i) {
+                    final task = list[i];
+                    return LongPressDraggable<TaskItem>(
+                      data: task,
+                      feedback: Material(
+                        color: Colors.transparent,
+                        child: SizedBox(
+                          width: 240,
+                          child: Opacity(
+                            opacity: 0.8,
+                            child: _buildTaskGridCard(task),
+                          ),
+                        ),
+                      ),
+                      childWhenDragging: Opacity(
+                        opacity: 0.3,
+                        child: _buildTaskGridCard(task),
+                      ),
+                      child: _buildTaskGridCard(task),
+                    );
+                  },
                 ),
-                child: Text(
-                  '${list.length}',
-                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black),
-                ),
-              ),
             ],
           ),
-          const SizedBox(height: 10),
-          if (list.isEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              alignment: Alignment.center,
-              child: Text(
-                'Empty',
-                style: TextStyle(fontSize: 11, color: isDark ? const Color(0xFF596780) : Colors.grey[400]),
-              ),
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: list.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (ctx, i) => _buildTaskGridCard(list[i]),
-            ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -452,6 +467,7 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   task.summary,
@@ -469,6 +485,7 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
           const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -541,13 +558,11 @@ class _EmployeeTasksScreenState extends State<EmployeeTasksScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          Expanded(
-            child: Text(
-              task.summary,
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: isDark ? Colors.white : const Color(0xFF1A1A2E)),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
+          Text(
+            task.summary,
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: isDark ? Colors.white : const Color(0xFF1A1A2E)),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 4),
           Text(

@@ -13,59 +13,9 @@ import 'emply_project_screen.dart';
 import 'emply_tasks_screen.dart';
 import 'emply_my_timesheet.dart';
 import 'emply_leave_request.dart';
+import '../../models/work_session_model.dart';
 
 enum DashboardViewPeriod { day, week, month }
-
-class WorkSession {
-  final String id;
-  final DateTime startTime;
-  final DateTime? endTime;
-  final String status;
-  final int breakMinutes;
-
-  WorkSession({
-    required this.id,
-    required this.startTime,
-    this.endTime,
-    required this.status,
-    this.breakMinutes = 0,
-  });
-
-  bool get isActive {
-    final lower = status.toLowerCase().trim();
-    return endTime == null && !['completed', 'done', 'finished', 'checked_out'].contains(lower);
-  }
-
-  Duration get duration => endTime?.difference(startTime) ?? DateTime.now().difference(startTime);
-  String get signIn => DateFormat('hh:mm a').format(startTime);
-  String get signOut => endTime != null ? DateFormat('hh:mm a').format(endTime!) : '--:--';
-  String get displayStatus {
-    final lower = status.toLowerCase();
-    if (isActive) return 'WORKING';
-    if (lower == 'completed') return 'COMPLETED';
-    if (lower == 'absent') return 'ABSENT';
-    return status.toUpperCase();
-  }
-
-  factory WorkSession.fromMap(Map<String, dynamic> json, {int breakMinutes = 0}) {
-    DateTime? parseDate(String? value) {
-      if (value == null) return null;
-      try {
-        return DateTime.parse(value.toString());
-      } catch (_) {
-        return null;
-      }
-    }
-
-    return WorkSession(
-      id: json['id']?.toString() ?? '',
-      startTime: parseDate(json['start_time']?.toString())?.toLocal() ?? DateTime.now().toLocal(),
-      endTime: parseDate(json['end_time']?.toString())?.toLocal(),
-      status: json['status']?.toString() ?? 'working',
-      breakMinutes: breakMinutes,
-    );
-  }
-}
 
 class EmployeeDashboardScreen extends StatefulWidget {
   const EmployeeDashboardScreen({super.key});
@@ -428,6 +378,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
   String _selectedPeriod = 'DAY';
   DateTime _selectedDate = DateTime.now();
   String _taskFilter = 'ALL';
+  String _dailyTaskFilter = 'All';
   bool _isWorking = false;
   bool _isClockPaused = false;
   Timer? _focusTimer;
@@ -718,7 +669,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
   }
 
   bool get _canLogout {
-    final state = context.read<TaskBloc>().state;
+    final state = context.watch<TaskBloc>().state;
     final tasks = _tasksForCurrentUser(state);
     return tasks.isEmpty || tasks.every((t) => t.status == TaskStatus.done);
   }
@@ -1910,6 +1861,10 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
         final ongoing = tasks.where((t) => _taskStatusLabel(t.status) == 'Ongoing').toList();
         final done = tasks.where((t) => _taskStatusLabel(t.status) == 'Done').toList();
 
+        final displayTasks = _dailyTaskFilter == 'All' 
+            ? tasks 
+            : tasks.where((t) => _taskStatusLabel(t.status) == _dailyTaskFilter).toList();
+
         return Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -2009,14 +1964,14 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                 ],
               ),
               const SizedBox(height: 16),
-              if (tasks.isEmpty)
+              if (displayTasks.isEmpty)
                 Center(
                   child: Column(
                     children: [
                       Icon(Icons.edit_note,
                           size: 36, color: isDark ? Colors.grey[800] : Colors.grey[300]),
                       const SizedBox(height: 6),
-                      Text('NO TASKS SET FOR TODAY',
+                      Text('NO TASKS FOR THIS FILTER',
                           style: TextStyle(
                               fontSize: 11,
                               color: isDark ? const Color(0xFF596780) : Colors.grey[400])),
@@ -2028,7 +1983,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                   children: [
                     _buildTaskSummaryRow(done.length, ongoing.length, pending.length),
                     const SizedBox(height: 12),
-                    ...tasks.map((task) => _buildTaskItem(
+                    ...displayTasks.map((task) => _buildTaskItem(
                           task,
                           task.description,
                           task.dueDate != null ? DateFormat('MMM d').format(task.dueDate!) : 'TODAY',
@@ -2047,19 +2002,29 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        _buildSummaryChip('Done', done, const Color(0xFF10B981), isDark),
-        _buildSummaryChip('Ongoing', ongoing, const Color(0xFF0EA5E9), isDark),
-        _buildSummaryChip('Pending', pending, const Color(0xFFF59E0B), isDark),
+        GestureDetector(
+          onTap: () => setState(() => _dailyTaskFilter = _dailyTaskFilter == 'Done' ? 'All' : 'Done'),
+          child: _buildSummaryChip('Done', done, const Color(0xFF10B981), isDark, _dailyTaskFilter == 'Done'),
+        ),
+        GestureDetector(
+          onTap: () => setState(() => _dailyTaskFilter = _dailyTaskFilter == 'Ongoing' ? 'All' : 'Ongoing'),
+          child: _buildSummaryChip('Ongoing', ongoing, const Color(0xFF0EA5E9), isDark, _dailyTaskFilter == 'Ongoing'),
+        ),
+        GestureDetector(
+          onTap: () => setState(() => _dailyTaskFilter = _dailyTaskFilter == 'Pending' ? 'All' : 'Pending'),
+          child: _buildSummaryChip('Pending', pending, const Color(0xFFF59E0B), isDark, _dailyTaskFilter == 'Pending'),
+        ),
       ],
     );
   }
 
-  Widget _buildSummaryChip(String label, int count, Color color, bool isDark) {
+  Widget _buildSummaryChip(String label, int count, Color color, bool isDark, bool isSelected) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: isSelected ? color.withOpacity(0.3) : color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(8),
+        border: isSelected ? Border.all(color: color, width: 1) : null,
       ),
       child: Row(
         children: [
