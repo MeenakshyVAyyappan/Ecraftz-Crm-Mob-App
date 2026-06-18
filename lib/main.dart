@@ -48,14 +48,78 @@ void main() async {
   );
 }
 
-/// AuthWrapper uses BlocBuilder to switch screens inside the provider tree,
-/// avoiding Navigator.pushReplacement which can lose provider context.
-class AuthWrapper extends StatelessWidget {
+/// AuthWrapper is a StatefulWidget that tracks a login session counter.
+/// Every time the user logs in (isLoginEvent = true), _loginSessionCount increments.
+/// This counter is embedded in the key of EmployeeDashboardScreen and MainShell,
+/// ensuring Flutter completely destroys and recreates the widget tree on each login —
+/// even for the same user — so the latest department and profile data are always loaded.
+class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
 
   @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  // Incremented on every login. Changing this value changes the key on the
+  // dashboard widget, forcing Flutter to tear down the old state completely
+  // and build a fresh one that fetches the latest profile/department from Supabase.
+  int _loginSessionCount = 0;
+
+  @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AuthBloc, AuthState>(
+    return BlocConsumer<AuthBloc, AuthState>(
+      listenWhen: (previous, current) {
+        // Rebuild listener only on meaningful state changes
+        return current is Authenticated || current is Unauthenticated;
+      },
+      listener: (context, state) {
+        if (state is Authenticated && state.isLoginEvent) {
+          // Increment counter to force widget recreation with a new key
+          setState(() {
+            _loginSessionCount++;
+          });
+          ScaffoldMessenger.of(context).clearSnackBars();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Login successful.'),
+              backgroundColor: AppTheme.success,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          Future.delayed(const Duration(milliseconds: 1500), () {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Profile loaded successfully.'),
+                  backgroundColor: AppTheme.success,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          });
+        } else if (state is Unauthenticated) {
+          if (state.loggedOut) {
+            ScaffoldMessenger.of(context).clearSnackBars();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Logout successful.'),
+                backgroundColor: AppTheme.success,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          } else if (state.sessionExpired) {
+            ScaffoldMessenger.of(context).clearSnackBars();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Session expired. Please login again.'),
+                backgroundColor: AppTheme.warning,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      },
       builder: (context, state) {
         if (state is AuthInitial || state is AuthLoading) {
           return const Scaffold(
@@ -63,9 +127,15 @@ class AuthWrapper extends StatelessWidget {
           );
         } else if (state is Authenticated) {
           if (state.role == 'employee') {
-            return const EmployeeDashboardScreen();
+            // Key includes loginSessionCount so the widget is fully recreated
+            // on every login, even if the same user logs in again after logout.
+            return EmployeeDashboardScreen(
+              key: ValueKey('emp_${state.user.id}_$_loginSessionCount'),
+            );
           }
-          return const MainShell();
+          return MainShell(
+            key: ValueKey('admin_${state.user.id}_$_loginSessionCount'),
+          );
         }
         // Unauthenticated or AuthError — show login
         return const LoginPage();

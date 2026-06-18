@@ -74,6 +74,7 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
         final res = await _client
             .from('tasks')
             .select()
+            .isFilter('deleted_at', null)
             .order('created_at', ascending: false);
         final list = (res as List).map((x) => TaskItem.fromJson(x)).toList();
         emit(TaskState(

@@ -111,13 +111,18 @@ class _MainShellState extends State<MainShell> {
           selectedIndex: _selectedIndex,
           onItemSelected: _onItemSelected,
         );
-      case 17:
-        return TimeMonitorScreen(
+      case 15:
+        return RolesAccessScreen(  
           selectedIndex: _selectedIndex,
           onItemSelected: _onItemSelected,
         );
       case 16:
         return HRPayrollScreen(
+          selectedIndex: _selectedIndex,
+          onItemSelected: _onItemSelected,
+        );
+      case 17:
+        return TimeMonitorScreen(
           selectedIndex: _selectedIndex,
           onItemSelected: _onItemSelected,
         );

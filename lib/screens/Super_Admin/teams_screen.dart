@@ -1,9 +1,11 @@
 // teams_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
 import '../../widgets/app_drawer.dart';
+import '../../services/supabase_service.dart';
 
 // ─── DATA MODELS ─────────────────────────────────────────────────────────────
 
@@ -60,13 +62,7 @@ class TeamMember {
 // ─── AVAILABLE ROLES & DEPARTMENTS ───────────────────────────────────────────
 
 const _roles = [
-  'Super Admin', 'Administrator', 'HR', 'Team Lead',
-  'Sales', 'Employee', 'Designer', 'Developer',
-];
-
-const _departments = [
-  'No Department', 'Web Developing', 'BDE',
-  'Digital Marketing', 'Design', 'HR', 'Sales',
+  'Administrator', 'Employee', 'HR', 'Sales', 'Team Lead',
 ];
 
 Color _roleColor(String role) {
@@ -92,22 +88,90 @@ Color _deptColor(String dept) {
     case 'design': return const Color(0xFF8B5CF6);
     case 'hr': return const Color(0xFF10B981);
     case 'sales': return const Color(0xFFF97316);
-    default: return const Color(0xFF6B7280);
+    case 'crm': return const Color(0xFF14B8A6);
+    case 'content writer': return const Color(0xFF8B5CF6);
+    case 'video editing': return const Color(0xFF6366F1);
+    case 'videography': return const Color(0xFFEC4899);
+    default: return const Color(0xFF00BCD4);
   }
 }
 
-final List<TeamMember> teamMembers = [
-  TeamMember(id: '1', name: 'viswajith e', email: 'viswajithithu333@gmail.com', role: 'Super Admin', department: 'No Department', status: MemberStatus.active, registeredAt: DateTime(2026, 4, 30), isSuperAdmin: true),
-  TeamMember(id: '2', name: 'Sasi', email: 'viswajith.e.cs@gmail.com', role: 'Administrator', department: 'No Department', status: MemberStatus.active, registeredAt: DateTime(2026, 4, 30)),
-  TeamMember(id: '3', name: 'ananthu', email: 'viswajith8025@gmail.com', role: 'HR', department: 'No Department', status: MemberStatus.active, registeredAt: DateTime(2026, 4, 30)),
-  TeamMember(id: '4', name: 'Chimbu', email: 'hackerhacker0424@gmail.com', role: 'Team Lead', department: 'Web Developing', status: MemberStatus.active, registeredAt: DateTime(2026, 5, 5)),
-  TeamMember(id: '5', name: 'Tony Stark', email: 'viswajith.ecraftz@gmail.com', role: 'Sales', department: 'BDE', status: MemberStatus.active, registeredAt: DateTime(2026, 5, 12)),
-  TeamMember(id: '6', name: 'Fathima Safa', email: 'fathmasafa.work@gmail.com', role: 'Employee', department: 'Digital Marketing', status: MemberStatus.active, registeredAt: DateTime(2026, 5, 26)),
-  TeamMember(id: '7', name: 'Roronoa', email: 'roronoa@gmail.com', role: 'Employee', department: 'Web Developing', status: MemberStatus.active, registeredAt: DateTime(2026, 5, 26)),
-  TeamMember(id: '8', name: 'admin', email: 'admin@ecraftz.com', role: 'Employee', department: 'No Department', status: MemberStatus.pending, registeredAt: DateTime(2026, 5, 26)),
-  TeamMember(id: '9', name: 'Test Active', email: 'testactive@gmail.com', role: 'Employee', department: 'No Department', status: MemberStatus.pending, registeredAt: DateTime(2026, 5, 26)),
-  TeamMember(id: '10', name: 'Roopesh', email: 'livein@jananilifestyle.in', role: 'Employee', department: 'No Department', status: MemberStatus.denied, registeredAt: DateTime(2026, 5, 5)),
-];
+MemberStatus _parseStatus(String? statusStr) {
+  switch (statusStr?.toLowerCase()) {
+    case 'active':
+      return MemberStatus.active;
+    case 'pending':
+      return MemberStatus.pending;
+    case 'denied':
+      return MemberStatus.denied;
+    case 'archived':
+      return MemberStatus.archived;
+    default:
+      return MemberStatus.pending;
+  }
+}
+
+String _statusToString(MemberStatus status) {
+  switch (status) {
+    case MemberStatus.active:
+      return 'active';
+    case MemberStatus.pending:
+      return 'pending';
+    case MemberStatus.denied:
+      return 'denied';
+    case MemberStatus.archived:
+      return 'archived';
+  }
+}
+
+String _mapRoleFromDb(String? role) {
+  if (role == null) return 'Employee';
+  switch (role.toLowerCase()) {
+    case 'admin':
+    case 'administrator':
+      return 'Administrator';
+    case 'super admin':
+    case 'super_admin':
+      return 'Super Admin';
+    case 'hr':
+      return 'HR';
+    case 'team lead':
+    case 'manager':
+      return 'Team Lead';
+    case 'sales':
+      return 'Sales';
+    case 'employee':
+      return 'Employee';
+    case 'designer':
+      return 'Designer';
+    case 'developer':
+      return 'Developer';
+    default:
+      return role;
+  }
+}
+
+String _mapRoleToDb(String role) {
+  switch (role.toLowerCase()) {
+    case 'super admin':
+    case 'super_admin':
+      return 'super_admin';
+    case 'administrator':
+    case 'admin':
+      return 'admin';
+    case 'hr':
+      return 'hr';
+    case 'team lead':
+    case 'manager':
+      return 'manager';
+    case 'sales':
+      return 'sales';
+    default:
+      return 'employee';
+  }
+}
+
+List<TeamMember> teamMembers = [];
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
@@ -130,7 +194,101 @@ class _TeamsPageState extends State<TeamsPage> {
   String _search = '';
   final _searchCtrl = TextEditingController();
 
-  List<TeamMember> get _members => teamMembers;
+  bool _isLoading = true;
+  List<TeamMember> _members = [];
+  List<Map<String, dynamic>> _dynamicDepartments = [];
+  RealtimeChannel? _profileSubscription;
+
+  List<String> get _departmentNames => ['No Department'] + _dynamicDepartments.map((d) => d['name'] as String).toList();
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchData();
+    _subscribeToProfiles();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    if (_profileSubscription != null) {
+      SupabaseService.client.removeChannel(_profileSubscription!);
+    }
+    super.dispose();
+  }
+
+  void _subscribeToProfiles() {
+    _profileSubscription = SupabaseService.client
+        .channel('public:profiles')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'profiles',
+          callback: (payload) {
+            _fetchData(showLoading: false);
+          },
+        )
+        .subscribe();
+  }
+
+  Future<void> _fetchData({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() => _isLoading = true);
+    }
+    try {
+      final deptsRes = await SupabaseService.client.from('departments').select('id, name');
+      final fetchedDepts = List<Map<String, dynamic>>.from(deptsRes as List);
+
+      final profilesRes = await SupabaseService.client
+          .from('profiles')
+          .select('*, departments:departments!fk_profiles_dept(id, name)');
+      
+      final fetchedProfiles = List<Map<String, dynamic>>.from(profilesRes as List);
+
+      final List<TeamMember> loadedMembers = fetchedProfiles.map((p) {
+        final id = p['id']?.toString() ?? '';
+        final name = p['full_name']?.toString() ?? 'Unknown';
+        final email = p['email']?.toString() ?? '';
+        
+        final rawRole = p['role']?.toString();
+        final role = _mapRoleFromDb(rawRole);
+
+        final deptMap = p['departments'];
+        final department = deptMap != null ? (deptMap['name']?.toString() ?? 'No Department') : 'No Department';
+
+        final rawStatus = p['status']?.toString();
+        final status = _parseStatus(rawStatus);
+
+        final createdAtStr = p['created_at']?.toString() ?? '';
+        final registeredAt = createdAtStr.isNotEmpty ? DateTime.parse(createdAtStr) : DateTime.now();
+
+        final isSuperAdmin = email == 'viswajithjithu3335@gmail.com' ||
+                             email == 'viswajithjithu333@gmail.com' ||
+                             id == 'f417dc7e-a4c3-4964-9e62-553ffffcef8c' ||
+                             role.toLowerCase() == 'super admin';
+
+        return TeamMember(
+          id: id,
+          name: name,
+          email: email,
+          role: role,
+          department: department,
+          status: status,
+          registeredAt: registeredAt,
+          isSuperAdmin: isSuperAdmin,
+        );
+      }).toList();
+
+      setState(() {
+        _dynamicDepartments = fetchedDepts;
+        _members = loadedMembers;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      _snack('Failed to load data from Supabase: $e', Colors.red);
+    }
+  }
 
   List<TeamMember> get _filtered {
     return _members.where((m) {
@@ -138,7 +296,8 @@ class _TeamsPageState extends State<TeamsPage> {
       final matchSearch = _search.isEmpty ||
           m.name.toLowerCase().contains(_search.toLowerCase()) ||
           m.email.toLowerCase().contains(_search.toLowerCase()) ||
-          m.role.toLowerCase().contains(_search.toLowerCase());
+          m.role.toLowerCase().contains(_search.toLowerCase()) ||
+          m.department.toLowerCase().contains(_search.toLowerCase());
       return matchTab && matchSearch;
     }).toList();
   }
@@ -148,24 +307,42 @@ class _TeamsPageState extends State<TeamsPage> {
 
   int get _pendingCount => _countByStatus(MemberStatus.pending);
 
-  void _approve(TeamMember m) {
-    setState(() => m.status = MemberStatus.active);
-    _snack('${m.name} approved', const Color(0xFF10B981));
-  }
+  Future<void> _updateStatus(TeamMember m, MemberStatus newStatus) async {
+    final statusStr = _statusToString(newStatus);
+    try {
+      await SupabaseService.client.from('profiles').update({
+        'status': statusStr,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', m.id);
 
-  void _deny(TeamMember m) {
-    setState(() => m.status = MemberStatus.denied);
-    _snack('${m.name} denied', Colors.red);
-  }
-
-  void _reinstate(TeamMember m) {
-    setState(() => m.status = MemberStatus.pending);
-    _snack('${m.name} reinstated to pending', const Color(0xFFF59E0B));
-  }
-
-  void _archive(TeamMember m) {
-    setState(() => m.status = MemberStatus.archived);
-    _snack('${m.name} archived', const Color(0xFF6B7280));
+      setState(() {
+        m.status = newStatus;
+      });
+      
+      String msg;
+      Color color;
+      switch (newStatus) {
+        case MemberStatus.active:
+          msg = '${m.name} approved';
+          color = const Color(0xFF10B981);
+          break;
+        case MemberStatus.pending:
+          msg = '${m.name} reinstated to pending';
+          color = const Color(0xFFF59E0B);
+          break;
+        case MemberStatus.denied:
+          msg = '${m.name} denied';
+          color = Colors.red;
+          break;
+        case MemberStatus.archived:
+          msg = '${m.name} archived';
+          color = const Color(0xFF6B7280);
+          break;
+      }
+      _snack(msg, color);
+    } catch (e) {
+      _snack('Failed to update status: $e', Colors.red);
+    }
   }
 
   void _snack(String msg, Color color) {
@@ -177,11 +354,67 @@ class _TeamsPageState extends State<TeamsPage> {
     );
   }
 
-  void _changeRole(TeamMember m, String role) =>
-      setState(() => m.role = role);
+  Future<void> _updateRole(TeamMember m, String role) async {
+    try {
+      final dbRole = _mapRoleToDb(role);
+      await SupabaseService.client.from('profiles').update({
+        'role': dbRole,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', m.id);
 
-  void _changeDept(TeamMember m, String dept) =>
-      setState(() => m.department = dept);
+      setState(() {
+        m.role = role;
+      });
+      _snack('Role updated to $role', const Color(0xFF10B981));
+    } catch (e) {
+      _snack('Failed to update role: $e', Colors.red);
+    }
+  }
+
+  String? _findDeptIdByName(String name) {
+    if (name == 'No Department') return null;
+    final dept = _dynamicDepartments.firstWhere(
+      (d) => d['name'] == name,
+      orElse: () => {},
+    );
+    return dept['id']?.toString();
+  }
+
+  Future<void> _updateDepartment(TeamMember m, String deptName) async {
+    final deptId = _findDeptIdByName(deptName);
+    try {
+      // 1. Update profiles table
+      await SupabaseService.client.from('profiles').update({
+        'department_id': deptId,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', m.id);
+
+      // 2. Sync department_members table
+      final dmRes = await SupabaseService.client.from('department_members').select('id').eq('profile_id', m.id);
+      if (dmRes.isNotEmpty) {
+        final dmId = dmRes.first['id'];
+        if (deptId == null) {
+          await SupabaseService.client.from('department_members').delete().eq('id', dmId);
+        } else {
+          await SupabaseService.client.from('department_members').update({
+            'department_id': deptId,
+          }).eq('id', dmId);
+        }
+      } else if (deptId != null) {
+        await SupabaseService.client.from('department_members').insert({
+          'profile_id': m.id,
+          'department_id': deptId,
+        });
+      }
+
+      setState(() {
+        m.department = deptName;
+      });
+      _snack('Department updated to $deptName', const Color(0xFF10B981));
+    } catch (e) {
+      _snack('Failed to update department: $e', Colors.red);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -296,40 +529,43 @@ class _TeamsPageState extends State<TeamsPage> {
           _buildTableHeader(isWide, _border),
           // List
           Expanded(
-            child: members.isEmpty
-                ? _buildEmpty(_textSecondary)
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    itemCount: members.length,
-                    itemBuilder: (_, i) {
-                      if (!isWide) {
-                        return _MemberCardMobile(
-                          member: members[i],
-                          tab: _tab,
-                          onApprove: () => _approve(members[i]),
-                          onDeny: () => _deny(members[i]),
-                          onReinstate: () => _reinstate(members[i]),
-                          onArchive: () => _archive(members[i]),
-                          onRoleChange: (r) => _changeRole(members[i], r),
-                          onDeptChange: (d) => _changeDept(members[i], d),
-                        );
-                      }
-                      return _MemberRow(
-                        member: members[i],
-                        isWide: isWide,
-                        tab: _tab,
-                        onApprove: () => _approve(members[i]),
-                        onDeny: () => _deny(members[i]),
-                        onReinstate: () => _reinstate(members[i]),
-                        onArchive: () => _archive(members[i]),
-                        onRoleChange: (r) => _changeRole(members[i], r),
-                        onDeptChange: (d) => _changeDept(members[i], d),
-                      );
-                    },
-                  ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF00BCD4)))
+                : (members.isEmpty
+                    ? _buildEmpty(_textSecondary)
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        itemCount: members.length,
+                        itemBuilder: (_, i) {
+                          if (!isWide) {
+                            return _MemberCardMobile(
+                              member: members[i],
+                              tab: _tab,
+                              onApprove: () => _updateStatus(members[i], MemberStatus.active),
+                              onDeny: () => _updateStatus(members[i], MemberStatus.denied),
+                              onReinstate: () => _updateStatus(members[i], MemberStatus.pending),
+                              onArchive: () => _updateStatus(members[i], MemberStatus.archived),
+                              onRoleChange: (r) => _updateRole(members[i], r),
+                              onDeptChange: (d) => _updateDepartment(members[i], d),
+                              deptItems: _departmentNames,
+                            );
+                          }
+                          return _MemberRow(
+                            member: members[i],
+                            isWide: isWide,
+                            tab: _tab,
+                            onApprove: () => _updateStatus(members[i], MemberStatus.active),
+                            onDeny: () => _updateStatus(members[i], MemberStatus.denied),
+                            onReinstate: () => _updateStatus(members[i], MemberStatus.pending),
+                            onArchive: () => _updateStatus(members[i], MemberStatus.archived),
+                            onRoleChange: (r) => _updateRole(members[i], r),
+                            onDeptChange: (d) => _updateDepartment(members[i], d),
+                            deptItems: _departmentNames,
+                          );
+                        },
+                      )),
           ),
-          // Dynamic role info
-          _buildRoleInfo(isDark),
+
         ],
       ),
     );
@@ -498,46 +734,7 @@ class _TeamsPageState extends State<TeamsPage> {
     );
   }
 
-  Widget _buildRoleInfo(bool isDark) {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0C2C3E) : const Color(0xFFF0F9FF),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF00BCD4).withOpacity(0.2)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.shield_outlined, size: 16, color: Color(0xFF00BCD4)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('DYNAMIC ROLE SYSTEM',
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? const Color(0xFF00BCD4) : const Color(0xFF0369A1),
-                        letterSpacing: 0.4)),
-                const SizedBox(height: 4),
-                Text(
-                    '• Roles are fully dynamic — create custom roles in Roles & Access Control.\n'
-                    '• Assigning a role here instantly updates the user\'s permissions.\n'
-                    '• Super Admin has permanent full access and cannot be reassigned.',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? Colors.cyan[200] : const Color(0xFF0369A1),
-                        height: 1.5)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+
 }
 
 // ─── TABLE HEADER CELL ────────────────────────────────────────────────────────
@@ -570,6 +767,7 @@ class _MemberRow extends StatelessWidget {
   final VoidCallback onArchive;
   final Function(String) onRoleChange;
   final Function(String) onDeptChange;
+  final List<String> deptItems;
 
   const _MemberRow({
     required this.member,
@@ -581,6 +779,7 @@ class _MemberRow extends StatelessWidget {
     required this.onArchive,
     required this.onRoleChange,
     required this.onDeptChange,
+    required this.deptItems,
   });
 
   @override
@@ -661,7 +860,7 @@ class _MemberRow extends StatelessWidget {
                   ? _DeptBadge(dept: member.department)
                   : _DropdownBadge(
                       value: member.department,
-                      items: _departments,
+                      items: deptItems,
                       color: _deptColor(member.department),
                       onChanged: onDeptChange,
                     ),
@@ -844,6 +1043,7 @@ class _DropdownBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final List<String> dropdownItems = items.contains(value) ? items : [value, ...items];
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
@@ -854,13 +1054,13 @@ class _DropdownBadge extends StatelessWidget {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           dropdownColor: Theme.of(context).colorScheme.surface,
-          value: items.contains(value) ? value : items.first,
+          value: value,
           isDense: true,
           icon: Icon(Icons.keyboard_arrow_down_rounded,
               size: 14, color: color),
           style: TextStyle(
               fontSize: 11, fontWeight: FontWeight.w600, color: color),
-          items: items
+          items: dropdownItems
               .map((i) => DropdownMenuItem(
                   value: i,
                   child: Text(i,
@@ -927,6 +1127,7 @@ class _MemberCardMobile extends StatelessWidget {
   final VoidCallback onArchive;
   final Function(String) onRoleChange;
   final Function(String) onDeptChange;
+  final List<String> deptItems;
 
   const _MemberCardMobile({
     required this.member,
@@ -937,6 +1138,7 @@ class _MemberCardMobile extends StatelessWidget {
     required this.onArchive,
     required this.onRoleChange,
     required this.onDeptChange,
+    required this.deptItems,
   });
 
   @override
@@ -1031,7 +1233,7 @@ class _MemberCardMobile extends StatelessWidget {
                         ? _DeptBadge(dept: member.department)
                         : _DropdownBadge(
                             value: member.department,
-                            items: _departments,
+                            items: deptItems,
                             color: _deptColor(member.department),
                             onChanged: onDeptChange,
                           ),

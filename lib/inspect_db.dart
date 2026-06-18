@@ -27,6 +27,25 @@ void main() {
     print('Supabase connected!');
 
     try {
+      final testEmail = 'inspect_${DateTime.now().millisecondsSinceEpoch}@ecraftz.com';
+      final testPassword = 'Password123!';
+      print('Authenticating as $testEmail...');
+      await client.auth.signUp(
+        email: testEmail,
+        password: testPassword,
+        data: {
+          'name': 'Inspector',
+          'full_name': 'Inspector User',
+          'role': 'super admin',
+          'organization_id': '00000000-0000-0000-0000-000000000000',
+        },
+      );
+      print('Authenticated successfully!');
+    } catch (authError) {
+      print('Auth error (could be fine if already authed): $authError');
+    }
+
+    try {
       final payrollRes = await client.from('payroll').select().limit(5);
       print('Payroll rows: $payrollRes');
     } catch (e) {
@@ -41,10 +60,13 @@ void main() {
     }
 
     try {
-      final profileRes = await client.from('profiles').select().limit(5);
-      print('Profiles: $profileRes');
+      final actRes = await client.from('activities').select().limit(5);
+      print('Activities rows: $actRes');
+      if (actRes.isNotEmpty) {
+        print('Activities keys: ${actRes.first.keys}');
+      }
     } catch (e) {
-      print('Error querying profiles: $e');
+      print('Error querying activities: $e');
     }
   });
 }

@@ -47,7 +47,13 @@ class TimesheetEntry {
         ? profile['full_name'].toString()
         : (row['employee_name']?.toString() ?? row['full_name']?.toString() ?? '');
     final role = (profile != null && profile['role'] != null) ? profile['role'].toString() : (row['role']?.toString() ?? 'EMPLOYEE');
-    final department = (profile != null && profile['department'] != null) ? profile['department'].toString() : (row['department']?.toString() ?? 'Unknown');
+    
+    final profileDept = profile != null
+        ? (profile['departments'] != null
+            ? profile['departments']['name']?.toString()
+            : profile['department']?.toString())
+        : null;
+    final department = profileDept ?? row['department']?.toString() ?? 'No Department';
 
     DateTime? startedAt;
     DateTime? endedAt;
@@ -149,6 +155,9 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
   List<TimesheetEntry> _entries = [];
   bool _isLoading = false;
   String? _loadError;
+  List<Map<String, dynamic>> _allProjects = [];
+  List<Map<String, dynamic>> _allTasks = [];
+  List<Map<String, dynamic>> _profiles = [];
 
   @override
   void initState() {
@@ -198,6 +207,14 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
     try {
       final client = SupabaseService.client;
       
+      // Load projects
+      final projectsRaw = await client.from('projects').select().isFilter('deleted_at', null);
+      final fetchedProjects = (projectsRaw as List).cast<Map<String, dynamic>>();
+
+      // Load tasks
+      final tasksRaw = await client.from('tasks').select().isFilter('deleted_at', null);
+      final fetchedTasks = (tasksRaw as List).cast<Map<String, dynamic>>();
+
       // Query work_sessions with full record to see actual schema
       final rowsRaw = await client.from('work_sessions').select();
       final rows = (rowsRaw as List).cast<Map<String, dynamic>>();
@@ -208,17 +225,24 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
       }
       
       if (rows.isEmpty) {
-        setState(() { _entries = []; _isLoading = false; });
+        setState(() {
+          _entries = [];
+          _allProjects = fetchedProjects;
+          _allTasks = fetchedTasks;
+          _profiles = [];
+          _isLoading = false;
+        });
         return;
       }
 
       // Fetch and join profiles
       final profileIds = rows.map((r) => r['user_id']?.toString()).where((id) => id != null).cast<String>().toSet().toList();
       Map<String, Map<String, dynamic>> profileMap = {};
+      List<Map<String, dynamic>> fetchedProfiles = [];
       if (profileIds.isNotEmpty) {
-        final profRaw = await client.from('profiles').select();
-        final profiles = (profRaw as List).cast<Map<String, dynamic>>();
-        for (final p in profiles) {
+        final profRaw = await client.from('profiles').select('*, departments:departments!fk_profiles_dept(id, name)');
+        fetchedProfiles = (profRaw as List).cast<Map<String, dynamic>>();
+        for (final p in fetchedProfiles) {
           final uid = p['id']?.toString();
           if (uid != null) profileMap[uid] = p;
         }
@@ -251,12 +275,141 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
         return TimesheetEntry.fromSupabase(r, profile: profile, breakMinutes: bm);
       }).toList();
 
-      setState(() { _entries = mapped; _isLoading = false; });
+      setState(() {
+        _entries = mapped;
+        _allProjects = fetchedProjects;
+        _allTasks = fetchedTasks;
+        _profiles = fetchedProfiles;
+        _isLoading = false;
+      });
     } catch (e, st) {
       print('ERROR loading sessions: $e');
       print(st);
       setState(() { _isLoading = false; _loadError = e.toString(); });
     }
+  }
+
+  List<String> get _matchingProfileIdsForStats {
+    if (_selectedDepartment == 'All Departments') {
+      return _profiles.map((p) => p['id']?.toString() ?? '').toList();
+    }
+    return _profiles.where((p) {
+      final deptMap = p['departments'];
+      final deptName = deptMap != null ? (deptMap['name']?.toString() ?? 'No Department') : 'No Department';
+      return deptName == _selectedDepartment;
+    }).map((p) => p['id']?.toString() ?? '').toList();
+  }
+
+  List<Map<String, dynamic>> get _filteredProjectsForStats {
+    final profileIds = _matchingProfileIdsForStats;
+    return _allProjects.where((proj) {
+      final projId = proj['id']?.toString() ?? '';
+
+      // 1. Department Filter
+      if (_selectedDepartment != 'All Departments') {
+        final projectTasks = _allTasks.where((t) => t['project_id']?.toString() == projId);
+        final hasDeptAssignee = projectTasks.any((t) {
+          final assignedTo = t['assigned_to']?.toString();
+          return assignedTo != null && profileIds.contains(assignedTo);
+        });
+        if (!hasDeptAssignee) return false;
+      }
+
+      // 2. Date Filter
+      DateTime? projDate;
+      if (proj['start_date'] != null) {
+        projDate = DateTime.tryParse(proj['start_date'].toString());
+      } else if (proj['created_at'] != null) {
+        projDate = DateTime.tryParse(proj['created_at'].toString());
+      }
+      if (projDate != null) {
+        final dayOnly = DateTime(projDate.year, projDate.month, projDate.day);
+        final filterDayOnly = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+        if (dayOnly != filterDayOnly) return false;
+      }
+
+      // 3. Status Filter
+      if (_selectedStatus != null) {
+        final projStatus = (proj['status']?.toString() ?? '').toLowerCase();
+        if (_selectedStatus == 'Completed' && projStatus != 'completed') return false;
+        if (_selectedStatus == 'In Progress' && projStatus != 'in_progress') return false;
+      }
+
+      return true;
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> get _filteredTasksForStats {
+    final profileIds = _matchingProfileIdsForStats;
+    return _allTasks.where((task) {
+      // 1. Department Filter
+      final assignedTo = task['assigned_to']?.toString();
+      if (_selectedDepartment != 'All Departments') {
+        if (assignedTo == null || !profileIds.contains(assignedTo)) {
+          return false;
+        }
+      }
+
+      // 2. Date Filter
+      DateTime? taskDate;
+      if (task['due_date'] != null) {
+        taskDate = DateTime.tryParse(task['due_date'].toString());
+      } else if (task['created_at'] != null) {
+        taskDate = DateTime.tryParse(task['created_at'].toString());
+      }
+      if (taskDate != null) {
+        final dayOnly = DateTime(taskDate.year, taskDate.month, taskDate.day);
+        final filterDayOnly = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+        if (dayOnly != filterDayOnly) return false;
+      }
+
+      // 3. Status Filter
+      if (_selectedStatus != null) {
+        final taskStatus = (task['status']?.toString() ?? '').toLowerCase();
+        if (_selectedStatus == 'Completed' && taskStatus != 'done') return false;
+        if (_selectedStatus == 'In Progress' && taskStatus != 'in_progress' && taskStatus != 'todo') return false;
+      }
+
+      return true;
+    }).toList();
+  }
+
+  List<TimesheetEntry> get _filteredSessionsForStats {
+    return _entries.where((e) {
+      // 1. Department Filter
+      if (_selectedDepartment != 'All Departments' && e.department != _selectedDepartment) {
+        return false;
+      }
+
+      // 2. Date Filter
+      final eDate = DateTime(e.date.year, e.date.month, e.date.day);
+      final filterDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+      if (eDate != filterDate) return false;
+
+      // 3. Status Filter
+      if (_selectedStatus != null) {
+        if (_selectedStatus == 'Completed' && e.status != TimesheetStatus.completed) return false;
+        if (_selectedStatus == 'In Progress' && e.status != TimesheetStatus.inProgress) return false;
+      }
+
+      return true;
+    }).toList();
+  }
+
+  int get totalProjectsCount => _filteredProjectsForStats.length;
+
+  int get completedProjectsCount {
+    return _filteredProjectsForStats.where((p) {
+      final statusStr = (p['status']?.toString() ?? '').toLowerCase();
+      return statusStr == 'completed';
+    }).length;
+  }
+
+  int get totalTasksCount => _filteredTasksForStats.length;
+
+  int get totalHoursCount {
+    final sessions = _filteredSessionsForStats;
+    return sessions.fold<int>(0, (sum, e) => sum + e.duration.inHours);
   }
 
   String _formatDuration(Duration d) {
@@ -519,7 +672,12 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
                 ],
               ),
             ),
-          _SummaryBar(entries: filtered),
+          _SummaryBar(
+            totalProjects: totalProjectsCount,
+            completedProjects: completedProjectsCount,
+            totalHours: totalHoursCount,
+            totalTasks: totalTasksCount,
+          ),
           // ── List ──
           Expanded(
             child: Builder(
@@ -605,14 +763,20 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
 // ─── Summary Bar ─────────────────────────────────────────────────────────────
 
 class _SummaryBar extends StatelessWidget {
-  final List<TimesheetEntry> entries;
-  const _SummaryBar({required this.entries});
+  final int totalProjects;
+  final int completedProjects;
+  final int totalHours;
+  final int totalTasks;
+
+  const _SummaryBar({
+    required this.totalProjects,
+    required this.completedProjects,
+    required this.totalHours,
+    required this.totalTasks,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final completed = entries.where((e) => e.status == TimesheetStatus.completed).length;
-    final totalHours = entries.fold<int>(0, (s, e) => s + e.duration.inHours);
-    final withTasks = entries.where((e) => e.tasksDone > 0).length;
     final w = MediaQuery.of(context).size.width;
     final cardBg = Theme.of(context).colorScheme.surface;
 
@@ -623,14 +787,14 @@ class _SummaryBar extends StatelessWidget {
       child: Row(
         children: [
           _SummaryStat(
-            label: 'Total',
-            value: '${entries.length}',
+            label: 'Projects',
+            value: '$totalProjects',
             color: const Color(0xFF0EA5E9),
           ),
           _divider(context, w < 360 ? 4 : 8),
           _SummaryStat(
             label: 'Completed',
-            value: '$completed',
+            value: '$completedProjects',
             color: const Color(0xFF10B981),
           ),
           _divider(context, w < 360 ? 4 : 8),
@@ -641,8 +805,8 @@ class _SummaryBar extends StatelessWidget {
           ),
           _divider(context, w < 360 ? 4 : 8),
           _SummaryStat(
-            label: 'With Tasks',
-            value: '$withTasks',
+            label: 'Total Tasks',
+            value: '$totalTasks',
             color: const Color(0xFFF59E0B),
           ),
         ],

@@ -118,13 +118,66 @@ class _MyTimesheetScreenState extends State<MyTimesheetScreen> {
     return a.year == b.year && a.month == b.month;
   }
 
+  DateTime get _currentPeriodStart {
+    final now = DateTime.now();
+    if (_selectedPeriod == 'Today') {
+      return DateTime(now.year, now.month, now.day, 0, 0, 0);
+    }
+    if (_selectedPeriod == 'This Week') {
+      final startMonday = now.subtract(Duration(days: now.weekday - 1));
+      return DateTime(startMonday.year, startMonday.month, startMonday.day, 0, 0, 0);
+    }
+    if (_selectedPeriod == 'This Month') {
+      return DateTime(now.year, now.month, 1, 0, 0, 0);
+    }
+    return DateTime(2000, 1, 1, 0, 0, 0);
+  }
+
+  DateTime get _currentPeriodEnd {
+    final now = DateTime.now();
+    if (_selectedPeriod == 'Today') {
+      return DateTime(now.year, now.month, now.day, 23, 59, 59);
+    }
+    if (_selectedPeriod == 'This Week') {
+      final startMonday = now.subtract(Duration(days: now.weekday - 1));
+      final weekStart = DateTime(startMonday.year, startMonday.month, startMonday.day, 0, 0, 0);
+      return DateTime(weekStart.year, weekStart.month, weekStart.day, 23, 59, 59).add(const Duration(days: 6));
+    }
+    if (_selectedPeriod == 'This Month') {
+      return DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+    }
+    return DateTime(2100, 1, 1, 0, 0, 0);
+  }
+
+  int _sessionDurationInPeriod(WorkSession session, DateTime periodStart, DateTime periodEnd) {
+    final sStart = session.startTime;
+    final sEnd = session.endTime ?? DateTime.now();
+
+    final intStart = sStart.isAfter(periodStart) ? sStart : periodStart;
+    final intEnd = sEnd.isBefore(periodEnd) ? sEnd : periodEnd;
+
+    if (intStart.isBefore(intEnd)) {
+      return intEnd.difference(intStart).inSeconds;
+    }
+    return 0;
+  }
+
   List<WorkSession> get _visibleSessions {
     final now = DateTime.now();
     return _sessions.where((session) {
       final start = session.startTime;
-      if (_selectedPeriod == 'Today') return _isSameDay(start, now);
-      if (_selectedPeriod == 'This Week') return _isSameWeek(start, now);
-      if (_selectedPeriod == 'This Month') return _isSameMonth(start, now);
+      if (_selectedPeriod == 'Today') {
+        if (session.isActive) return true;
+        return _isSameDay(start, now);
+      }
+      if (_selectedPeriod == 'This Week') {
+        if (session.isActive) return true;
+        return _isSameWeek(start, now);
+      }
+      if (_selectedPeriod == 'This Month') {
+        if (session.isActive) return true;
+        return _isSameMonth(start, now);
+      }
       return true;
     }).toList();
   }
@@ -184,7 +237,7 @@ class _MyTimesheetScreenState extends State<MyTimesheetScreen> {
           final visibleTasks = _visibleTasks(taskState);
           final tasksDoneCount = visibleTasks.where((t) => t.status == TaskStatus.done).length;
 
-          final totalSeconds = _visibleSessions.fold<int>(0, (sum, session) => sum + session.duration.inSeconds);
+          final totalSeconds = _visibleSessions.fold<int>(0, (sum, session) => sum + _sessionDurationInPeriod(session, _currentPeriodStart, _currentPeriodEnd));
           final totalBreakMinutes = _visibleSessions.fold<int>(0, (sum, session) => sum + session.breakMinutes);
           final productiveSeconds = totalSeconds - (totalBreakMinutes * 60);
           final actualSeconds = productiveSeconds > 0 ? productiveSeconds : 0;

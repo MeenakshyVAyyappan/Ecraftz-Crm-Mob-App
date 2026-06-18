@@ -33,12 +33,84 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   void _register() {
+    final name = _nameCtrl.text.trim();
+    final email = _emailCtrl.text.trim();
+    final password = _passCtrl.text.trim();
+    final confirmPassword = _confirmCtrl.text.trim();
+
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your full name.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your email address.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
+    if (!emailRegex.hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid email address.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your password.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (password.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password must be at least 6 characters.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (confirmPassword != password) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Passwords do not match.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
     context.read<AuthBloc>().add(
       AuthRegisterEvent(
-        email: _emailCtrl.text.trim(),
-        password: _passCtrl.text.trim(),
-        name: _nameCtrl.text.trim(),
+        email: email,
+        password: password,
+        name: name,
       ),
     );
   }
@@ -51,11 +123,18 @@ class _RegisterPageState extends State<RegisterPage> {
 
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
-        if (state is Authenticated) {
+        if (state is AuthRegistrationSuccess) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Registration successful. Please wait for admin approval.'),
+              backgroundColor: AppTheme.success,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
           final name = _nameCtrl.text.trim();
           final email = _emailCtrl.text.trim();
           final newMember = TeamMember(
-            id: state.user.id,
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
             name: name,
             email: email,
             role: 'Employee',
@@ -299,7 +378,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   _inputDec(context, 'John Doe', Icons.person_outline_rounded),
               style: TextStyle(color: isDark ? Colors.white : Colors.black),
               validator: (v) =>
-                  (v == null || v.isEmpty) ? 'Name required' : null,
+                  (v == null || v.trim().isEmpty) ? 'Please enter your full name.' : null,
             ),
             const SizedBox(height: 14),
             const _FieldLabel('Email Address'),
@@ -311,8 +390,8 @@ class _RegisterPageState extends State<RegisterPage> {
                   _inputDec(context, 'you@company.com', Icons.email_outlined),
               style: TextStyle(color: isDark ? Colors.white : Colors.black),
               validator: (v) {
-                if (v == null || v.isEmpty) return 'Email required';
-                if (!v.contains('@')) return 'Invalid email';
+                if (v == null || v.trim().isEmpty) return 'Please enter your email address.';
+                if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(v.trim())) return 'Please enter a valid email address.';
                 return null;
               },
             ),
@@ -338,8 +417,8 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
               style: TextStyle(color: isDark ? Colors.white : Colors.black),
               validator: (v) {
-                if (v == null || v.isEmpty) return 'Password required';
-                if (v.length < 6) return 'Minimum 6 characters';
+                if (v == null || v.trim().isEmpty) return 'Please enter your password.';
+                if (v.trim().length < 6) return 'Password must be at least 6 characters.';
                 return null;
               },
             ),
@@ -366,8 +445,8 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
               style: TextStyle(color: isDark ? Colors.white : Colors.black),
               validator: (v) {
-                if (v == null || v.isEmpty) return 'Please confirm password';
-                if (v != _passCtrl.text) return 'Passwords do not match';
+                if (v == null || v.trim().isEmpty) return 'Please confirm password';
+                if (v.trim() != _passCtrl.text.trim()) return 'Passwords do not match.';
                 return null;
               },
             ),

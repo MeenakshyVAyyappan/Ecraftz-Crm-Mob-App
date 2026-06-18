@@ -47,6 +47,10 @@ void main() async {
   await queryTable(client, 'profiles', accessToken, apiKey);
   await queryTable(client, 'payroll', accessToken, apiKey);
   await queryTable(client, 'department_members', accessToken, apiKey);
+  await queryTable(client, 'departments', accessToken, apiKey);
+  
+  print('\n=== Querying joined profiles with departments ===');
+  await queryTable(client, 'profiles?select=*,departments:departments!fk_profiles_dept(id,name)', accessToken, apiKey);
 
   client.close();
 }
@@ -65,7 +69,17 @@ Future<void> queryTable(HttpClient client, String table, String token, String ap
     final json = jsonDecode(body);
     if (json is List) {
       print('Row count: ${json.length}');
-      if (json.isNotEmpty) {
+      if (table == 'departments') {
+        for (final row in json) {
+          print('  - ${row['name']} (${row['id']})');
+        }
+      } else if (table.startsWith('profiles')) {
+        for (final row in json) {
+          final dept = row['departments'];
+          final deptName = dept != null ? dept['name'] : 'No Department';
+          print('  - ${row['full_name']} (${row['email']}) | Role: ${row['role']} | Status: ${row['status']} | Dept: $deptName');
+        }
+      } else if (json.isNotEmpty) {
         print('First row: ${json.first}');
       }
     } else {

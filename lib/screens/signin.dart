@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'signup.dart';
+import 'forgot_password.dart';
 import '../blocs/auth/auth_bloc.dart';
 import '../theme/app_theme.dart';
 import '../blocs/theme/theme_bloc.dart';
@@ -26,11 +27,59 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _login() {
+    final email = _emailCtrl.text.trim();
+    final password = _passCtrl.text.trim();
+
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your email address.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
+    if (!emailRegex.hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid email address.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your password.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (password.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password must be at least 6 characters.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
     context.read<AuthBloc>().add(
       AuthLoginEvent(
-        email: _emailCtrl.text.trim(),
-        password: _passCtrl.text.trim(),
+        email: email,
+        password: password,
       ),
     );
   }
@@ -128,8 +177,8 @@ class _LoginPageState extends State<LoginPage> {
                                     context, 'you@ecraftz.com', Icons.email_outlined),
                                 style: TextStyle(color: isDark ? Colors.white : Colors.black),
                                 validator: (v) {
-                                  if (v == null || v.isEmpty) return 'Email required';
-                                  if (!v.contains('@')) return 'Invalid email';
+                                  if (v == null || v.trim().isEmpty) return 'Please enter your email address.';
+                                  if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(v.trim())) return 'Please enter a valid email address.';
                                   return null;
                                 },
                               ),
@@ -158,8 +207,8 @@ class _LoginPageState extends State<LoginPage> {
                                 ),
                                 style: TextStyle(color: isDark ? Colors.white : Colors.black),
                                 validator: (v) {
-                                  if (v == null || v.isEmpty) return 'Password required';
-                                  if (v.length < 6) return 'Minimum 6 characters';
+                                  if (v == null || v.trim().isEmpty) return 'Please enter your password.';
+                                  if (v.trim().length < 6) return 'Password must be at least 6 characters.';
                                   return null;
                                 },
                               ),
@@ -167,7 +216,14 @@ class _LoginPageState extends State<LoginPage> {
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: TextButton(
-                                  onPressed: () {},
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => const ForgotPasswordPage(),
+                                      ),
+                                    );
+                                  },
                                   style: TextButton.styleFrom(
                                       padding: EdgeInsets.zero,
                                       minimumSize: Size.zero,
@@ -184,29 +240,63 @@ class _LoginPageState extends State<LoginPage> {
                               BlocBuilder<AuthBloc, AuthState>(
                                 builder: (context, state) {
                                   final loading = state is AuthLoading;
-                                  return SizedBox(
-                                    width: double.infinity,
-                                    height: 48,
-                                    child: ElevatedButton(
-                                      onPressed: loading ? null : _login,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF00BCD4),
-                                        foregroundColor: Colors.white,
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(10)),
-                                        elevation: 0,
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      if (state is AuthError) ...[
+                                        Container(
+                                          margin: const EdgeInsets.only(bottom: 16),
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                          decoration: BoxDecoration(
+                                            color: isDark ? const Color(0xFF2C1A1A) : const Color(0xFFFEE2E2),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(
+                                              color: isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFECACA),
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              const Icon(Icons.error_outline_rounded, color: Colors.red, size: 18),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  state.message,
+                                                  style: TextStyle(
+                                                    color: isDark ? const Color(0xFFFCA5A5) : const Color(0xFF991B1B),
+                                                    fontSize: 12.5,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                      SizedBox(
+                                        width: double.infinity,
+                                        height: 48,
+                                        child: ElevatedButton(
+                                          onPressed: loading ? null : _login,
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFF00BCD4),
+                                            foregroundColor: Colors.white,
+                                            shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(10)),
+                                            elevation: 0,
+                                          ),
+                                          child: loading
+                                              ? const SizedBox(
+                                                  width: 20,
+                                                  height: 20,
+                                                  child: CircularProgressIndicator(
+                                                      color: Colors.white, strokeWidth: 2))
+                                              : const Text('Sign In',
+                                                  style: TextStyle(
+                                                      fontSize: 15,
+                                                      fontWeight: FontWeight.w700)),
+                                        ),
                                       ),
-                                      child: loading
-                                          ? const SizedBox(
-                                              width: 20,
-                                              height: 20,
-                                              child: CircularProgressIndicator(
-                                                  color: Colors.white, strokeWidth: 2))
-                                          : const Text('Sign In',
-                                              style: TextStyle(
-                                                  fontSize: 15,
-                                                  fontWeight: FontWeight.w700)),
-                                    ),
+                                    ],
                                   );
                                 },
                               ),

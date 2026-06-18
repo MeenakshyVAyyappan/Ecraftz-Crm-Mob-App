@@ -1,5 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'dart:convert';
+import 'dart:io';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../widgets/app_drawer.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
@@ -379,6 +386,117 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
   int _page = 1;
   final int _perPage = 10;
 
+  List<String> _getRowStrings(Map<String, dynamic> row) {
+    switch (widget.route) {
+      case 'emp_dir':
+        return [
+          row['name']?.toString() ?? '',
+          row['role']?.toString() ?? '',
+          '\$${(row['rate'] as double).toStringAsFixed(2)}/hr',
+          row['status']?.toString() ?? '',
+        ];
+      case 'att_logs':
+        return [
+          row['name']?.toString() ?? '',
+          row['in']?.toString() ?? '',
+          row['out']?.toString() ?? '',
+          row['duration']?.toString() ?? '',
+          row['status']?.toString() ?? '',
+        ];
+      case 'leave_mgmt':
+        return [
+          row['name']?.toString() ?? '',
+          row['start']?.toString() ?? '',
+          row['end']?.toString() ?? '',
+          row['reason']?.toString() ?? '',
+          row['status']?.toString() ?? '',
+        ];
+      case 'inv_audit':
+        return [
+          row['inv']?.toString() ?? '',
+          row['client']?.toString() ?? '',
+          row['date']?.toString() ?? '',
+          row['face']?.toString() ?? '',
+          row['rec']?.toString() ?? '',
+          row['status']?.toString() ?? '',
+        ];
+      case 'expense':
+        return [
+          row['date']?.toString() ?? '',
+          row['desc']?.toString() ?? '',
+          row['amount']?.toString() ?? '',
+          row['cat']?.toString() ?? '',
+          row['status']?.toString() ?? '',
+        ];
+      case 'payments':
+      case 'income':
+        return [
+          row['date']?.toString() ?? '',
+          row['ref']?.toString() ?? '',
+          row['client']?.toString() ?? '',
+          row['amount']?.toString() ?? '',
+          row['method']?.toString() ?? '',
+          row['status']?.toString() ?? '',
+        ];
+      case 'clients':
+        return [
+          row['name']?.toString() ?? '',
+          '${row['email'] ?? ''} ${row['phone'] ?? ''}'.trim(),
+          row['location']?.toString() ?? '',
+          row['joined']?.toString() ?? '',
+          row['status']?.toString() ?? '',
+        ];
+      case 'projects':
+        return [
+          row['name']?.toString() ?? '',
+          row['timeline']?.toString() ?? '',
+          row['budget']?.toString() ?? '',
+          row['stage']?.toString() ?? '',
+        ];
+      case 'tasks':
+        return [
+          '${row['task'] ?? ''} (${row['project'] ?? ''})',
+          row['assignee']?.toString() ?? '',
+          row['due']?.toString() ?? '',
+          row['priority']?.toString() ?? '',
+          row['status']?.toString() ?? '',
+        ];
+      case 'renewals':
+        return [
+          row['service']?.toString() ?? '',
+          row['category']?.toString() ?? '',
+          row['expiry']?.toString() ?? '',
+          row['value']?.toString() ?? '',
+          row['reminders']?.toString() ?? '',
+          row['status']?.toString() ?? '',
+        ];
+      case 'leads':
+        return [
+          '${row['name'] ?? ''} (${row['company'] ?? ''})',
+          row['email']?.toString() ?? '',
+          row['value']?.toString() ?? '',
+          row['status']?.toString() ?? '',
+          row['created']?.toString() ?? '',
+        ];
+      case 'system':
+        return [
+          row['timestamp']?.toString() ?? '',
+          row['action']?.toString() ?? '',
+          row['target']?.toString() ?? '',
+          row['user']?.toString() ?? '',
+        ];
+      default:
+        return [
+          row['inv']?.toString() ?? '',
+          row['client']?.toString() ?? '',
+          row['due']?.toString() ?? '',
+          row['amount']?.toString() ?? '',
+          row['paid']?.toString() ?? '',
+          row['status']?.toString() ?? '',
+        ];
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -405,12 +523,15 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             final initials = nameParts.length >= 2
                 ? '${nameParts.first[0]}${nameParts.last[0]}'.toUpperCase()
                 : (name.isNotEmpty ? name[0].toUpperCase() : '?');
+            final double rate = (row['hourly_rate'] != null)
+                ? (row['hourly_rate'] is num ? (row['hourly_rate'] as num).toDouble() : double.tryParse(row['hourly_rate'].toString()) ?? 0.0)
+                : 0.0;
             return {
               'initials': initials,
               'name': name,
               'email': email,
               'role': role,
-              'rate': 0.0,
+              'rate': rate,
               'status': status,
             };
           }).toList();
@@ -637,12 +758,13 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           break;
 
         case 'system':
-          final res = await client.from('activities').select().order('created_at', ascending: false);
+          final res = await client.from('activities').select('*, profiles(full_name)').order('created_at', ascending: false);
           loadedData = (res as List).map((row) {
             final action = row['action']?.toString() ?? '';
             final target = row['target_name']?.toString() ?? '';
             final created = row['created_at']?.toString() ?? '';
-            final user = 'Viswajith E'; 
+            final profiles = row['profiles'] as Map?;
+            final user = profiles?['full_name']?.toString() ?? 'System';
             return {
               'timestamp': created.replaceFirst('T', ' ').split('.')[0],
               'action': action.toUpperCase(),
@@ -685,6 +807,160 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     }
   }
 
+  Future<Uint8List> _generateReportPdf() async {
+    final pdf = pw.Document();
+    final columns = _columns;
+    final data = _filtered;
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: const pw.EdgeInsets.all(24),
+        header: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(_reportTitle, style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 4),
+            pw.Text(_reportSubtitle, style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+            pw.SizedBox(height: 8),
+            pw.Divider(thickness: 1, color: PdfColors.cyan),
+            pw.SizedBox(height: 8),
+          ],
+        ),
+        build: (context) => [
+          pw.TableHelper.fromTextArray(
+            headers: columns,
+            data: data.map((row) => _getRowStrings(row)).toList(),
+            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
+            cellStyle: const pw.TextStyle(fontSize: 7),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+            cellAlignment: pw.Alignment.centerLeft,
+            headerAlignment: pw.Alignment.centerLeft,
+          ),
+        ],
+        footer: (context) => pw.Container(
+          alignment: pw.Alignment.centerRight,
+          margin: const pw.EdgeInsets.only(top: 10),
+          child: pw.Text(
+            'Page ${context.pageNumber} of ${context.pagesCount}',
+            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey500),
+          ),
+        ),
+      ),
+    );
+    return pdf.save();
+  }
+
+  Future<void> _printReport() async {
+    try {
+      final pdfBytes = await _generateReportPdf();
+      await Printing.layoutPdf(
+        onLayout: (_) async => pdfBytes,
+        name: '${widget.route}_report.pdf',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to print: $e'), backgroundColor: RTheme.danger),
+      );
+    }
+  }
+
+  Future<void> _exportPdf() async {
+    try {
+      final pdfBytes = await _generateReportPdf();
+      
+      try {
+        final String? path = await FilePicker.platform.saveFile(
+          dialogTitle: 'Save PDF',
+          fileName: '${widget.route}_report.pdf',
+          type: FileType.any,
+        );
+
+        if (path != null) {
+          final file = File(path);
+          await file.writeAsBytes(pdfBytes);
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Report saved to $path'), backgroundColor: RTheme.success),
+          );
+          return;
+        }
+      } catch (e) {
+        debugPrint('FilePicker saveFile error: $e');
+      }
+
+      await Printing.sharePdf(
+        bytes: pdfBytes,
+        filename: '${widget.route}_report.pdf',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to export PDF: $e'), backgroundColor: RTheme.danger),
+      );
+    }
+  }
+
+  Future<void> _exportCsv() async {
+    try {
+      final buffer = StringBuffer();
+      buffer.writeln(_columns.map((c) => '"${c.replaceAll('"', '""')}"').join(','));
+      for (final row in _filtered) {
+        final cells = _getRowStrings(row);
+        buffer.writeln(cells.map((c) => '"${c.replaceAll('"', '""')}"').join(','));
+      }
+      final csvString = buffer.toString();
+      final bytes = Uint8List.fromList(utf8.encode(csvString));
+
+      try {
+        final String? path = await FilePicker.platform.saveFile(
+          dialogTitle: 'Save CSV',
+          fileName: '${widget.route}_report.csv',
+          type: FileType.any,
+        );
+
+        if (path != null) {
+          final file = File(path);
+          await file.writeAsBytes(bytes);
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Report saved to $path'), backgroundColor: RTheme.success),
+          );
+          return;
+        }
+      } catch (e) {
+        debugPrint('FilePicker saveFile error: $e');
+      }
+
+      await Clipboard.setData(ClipboardData(text: csvString));
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: _cardBg,
+          title: Text('CSV Exported', style: TextStyle(color: _textPrimary)),
+          content: Text(
+            'The CSV report data has been copied to your clipboard. You can paste it directly into Excel or Google Sheets.',
+            style: TextStyle(color: _textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK', style: TextStyle(color: RTheme.primary)),
+            )
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to export CSV: $e'), backgroundColor: RTheme.danger),
+      );
+    }
+  }
+
   List<Map<String, dynamic>> get _rawData => _data;
 
   List<Map<String, dynamic>> get _filtered {
@@ -711,11 +987,21 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         final workforce = _data.length;
         final operators = _data.where((e) => e['role']?.toString().toLowerCase() != 'admin' && e['role']?.toString().toLowerCase() != 'super admin').length;
         final admins = _data.where((e) => e['role']?.toString().toLowerCase() == 'admin' || e['role']?.toString().toLowerCase() == 'super admin').length;
+        double totalRate = 0.0;
+        int rateCount = 0;
+        for (final e in _data) {
+          final r = e['rate'];
+          if (r is num && r > 0) {
+            totalRate += r;
+            rateCount++;
+          }
+        }
+        final avgRate = rateCount == 0 ? 0.0 : totalRate / rateCount;
         return {
           'workforce': workforce,
           'operators': operators,
           'admins': admins,
-          'avgRate': 0.0,
+          'avgRate': avgRate,
         };
       case 'att_logs':
         final sessions = _data.length;
@@ -793,11 +1079,16 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       case 'clients':
         final portfolio = _data.length;
         final active = _data.where((e) => e['status']?.toString().toUpperCase() == 'ACTIVE').length;
+        final footprint = _data.map((e) => e['location']?.toString().trim().toLowerCase() ?? 'global')
+            .where((loc) => loc.isNotEmpty && loc != 'null')
+            .toSet()
+            .length;
+        final velocity = portfolio == 0 ? '0%' : '${(active / portfolio * 100).toStringAsFixed(0)}%';
         return {
           'portfolio': portfolio,
           'active': active,
-          'footprint': 1,
-          'velocity': '100%',
+          'footprint': footprint == 0 ? 1 : footprint,
+          'velocity': velocity,
         };
       case 'projects':
         final portfolio = _data.length;
@@ -835,11 +1126,13 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           pipe += double.tryParse(valStr) ?? 0.0;
         }
         final critical = _data.where((e) => e['status']?.toString().toUpperCase() == 'OVERDUE').length;
+        final paidCount = _data.where((e) => e['status']?.toString().toUpperCase() == 'PAID' || e['status']?.toString().toUpperCase() == 'COMPLETED' || e['status']?.toString().toUpperCase() == 'ACTIVE').length;
+        final collection = matrix == 0 ? '0%' : '${(paidCount / matrix * 100).toStringAsFixed(0)}%';
         return {
           'matrix': matrix,
           'pipeline': '₹${pipe.toStringAsFixed(0)}',
           'critical': critical,
-          'collection': '100%',
+          'collection': collection,
         };
       case 'leads':
         final velocity = _data.length;
@@ -848,10 +1141,12 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           final valStr = l['value']?.toString().replaceAll('₹', '') ?? '0';
           pipe += double.tryParse(valStr) ?? 0.0;
         }
+        final convertedCount = _data.where((e) => e['status']?.toString().toUpperCase() == 'CONVERTED' || e['status']?.toString().toUpperCase() == 'WON').length;
+        final conversion = velocity == 0 ? '0%' : '${(convertedCount / velocity * 100).toStringAsFixed(0)}%';
         return {
           'velocity': velocity,
           'pipeline': '₹${pipe.toStringAsFixed(0)}',
-          'conversion': '0%',
+          'conversion': conversion,
           'avgAge': '---',
         };
       case 'system':
@@ -1156,18 +1451,18 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         children: [
           Text('EXPORT OPTIONS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _textSecondary)),
           Wrap(spacing: 8, children: [
-            _actionBtn(Icons.print_rounded, 'PRINT'),
-            _actionBtn(Icons.grid_on_rounded, 'CSV'),
-            _exportPdfBtn(),
+            _actionBtn(Icons.print_rounded, 'PRINT', onTap: _printReport),
+            _actionBtn(Icons.grid_on_rounded, 'CSV', onTap: _exportCsv),
+            _exportPdfBtn(onTap: _exportPdf),
           ]),
         ],
       ),
     );
   }
 
-  Widget _actionBtn(IconData icon, String label) {
+  Widget _actionBtn(IconData icon, String label, {required VoidCallback onTap}) {
     return GestureDetector(
-      onTap: () {},
+      onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(border: Border.all(color: _border), borderRadius: BorderRadius.circular(7)),
@@ -1180,9 +1475,9 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     );
   }
 
-  Widget _exportPdfBtn() {
+  Widget _exportPdfBtn({required VoidCallback onTap}) {
     return GestureDetector(
-      onTap: () {},
+      onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
