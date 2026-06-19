@@ -91,7 +91,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     });
 
     try {
-      await SupabaseService.client.auth.resetPasswordForEmail(email);
+      await SupabaseService.client.auth.signInWithOtp(
+        email: email,
+        shouldCreateUser: false,
+      );
       
       setState(() {
         _currentStep = ForgotPasswordStep.enterOtp;
@@ -136,7 +139,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
     try {
       final email = _emailCtrl.text.trim();
-      await SupabaseService.client.auth.resetPasswordForEmail(email);
+      await SupabaseService.client.auth.signInWithOtp(
+        email: email,
+        shouldCreateUser: false,
+      );
       _startResendTimer();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -170,10 +176,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       );
       return;
     }
-    if (otp.length != 6) {
+    if (otp.length < 6 || otp.length > 8) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('OTP must be exactly 6 digits.'),
+          content: Text('OTP must be between 6 and 8 digits.'),
           backgroundColor: Colors.orange,
           behavior: SnackBarBehavior.floating,
         ),
@@ -193,7 +199,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       final response = await SupabaseService.client.auth.verifyOTP(
         email: email,
         token: otp,
-        type: OtpType.recovery,
+        type: OtpType.email,
       );
 
       if (response.session == null) {
@@ -650,20 +656,20 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         ),
         const SizedBox(height: 4),
         Text(
-          "We've sent a 6-digit verification code to ${_emailCtrl.text.trim()}. Please enter it below.",
+          "We've sent a verification code to ${_emailCtrl.text.trim()}. Please enter it below.",
           style: TextStyle(
             fontSize: 13,
             color: isDark ? const Color(0xFF8E9CB8) : const Color(0xFF6B7280),
           ),
         ),
         const SizedBox(height: 24),
-        const _FieldLabel('6-Digit OTP Code'),
+        const _FieldLabel('OTP Verification Code'),
         const SizedBox(height: 6),
         TextFormField(
           controller: _otpCtrl,
           keyboardType: TextInputType.number,
-          maxLength: 6,
-          decoration: _inputDec(context, '••••••', Icons.pin_outlined).copyWith(
+          maxLength: 8,
+          decoration: _inputDec(context, '••••••••', Icons.pin_outlined).copyWith(
             counterText: '',
           ),
           style: TextStyle(
@@ -674,7 +680,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           textAlign: TextAlign.center,
           validator: (v) {
             if (v == null || v.trim().isEmpty) return 'Please enter the verification code.';
-            if (v.trim().length != 6) return 'OTP must be exactly 6 digits.';
+            if (v.trim().length < 6 || v.trim().length > 8) return 'OTP must be between 6 and 8 digits.';
             return null;
           },
         ),
