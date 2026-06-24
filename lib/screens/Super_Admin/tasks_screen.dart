@@ -119,6 +119,10 @@ class _TasksPageState extends State<TasksPage> {
               );
             },
           ),
+          IconButton(
+            icon: Icon(Icons.add, color: _primary),
+            onPressed: () => _showCreateTaskModal(context),
+          ),
         ],
       ),
       body: SafeArea(
@@ -133,11 +137,6 @@ class _TasksPageState extends State<TasksPage> {
             );
           },
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showCreateTaskModal(context),
-        backgroundColor: _primary,
-        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
@@ -522,16 +521,12 @@ class _TasksPageState extends State<TasksPage> {
   }
 
   Future<void> _showImportSheet(BuildContext context) async {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      backgroundColor: isDark ? AppTheme.bgCardDark : Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => _ImportSheet(
+      barrierDismissible: true,
+      builder: (_) => _ImportDataDialog(
         onImport: () async {
-          Navigator.pop(ctx);
+          Navigator.pop(context);
           await _pickAndImportCsv(context);
         },
       ),
@@ -823,11 +818,11 @@ class _FilterSheetState extends State<_FilterSheet> {
   }
 }
 
-// ─── IMPORT SHEET ─────────────────────────────────────────────────────────────
+// ─── IMPORT DATA DIALOG ───────────────────────────────────────────────────────
 
-class _ImportSheet extends StatelessWidget {
+class _ImportDataDialog extends StatelessWidget {
   final VoidCallback onImport;
-  const _ImportSheet({required this.onImport});
+  const _ImportDataDialog({required this.onImport});
 
   @override
   Widget build(BuildContext context) {
@@ -835,101 +830,152 @@ class _ImportSheet extends StatelessWidget {
     final bg = isDark ? AppTheme.bgCardDark : Colors.white;
     final textPrimary = AppTheme.textPrimaryOf(context);
     final textSecondary = AppTheme.textSecondaryOf(context);
+    final textMuted = AppTheme.textMutedOf(context);
     final border = AppTheme.borderOf(context);
     const primary = Color(0xFF0EA5E9);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.upload_file_rounded, color: primary, size: 22),
-              const SizedBox(width: 8),
-              Text('Import Tasks from CSV',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: textPrimary)),
-              const Spacer(),
-              IconButton(
-                icon: Icon(Icons.close, size: 20, color: textSecondary),
-                onPressed: () => Navigator.pop(context),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: primary.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: primary.withOpacity(0.2)),
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+      child: Container(
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('CSV Format', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: primary)),
-                const SizedBox(height: 6),
-                Text(
-                  'Your CSV file should have a header row with these columns:',
-                  style: TextStyle(fontSize: 11, color: textSecondary),
-                ),
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: primary.withOpacity(0.25)),
+                    ),
+                    child: const Icon(
+                      Icons.upload_file_rounded,
+                      color: primary,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Import Data to Tasks',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: textPrimary,
+                          ),
+                        ),
+                        Text(
+                          'Bulk migration wizard for production-grade data ingestion.',
+                          style: TextStyle(fontSize: 10.5, color: textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, size: 18, color: textMuted),
+                    onPressed: () => Navigator.pop(context),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 20, color: border),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+              child: GestureDetector(
+                onTap: onImport,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
                   decoration: BoxDecoration(
-                    color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(6),
+                    color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: border),
                   ),
-                  child: Text(
-                    'title, status, priority, owner, project, due_date, description',
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontFamily: 'monospace',
-                        color: textPrimary,
-                        fontWeight: FontWeight.w500),
+                  child: Column(
+                    children: [
+                      Icon(Icons.upload_rounded, size: 40, color: textMuted),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Upload Excel or CSV File',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: textPrimary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Drop your migration file here or click to browse.',
+                        style: TextStyle(fontSize: 12, color: textSecondary),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      OutlinedButton.icon(
+                        onPressed: onImport,
+                        icon: Icon(Icons.folder_open_outlined,
+                            size: 16, color: textPrimary),
+                        label: Text(
+                          'Choose File',
+                          style: TextStyle(fontSize: 13, color: textPrimary),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: border),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  '• title / summary / task (required)\n'
-                  '• status: todo | in_progress | review | done\n'
-                  '• priority: low | medium | high\n'
-                  '• due_date: YYYY-MM-DD',
-                  style: TextStyle(fontSize: 10, color: textSecondary, height: 1.6),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 46,
-            child: ElevatedButton.icon(
-              onPressed: onImport,
-              icon: const Icon(Icons.folder_open_rounded, size: 18),
-              label: const Text('Choose CSV File', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-        ],
+            Divider(height: 24, color: border),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Row(
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('Cancel',
+                        style: TextStyle(
+                            fontSize: 14,
+                            color: textSecondary,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
+
 
 // ─── KANBAN COLUMN (Wide) ─────────────────────────────────────────────────────
 

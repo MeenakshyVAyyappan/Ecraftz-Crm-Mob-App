@@ -360,13 +360,6 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
         onItemSelected: widget.onItemSelected,
       ),
       backgroundColor: HRTheme.backgroundOf(context),
-      floatingActionButton: _activeTab == 1
-          ? FloatingActionButton(
-              backgroundColor: HRTheme.primary,
-              onPressed: _showLeaveRequestSheet,
-              child: const Icon(Icons.add, color: Colors.white),
-            )
-          : null,
       body: SafeArea(
         child: Column(
           children: [
@@ -450,6 +443,13 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
                 );
               },
             ),
+            if (_activeTab == 1)
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: const Icon(Icons.add, size: 20, color: HRTheme.primary),
+                onPressed: _showLeaveRequestSheet,
+              ),
           ]),
           const SizedBox(height: 8),
           Text('HR & Employee Management',

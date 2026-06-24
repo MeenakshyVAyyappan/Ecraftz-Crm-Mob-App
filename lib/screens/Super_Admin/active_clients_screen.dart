@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../widgets/app_drawer.dart';
 import '../../models/client_model.dart';
 import '../../blocs/client/client_bloc.dart';
@@ -68,19 +70,57 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
   }
 
   void _showBulkImport() {
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _BulkImportSheet(
-        onImport: (clients) {
-          context.read<ClientBloc>().add(AddClientsBulkEvent(clients));
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${clients.length} client(s) imported successfully'),
-              backgroundColor: const Color(0xFF10B981),
-            ),
-          );
+      barrierDismissible: true,
+      builder: (_) => _ImportDataDialog(
+        title: 'Import Data to Active Clients',
+        subtitle: 'Bulk migration wizard for production-grade data ingestion.',
+        onFilePicked: (file) async {
+          // Parse and import clients from the picked file
+          try {
+            String content;
+            if (file.bytes != null) {
+              content = String.fromCharCodes(file.bytes!);
+            } else if (file.path != null) {
+              content = await File(file.path!).readAsString();
+            } else {
+              return;
+            }
+            final lines = content
+                .split(RegExp(r'\r?\n'))
+                .where((l) => l.trim().isNotEmpty)
+                .toList();
+            final clients = <ActiveClient>[];
+            for (int i = 0; i < lines.length; i++) {
+              final cols = lines[i].split(',').map((s) => s.trim()).toList();
+              if (cols.length < 3) continue;
+              clients.add(ActiveClient(
+                id: DateTime.now().millisecondsSinceEpoch.toString() + i.toString(),
+                name: cols[0],
+                email: cols[1],
+                services: cols[2].split(';').map((s) => s.trim()).toList(),
+                contractValue: cols.length > 3 ? double.tryParse(cols[3]) ?? 0 : 0,
+                onboardedAt: DateTime.now(),
+                templateUsed: 'Bulk Import',
+              ));
+            }
+            if (clients.isNotEmpty && mounted) {
+              context.read<ClientBloc>().add(AddClientsBulkEvent(clients));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('\${clients.length} client(s) imported successfully'),
+                  backgroundColor: const Color(0xFF10B981),
+                ),
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Import failed: \$e')),
+              );
+            }
+          }
         },
       ),
     );
@@ -1071,51 +1111,47 @@ class _InvoiceSheet extends StatelessWidget {
   }
 }
 
-// ─── BULK IMPORT SHEET ────────────────────────────────────────────────────────
+// ─── IMPORT DATA DIALOG ───────────────────────────────────────────────────────
 
-class _BulkImportSheet extends StatefulWidget {
-  final Function(List<ActiveClient>) onImport;
-  const _BulkImportSheet({required this.onImport});
+class _ImportDataDialog extends StatefulWidget {
+  final String title;
+  final String subtitle;
+  final Future<void> Function(PlatformFile file) onFilePicked;
+
+  const _ImportDataDialog({
+    required this.title,
+    required this.subtitle,
+    required this.onFilePicked,
+  });
 
   @override
-  State<_BulkImportSheet> createState() => _BulkImportSheetState();
+  State<_ImportDataDialog> createState() => _ImportDataDialogState();
 }
 
-class _BulkImportSheetState extends State<_BulkImportSheet> {
-  final TextEditingController _csvCtrl = TextEditingController();
-  bool _isParsed = false;
-  List<ActiveClient> _parsedClients = [];
-  String? _error;
+class _ImportDataDialogState extends State<_ImportDataDialog> {
+  PlatformFile? _selectedFile;
+  bool _isImporting = false;
 
-  void _parse() {
-    final lines = _csvCtrl.text.trim().split('\n');
-    final clients = <ActiveClient>[];
-    String? err;
-
-    for (int i = 0; i < lines.length; i++) {
-      final line = lines[i].trim();
-      if (line.isEmpty) continue;
-      final cols = line.split(',').map((s) => s.trim()).toList();
-      if (cols.length < 3) {
-        err = 'Row ${i + 1}: Need at least 3 columns (name, email, service)';
-        break;
-      }
-      clients.add(ActiveClient(
-        id: DateTime.now().millisecondsSinceEpoch.toString() + i.toString(),
-        name: cols[0],
-        email: cols[1],
-        services: cols[2].split(';').map((s) => s.trim()).toList(),
-        contractValue: cols.length > 3 ? double.tryParse(cols[3]) ?? 0 : 0,
-        onboardedAt: DateTime.now(),
-        templateUsed: 'Bulk Import',
-      ));
+  Future<void> _pickFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['csv', 'xlsx', 'xls'],
+      allowMultiple: false,
+    );
+    if (result != null && result.files.isNotEmpty) {
+      setState(() => _selectedFile = result.files.first);
     }
+  }
 
-    setState(() {
-      _error = err;
-      _parsedClients = err == null ? clients : [];
-      _isParsed = err == null && clients.isNotEmpty;
-    });
+  Future<void> _doImport() async {
+    if (_selectedFile == null) return;
+    setState(() => _isImporting = true);
+    try {
+      await widget.onFilePicked(_selectedFile!);
+      if (mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _isImporting = false);
+    }
   }
 
   @override
@@ -1124,215 +1160,189 @@ class _BulkImportSheetState extends State<_BulkImportSheet> {
     final bg = isDark ? AppTheme.bgCardDark : Colors.white;
     final textPrimary = AppTheme.textPrimaryOf(context);
     final textSecondary = AppTheme.textSecondaryOf(context);
+    final textMuted = AppTheme.textMutedOf(context);
     final border = AppTheme.borderOf(context);
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.8,
-      maxChildSize: 0.95,
-      minChildSize: 0.5,
-      builder: (_, ctrl) => Container(
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+      child: Container(
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                  color: border,
-                  borderRadius: BorderRadius.circular(2)),
-            ),
+            // Header
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
               child: Row(
                 children: [
-                  Text('Bulk Import Clients',
-                      style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: textPrimary)),
-                  const Spacer(),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00BCD4).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: const Color(0xFF00BCD4).withOpacity(0.25)),
+                    ),
+                    child: const Icon(
+                      Icons.upload_file_rounded,
+                      color: Color(0xFF00BCD4),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.title,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: textPrimary,
+                          ),
+                        ),
+                        Text(
+                          widget.subtitle,
+                          style: TextStyle(fontSize: 10.5, color: textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
                   IconButton(
-                    icon: Icon(Icons.close, color: textSecondary),
+                    icon: Icon(Icons.close, size: 18, color: textMuted),
                     onPressed: () => Navigator.pop(context),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                   ),
                 ],
               ),
             ),
             Divider(height: 20, color: border),
-            Expanded(
-              child: ListView(
-                controller: ctrl,
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                children: [
-                  // Format guide
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF164E63) : const Color(0xFFF0FDFE),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                          color: const Color(0xFF00BCD4).withOpacity(0.3)),
+            // Upload area
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+              child: GestureDetector(
+                onTap: _pickFile,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _selectedFile != null
+                          ? const Color(0xFF00BCD4)
+                          : border,
+                      width: _selectedFile != null ? 1.5 : 1,
+                      style: BorderStyle.solid,
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.info_outline,
-                                size: 14, color: Color(0xFF00BCD4)),
-                            SizedBox(width: 6),
-                            Text('CSV Format Guide',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF0284C7))),
-                          ],
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.upload_rounded,
+                        size: 40,
+                        color: _selectedFile != null
+                            ? const Color(0xFF00BCD4)
+                            : textMuted,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        _selectedFile != null
+                            ? _selectedFile!.name
+                            : 'Upload Excel or CSV File',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: _selectedFile != null
+                              ? const Color(0xFF00BCD4)
+                              : textPrimary,
                         ),
-                        const SizedBox(height: 8),
+                        textAlign: TextAlign.center,
+                      ),
+                      if (_selectedFile == null) ...[
+                        const SizedBox(height: 4),
                         Text(
-                            'Each row: Name, Email, Service(s separated by ;), ContractValue\n'
-                            'Example:\narsenal, arsenal@gmail.com, Digital Marketing, 30000\njanani, livein@janani.in, Web Development;SEO Services, 20000',
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: isDark ? const Color(0xFFBAE6FD) : const Color(0xFF0369A1),
-                                fontFamily: 'monospace')),
+                          'Drop your migration file here or click to browse.',
+                          style: TextStyle(fontSize: 12, color: textSecondary),
+                          textAlign: TextAlign.center,
+                        ),
                       ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text('Paste CSV Data',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: textPrimary)),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: _csvCtrl,
-                    maxLines: 8,
-                    style: TextStyle(
-                        fontSize: 12, fontFamily: 'monospace', color: textPrimary),
-                    decoration: InputDecoration(
-                      hintText:
-                          'arsenal, arsenal@gmail.com, Digital Marketing, 30000\njanani, livein@janani.in, Web Development;SEO, 20000',
-                      hintStyle: TextStyle(
-                          color: AppTheme.textMutedOf(context), fontSize: 11),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: border)),
-                      enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: border)),
-                      focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(
-                              color: Color(0xFF00BCD4), width: 1.5)),
-                      contentPadding: const EdgeInsets.all(12),
-                    ),
-                    onChanged: (_) => setState(() {
-                      _isParsed = false;
-                      _error = null;
-                    }),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 8),
-                    Text(_error!,
-                        style: const TextStyle(
-                            fontSize: 11, color: Colors.red)),
-                  ],
-                  const SizedBox(height: 12),
-                  ElevatedButton(
-                    onPressed: _parse,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isDark ? AppTheme.bgBaseDark : const Color(0xFF374151),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: const Text('Parse & Preview',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
-                  ),
-                  // Preview
-                  if (_isParsed) ...[
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        const Icon(Icons.check_circle,
-                            size: 16, color: Color(0xFF10B981)),
-                        const SizedBox(width: 6),
-                        Text('${_parsedClients.length} clients ready to import',
-                            style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF10B981),
-                                fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    ..._parsedClients.map((c) => Container(
-                          margin: const EdgeInsets.only(bottom: 6),
+                      const SizedBox(height: 16),
+                      OutlinedButton.icon(
+                        onPressed: _pickFile,
+                        icon: Icon(Icons.folder_open_outlined,
+                            size: 16, color: textPrimary),
+                        label: Text(
+                          _selectedFile != null ? 'Change File' : 'Choose File',
+                          style:
+                              TextStyle(fontSize: 13, color: textPrimary),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: border),
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: border),
-                          ),
-                          child: Row(
-                            children: [
-                              _Avatar(initials: c.initials, size: 32),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text(c.name,
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: textPrimary)),
-                                    Text(c.email,
-                                        style: TextStyle(
-                                            fontSize: 11,
-                                            color: textSecondary)),
-                                  ],
-                                ),
-                              ),
-                              Text(
-                                c.contractValue > 0
-                                    ? '\$${c.contractValue.toStringAsFixed(0)}'
-                                    : '\$0',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: textPrimary),
-                              ),
-                            ],
-                          ),
-                        )),
-                    const SizedBox(height: 14),
+                              horizontal: 16, vertical: 10),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Divider(height: 24, color: border),
+            // Footer actions
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Row(
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('Cancel',
+                        style: TextStyle(
+                            fontSize: 14,
+                            color: textSecondary,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                  const Spacer(),
+                  if (_selectedFile != null)
                     ElevatedButton.icon(
-                      onPressed: () {
-                        widget.onImport(_parsedClients);
-                        Navigator.pop(context);
-                      },
-                      icon: const Icon(Icons.upload_rounded, size: 16),
-                      label: Text('Import ${_parsedClients.length} Clients',
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                      onPressed: _isImporting ? null : _doImport,
+                      icon: _isImporting
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.upload_rounded, size: 16),
+                      label: Text(
+                          _isImporting ? 'Importing...' : 'Import',
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w600)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF00BCD4),
                         foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 10),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        elevation: 0,
                       ),
                     ),
-                  ],
-                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -1342,6 +1352,7 @@ class _BulkImportSheetState extends State<_BulkImportSheet> {
     );
   }
 }
+
 
 // ─── REUSABLE WIDGETS ─────────────────────────────────────────────────────────
 

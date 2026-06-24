@@ -76,7 +76,27 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
             .select()
             .isFilter('deleted_at', null)
             .order('created_at', ascending: false);
-        final list = (res as List).map((x) => TaskItem.fromJson(x)).toList();
+
+        final Map<String, String> idToName = {};
+        try {
+          final profilesRes = await _client.from('profiles').select('id, full_name, name');
+          for (final p in (profilesRes as List)) {
+            final id = p['id']?.toString() ?? '';
+            final name = p['full_name']?.toString() ?? p['name']?.toString() ?? '';
+            if (id.isNotEmpty && name.isNotEmpty) {
+              idToName[id] = name;
+            }
+          }
+        } catch (_) {}
+
+        final list = (res as List).map((x) {
+          final task = TaskItem.fromJson(x);
+          if (task.owner != null && idToName.containsKey(task.owner)) {
+            task.owner = idToName[task.owner];
+          }
+          return task;
+        }).toList();
+
         emit(TaskState(
           tasks: list,
           members: _recomputeMembers(list),

@@ -317,7 +317,7 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => _QuickCreateSheet(),
+      builder: (_) => _QuickCreateSheet(onItemSelected: widget.onItemSelected),
     );
   }
 
@@ -1278,7 +1278,8 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
 // ─── QUICK CREATE SHEET ───────────────────────────────────────────────────────
 
 class _QuickCreateSheet extends StatelessWidget {
-  const _QuickCreateSheet();
+  final Function(int) onItemSelected;
+  const _QuickCreateSheet({required this.onItemSelected});
 
   @override
   Widget build(BuildContext context) {
@@ -1306,7 +1307,18 @@ class _QuickCreateSheet extends StatelessWidget {
               style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.textSecondaryOf(context), letterSpacing: 0.8)),
           const SizedBox(height: 12),
           ...items.map((item) => GestureDetector(
-            onTap: () => Navigator.pop(context),
+            onTap: () {
+              Navigator.pop(context);
+              if (item.$2 == 'New Lead') {
+                onItemSelected(1);
+              } else if (item.$2 == 'New Project') {
+                onItemSelected(4);
+              } else if (item.$2 == 'New Invoice') {
+                onItemSelected(7);
+              } else if (item.$2 == 'New Task') {
+                onItemSelected(5);
+              }
+            },
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
               decoration: BoxDecoration(

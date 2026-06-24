@@ -137,7 +137,10 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedSwitcher(
+    final w = MediaQuery.of(context).size.width;
+    final isDesktop = w > 900;
+    
+    final content = AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
       transitionBuilder: (Widget child, Animation<double> animation) {
         return FadeTransition(
@@ -148,6 +151,53 @@ class _MainShellState extends State<MainShell> {
       child: KeyedSubtree(
         key: ValueKey<int>(_selectedIndex),
         child: _buildPage(_selectedIndex),
+      ),
+    );
+    
+    if (isDesktop) {
+      return content;
+    }
+
+    int bottomNavIndex = 0;
+    switch (_selectedIndex) {
+      case 0: bottomNavIndex = 0; break;
+      case 2: bottomNavIndex = 1; break;
+      case 4: bottomNavIndex = 2; break;
+      case 5: bottomNavIndex = 3; break;
+      case 16: bottomNavIndex = 4; break;
+      default: bottomNavIndex = 0;
+    }
+
+    return Scaffold(
+      body: content,
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: bottomNavIndex,
+        onTap: (index) {
+          int newIndex = 0;
+          switch (index) {
+            case 0: newIndex = 0; break;
+            case 1: newIndex = 2; break; // Active Clients
+            case 2: newIndex = 4; break; // Projects
+            case 3: newIndex = 5; break; // Tasks
+            case 4: newIndex = 16; break; // HR
+          }
+          if (_selectedIndex != newIndex) {
+            _onItemSelected(newIndex);
+          }
+        },
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        selectedItemColor: const Color(0xFF0EA5E9),
+        unselectedItemColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF8892B0) : const Color(0xFF6B7A99),
+        selectedFontSize: 11,
+        unselectedFontSize: 11,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded, size: 20), label: 'Dashboard'),
+          BottomNavigationBarItem(icon: Icon(Icons.people_outline, size: 20), label: 'Clients'),
+          BottomNavigationBarItem(icon: Icon(Icons.folder_outlined, size: 20), label: 'Projects'),
+          BottomNavigationBarItem(icon: Icon(Icons.check_circle_outline_rounded, size: 20), label: 'Tasks'),
+          BottomNavigationBarItem(icon: Icon(Icons.group_work_outlined, size: 20), label: 'HR'),
+        ],
       ),
     );
   }

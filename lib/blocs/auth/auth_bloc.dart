@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/supabase_service.dart';
 
 abstract class AuthEvent extends Equatable {
@@ -95,6 +96,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             if (status == 'active') {
               final role = profile['role']?.toString().toLowerCase() ?? 'employee';
               _wasAuthenticated = true;
+              
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('user_role', role);
+              
               emit(Authenticated(user: user, role: role));
               return;
             }
@@ -102,15 +107,26 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await SupabaseService.signOut();
           final hadSession = _wasAuthenticated;
           _wasAuthenticated = false;
+          
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove('user_role');
+          
           emit(Unauthenticated(sessionExpired: hadSession));
         } catch (e) {
-          final role = user.userMetadata?['role']?.toString().toLowerCase() ?? 'employee';
+          final prefs = await SharedPreferences.getInstance();
+          final cachedRole = prefs.getString('user_role');
+          
+          final role = cachedRole ?? user.userMetadata?['role']?.toString().toLowerCase() ?? 'employee';
           _wasAuthenticated = true;
           emit(Authenticated(user: user, role: role));
         }
       } else {
         final hadSession = _wasAuthenticated;
         _wasAuthenticated = false;
+        
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('user_role');
+        
         emit(Unauthenticated(sessionExpired: hadSession));
       }
     });
@@ -155,6 +171,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
           final role = profile['role']?.toString().toLowerCase() ?? 'employee';
           _wasAuthenticated = true;
+          
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('user_role', role);
+          
           emit(Authenticated(user: user, role: role, isLoginEvent: true));
         } else {
           _wasAuthenticated = false;

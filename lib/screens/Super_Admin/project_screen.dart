@@ -1,6 +1,8 @@
 // projects_page.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../blocs/project/project_bloc.dart';
 import '../../models/project_model.dart';
 import '../../widgets/app_drawer.dart';
@@ -124,6 +126,10 @@ class _ProjectsPageState extends State<ProjectsPage>
               );
             },
           ),
+          IconButton(
+            icon: const Icon(Icons.add, color: _primary),
+            onPressed: () => _showCreateProjectModal(context),
+          ),
         ],
       ),
       body: SafeArea(
@@ -148,11 +154,6 @@ class _ProjectsPageState extends State<ProjectsPage>
             );
           },
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showCreateProjectModal(context),
-        backgroundColor: _primary,
-        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
@@ -406,46 +407,53 @@ class _ProjectsPageState extends State<ProjectsPage>
   void _showBulkImportDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Bulk Import'),
-        content: const Text(
-            'Upload a CSV file to bulk import projects.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final bulkProjects = [
-                Project(
-                  id: DateTime.now().millisecondsSinceEpoch.toString(),
-                  name: 'Imported Project A',
-                  clientName: 'Client A',
-                  status: ProjectStatus.planning,
-                ),
-                Project(
-                  id: (DateTime.now().millisecondsSinceEpoch + 1).toString(),
-                  name: 'Imported Project B',
-                  clientName: 'Client B',
-                  status: ProjectStatus.inProgress,
-                ),
-              ];
-              context.read<ProjectBloc>().add(AddProjectsBulkEvent(bulkProjects));
-              Navigator.pop(context);
+      barrierDismissible: true,
+      builder: (_) => _ImportDataDialog(
+        title: 'Import Data to Projects',
+        subtitle: 'Bulk migration wizard for production-grade data ingestion.',
+        onFilePicked: (file) async {
+          try {
+            String content;
+            if (file.bytes != null) {
+              content = String.fromCharCodes(file.bytes!);
+            } else if (file.path != null) {
+              content = await File(file.path!).readAsString();
+            } else {
+              return;
+            }
+            final lines = content
+                .split(RegExp(r'\r?\n'))
+                .where((l) => l.trim().isNotEmpty)
+                .skip(1) // skip header
+                .toList();
+            final projects = <Project>[];
+            for (int i = 0; i < lines.length; i++) {
+              final cols = lines[i].split(',').map((s) => s.trim()).toList();
+              if (cols.isEmpty || cols[0].isEmpty) continue;
+              projects.add(Project(
+                id: DateTime.now().millisecondsSinceEpoch.toString() + i.toString(),
+                name: cols[0],
+                clientName: cols.length > 1 ? cols[1] : '',
+                status: ProjectStatus.planning,
+              ));
+            }
+            if (projects.isNotEmpty && context.mounted) {
+              context.read<ProjectBloc>().add(AddProjectsBulkEvent(projects));
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Bulk imported 2 projects!'),
-                  backgroundColor: Color(0xFF10B981),
+                SnackBar(
+                  content: Text('\${projects.length} project(s) imported successfully'),
+                  backgroundColor: const Color(0xFF10B981),
                 ),
               );
-            },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0EA5E9)),
-            child: const Text('Upload CSV',
-                style: TextStyle(color: Colors.white)),
-          ),
-        ],
+            }
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Import failed: \$e')),
+              );
+            }
+          }
+        },
       ),
     );
   }
@@ -1539,6 +1547,243 @@ class _FormField extends StatelessWidget {
         const SizedBox(height: 5),
         child,
       ],
+    );
+  }
+}
+
+// ─── IMPORT DATA DIALOG ───────────────────────────────────────────────────────
+
+class _ImportDataDialog extends StatefulWidget {
+  final String title;
+  final String subtitle;
+  final Future<void> Function(PlatformFile file) onFilePicked;
+
+  const _ImportDataDialog({
+    required this.title,
+    required this.subtitle,
+    required this.onFilePicked,
+  });
+
+  @override
+  State<_ImportDataDialog> createState() => _ImportDataDialogState();
+}
+
+class _ImportDataDialogState extends State<_ImportDataDialog> {
+  PlatformFile? _selectedFile;
+  bool _isImporting = false;
+
+  Future<void> _pickFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['csv', 'xlsx', 'xls'],
+      allowMultiple: false,
+    );
+    if (result != null && result.files.isNotEmpty) {
+      setState(() => _selectedFile = result.files.first);
+    }
+  }
+
+  Future<void> _doImport() async {
+    if (_selectedFile == null) return;
+    setState(() => _isImporting = true);
+    try {
+      await widget.onFilePicked(_selectedFile!);
+      if (mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _isImporting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppTheme.bgCardDark : Colors.white;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    final textMuted = AppTheme.textMutedOf(context);
+    final border = AppTheme.borderOf(context);
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+      child: Container(
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0EA5E9).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: const Color(0xFF0EA5E9).withOpacity(0.25)),
+                    ),
+                    child: const Icon(
+                      Icons.upload_file_rounded,
+                      color: Color(0xFF0EA5E9),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.title,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: textPrimary,
+                          ),
+                        ),
+                        Text(
+                          widget.subtitle,
+                          style: TextStyle(fontSize: 10.5, color: textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, size: 18, color: textMuted),
+                    onPressed: () => Navigator.pop(context),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 20, color: border),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+              child: GestureDetector(
+                onTap: _pickFile,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _selectedFile != null
+                          ? const Color(0xFF0EA5E9)
+                          : border,
+                      width: _selectedFile != null ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.upload_rounded,
+                        size: 40,
+                        color: _selectedFile != null
+                            ? const Color(0xFF0EA5E9)
+                            : textMuted,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        _selectedFile != null
+                            ? _selectedFile!.name
+                            : 'Upload Excel or CSV File',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: _selectedFile != null
+                              ? const Color(0xFF0EA5E9)
+                              : textPrimary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      if (_selectedFile == null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Drop your migration file here or click to browse.',
+                          style: TextStyle(fontSize: 12, color: textSecondary),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      OutlinedButton.icon(
+                        onPressed: _pickFile,
+                        icon: Icon(Icons.folder_open_outlined,
+                            size: 16, color: textPrimary),
+                        label: Text(
+                          _selectedFile != null ? 'Change File' : 'Choose File',
+                          style: TextStyle(fontSize: 13, color: textPrimary),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: border),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Divider(height: 24, color: border),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Row(
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('Cancel',
+                        style: TextStyle(
+                            fontSize: 14,
+                            color: textSecondary,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                  const Spacer(),
+                  if (_selectedFile != null)
+                    ElevatedButton.icon(
+                      onPressed: _isImporting ? null : _doImport,
+                      icon: _isImporting
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.upload_rounded, size: 16),
+                      label: Text(
+                          _isImporting ? 'Importing...' : 'Import',
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w600)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0EA5E9),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 10),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                        elevation: 0,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

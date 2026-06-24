@@ -177,7 +177,13 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
       CreateTemplateEvent event, Emitter<OnboardingState> emit) async {
     try {
       final templateData = event.templateData;
-      final rawSections = templateData['sections'] as List<dynamic>? ?? [];
+      final secData = templateData['sections'];
+      List<dynamic> rawSections = [];
+      if (secData is String) {
+        try { rawSections = jsonDecode(secData) as List<dynamic>; } catch (_) {}
+      } else if (secData is List) {
+        rawSections = secData as List<dynamic>;
+      }
       final sectionsJson = _convertSectionsToJson(rawSections);
       
       await _db.from('onboarding_templates').insert({
@@ -250,7 +256,13 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
     try {
       final templateData = event.templateData;
       final templateId = event.id;
-      final rawSections = templateData['sections'] as List<dynamic>? ?? [];
+      final secData = templateData['sections'];
+      List<dynamic> rawSections = [];
+      if (secData is String) {
+        try { rawSections = jsonDecode(secData) as List<dynamic>; } catch (_) {}
+      } else if (secData is List) {
+        rawSections = secData as List<dynamic>;
+      }
       final sectionsJson = _convertSectionsToJson(rawSections);
 
       await _db.from('onboarding_templates').update({

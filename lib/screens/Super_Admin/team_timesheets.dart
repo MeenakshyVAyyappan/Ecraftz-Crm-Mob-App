@@ -755,7 +755,7 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => const _QuickCreateSheet(),
+      builder: (_) => _QuickCreateSheet(onItemSelected: widget.onItemSelected),
     );
   }
 }
@@ -2179,7 +2179,8 @@ class _TimeField extends StatelessWidget {
 // ─── Quick Create Sheet ───────────────────────────────────────────────────────
 
 class _QuickCreateSheet extends StatelessWidget {
-  const _QuickCreateSheet();
+  final Function(int) onItemSelected;
+  const _QuickCreateSheet({required this.onItemSelected});
 
   @override
   Widget build(BuildContext context) {
@@ -2230,7 +2231,18 @@ class _QuickCreateSheet extends StatelessWidget {
           const SizedBox(height: 8),
           ...options.map(
             (o) => ListTile(
-              onTap: () => Navigator.pop(context),
+              onTap: () {
+                Navigator.pop(context);
+                if (o.$2 == 'New Lead') {
+                  onItemSelected(1);
+                } else if (o.$2 == 'New Project') {
+                  onItemSelected(4);
+                } else if (o.$2 == 'New Invoice') {
+                  onItemSelected(7);
+                } else if (o.$2 == 'New Task') {
+                  onItemSelected(5);
+                }
+              },
               leading: Container(
                 width: 36,
                 height: 36,
