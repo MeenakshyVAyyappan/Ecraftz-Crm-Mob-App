@@ -241,7 +241,8 @@ class _TeamsPageState extends State<TeamsPage> {
 
       final profilesRes = await SupabaseService.client
           .from('profiles')
-          .select('*, departments:departments!fk_profiles_dept(id, name)');
+          .select('*, departments:departments!fk_profiles_dept(id, name)')
+          .eq('organization_id', '00000000-0000-0000-0000-000000000000');
       
       final fetchedProfiles = List<Map<String, dynamic>>.from(profilesRes as List);
 

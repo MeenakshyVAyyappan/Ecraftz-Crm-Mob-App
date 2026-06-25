@@ -634,8 +634,31 @@ class _DashboardScreenState extends State<DashboardScreen>
         childAspectRatio: 1.1,
       ),
       itemCount: stats.length,
-      itemBuilder: (context, i) =>
-          StatCard(stat: stats[i], index: i),
+      itemBuilder: (context, i) {
+        return GestureDetector(
+          onTap: () {
+            int targetIndex = 0;
+            switch (i) {
+              case 0:
+                targetIndex = 7; // Billing
+                break;
+              case 1:
+                targetIndex = 4; // Projects
+                break;
+              case 2:
+                targetIndex = 5; // Tasks
+                break;
+              case 3:
+                targetIndex = 16; // HR & Payroll
+                break;
+              default:
+                targetIndex = 0;
+            }
+            widget.onItemSelected(targetIndex);
+          },
+          child: StatCard(stat: stats[i], index: i),
+        );
+      },
     );
   }
 

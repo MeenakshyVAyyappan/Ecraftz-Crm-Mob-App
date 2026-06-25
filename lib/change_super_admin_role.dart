@@ -20,7 +20,7 @@ void main() async {
       'name': 'SA Changer',
       'full_name': 'SA Changer',
       'role': 'employee',
-      'organization_id': '00000000-0000-0000-0000-000000000000'
+      'organization_id': '00000000-0000-0000-0000-000000000000',
     }
   })));
 

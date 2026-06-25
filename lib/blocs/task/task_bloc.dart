@@ -78,13 +78,20 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
             .order('created_at', ascending: false);
 
         final Map<String, String> idToName = {};
+        final List<Map<String, dynamic>> activeProfiles = [];
         try {
-          final profilesRes = await _client.from('profiles').select('id, full_name, name');
+          final profilesRes = await _client
+              .from('profiles')
+              .select('*, departments:departments!fk_profiles_dept(id, name)');
           for (final p in (profilesRes as List)) {
             final id = p['id']?.toString() ?? '';
             final name = p['full_name']?.toString() ?? p['name']?.toString() ?? '';
             if (id.isNotEmpty && name.isNotEmpty) {
               idToName[id] = name;
+            }
+            final statusStr = p['status']?.toString().toLowerCase() ?? '';
+            if (statusStr == 'active') {
+              activeProfiles.add(Map<String, dynamic>.from(p));
             }
           }
         } catch (_) {}
@@ -97,9 +104,32 @@ class TaskBloc extends Bloc<TaskEvent, TaskState> {
           return task;
         }).toList();
 
+        List<TeamMember> members;
+        if (activeProfiles.isNotEmpty) {
+          members = activeProfiles.map((p) {
+            final id = p['id']?.toString() ?? '';
+            final name = p['full_name']?.toString() ?? p['name']?.toString() ?? 'Unknown';
+            final role = p['role']?.toString() ?? 'Employee';
+            final deptMap = p['departments'];
+            final department = deptMap != null ? (deptMap['name']?.toString() ?? 'No Department') : 'No Department';
+            final userTasks = list.where((t) => t.owner == name || t.owner == id).toList();
+            return TeamMember(
+              id: id,
+              name: name,
+              role: role.toUpperCase(),
+              department: department.toUpperCase(),
+              weeklyLoad: userTasks.length * 8,
+              weeklyLimit: 40,
+              tasks: userTasks,
+            );
+          }).toList();
+        } else {
+          members = _recomputeMembers(list);
+        }
+
         emit(TaskState(
           tasks: list,
-          members: _recomputeMembers(list),
+          members: members,
         ));
       } catch (e, stackTrace) {
         print('Error loading tasks: $e\n$stackTrace');

@@ -143,6 +143,11 @@ class Invoice {
   DateTime dueDate;
   String notes;
   String currency;
+  final double dbSubtotal;
+  final double dbTotalTax;
+  final double dbGrandTotal;
+  final double dbAmountPaid;
+  final double dbAmountDue;
 
   Invoice({
     required this.id,
@@ -159,6 +164,11 @@ class Invoice {
     required this.dueDate,
     this.notes = '',
     this.currency = 'INR',
+    this.dbSubtotal = 0.0,
+    this.dbTotalTax = 0.0,
+    this.dbGrandTotal = 0.0,
+    this.dbAmountPaid = 0.0,
+    this.dbAmountDue = 0.0,
   });
 
   double get subtotal => items.fold(0, (s, i) => s + i.subtotal);
@@ -212,11 +222,21 @@ class Invoice {
       }
     }
 
-    // If still empty, create a default item from subtotal
+    // If still empty, create a default item from subtotal and compute correct tax percent
     if (items.isEmpty) {
       final subtotal = (json['subtotal'] is num) ? (json['subtotal'] as num).toDouble()
           : double.tryParse(json['subtotal']?.toString() ?? '') ?? 0.0;
-      items = [InvoiceItem(description: 'Services', unitPrice: subtotal, quantity: 1.0)];
+      final totalTax = (json['total_tax'] is num) ? (json['total_tax'] as num).toDouble()
+          : double.tryParse(json['total_tax']?.toString() ?? '') ?? 0.0;
+      final grandTotal = (json['grand_total'] is num) ? (json['grand_total'] as num).toDouble()
+          : double.tryParse(json['grand_total']?.toString() ?? '') ?? 0.0;
+
+      if (subtotal > 0) {
+        final taxPercent = (totalTax / subtotal) * 100;
+        items = [InvoiceItem(description: 'Services', unitPrice: subtotal, quantity: 1.0, taxPercent: taxPercent)];
+      } else {
+        items = [InvoiceItem(description: 'Services', unitPrice: grandTotal, quantity: 1.0, taxPercent: 0.0)];
+      }
     }
 
     // --- Client info ---
@@ -227,6 +247,12 @@ class Invoice {
     final cPhone = (clientsMap is Map && clientsMap['phone'] != null) ? clientsMap['phone'].toString() : null;
     final cAddress = (clientsMap is Map && clientsMap['address'] != null) ? clientsMap['address'].toString() : null;
     final pName = (projectsMap is Map && projectsMap['name'] != null) ? projectsMap['name'].toString() : '';
+
+    final dbSubtotal = (json['subtotal'] is num) ? (json['subtotal'] as num).toDouble() : 0.0;
+    final dbTotalTax = (json['total_tax'] is num) ? (json['total_tax'] as num).toDouble() : 0.0;
+    final dbGrandTotal = (json['grand_total'] is num) ? (json['grand_total'] as num).toDouble() : 0.0;
+    final dbAmountPaid = (json['amount_paid'] is num) ? (json['amount_paid'] as num).toDouble() : 0.0;
+    final dbAmountDue = (json['amount_due'] is num) ? (json['amount_due'] as num).toDouble() : 0.0;
 
     return Invoice(
       id: json['id']?.toString() ?? '',
@@ -243,6 +269,11 @@ class Invoice {
       dueDate: json['due_date'] != null ? DateTime.parse(json['due_date'].toString()) : DateTime.now(),
       notes: notes,
       currency: json['currency']?.toString() ?? 'INR',
+      dbSubtotal: dbSubtotal,
+      dbTotalTax: dbTotalTax,
+      dbGrandTotal: dbGrandTotal,
+      dbAmountPaid: dbAmountPaid,
+      dbAmountDue: dbAmountDue,
     );
   }
 

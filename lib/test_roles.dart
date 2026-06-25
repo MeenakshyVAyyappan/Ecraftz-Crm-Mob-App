@@ -20,7 +20,7 @@ void main() async {
       'name': 'Roles Test',
       'full_name': 'Roles Test',
       'role': 'employee',
-      'organization_id': '00000000-0000-0000-0000-000000000000'
+      'organization_id': '00000000-0000-0000-0000-000000000000',
     }
   })));
 

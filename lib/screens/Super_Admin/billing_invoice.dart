@@ -70,10 +70,9 @@ class _BillingPageState extends State<BillingPage> {
     }).toList();
   }
 
-  double _totalInvoiced(List<Invoice> inv) => inv.fold(0, (s, i) => s + i.grossAmount);
-  double _totalPaid(List<Invoice> inv) =>
-      inv.where((i) => i.status == InvoiceStatus.paid).fold(0, (s, i) => s + i.grossAmount);
-  double _outstanding(List<Invoice> inv) => _totalInvoiced(inv) - _totalPaid(inv);
+  double _totalInvoiced(List<Invoice> inv) => inv.fold(0, (s, i) => s + i.dbGrandTotal);
+  double _totalPaid(List<Invoice> inv) => inv.fold(0, (s, i) => s + i.dbAmountPaid);
+  double _outstanding(List<Invoice> inv) => inv.fold(0, (s, i) => s + i.dbAmountDue);
 
   void _showGstSettings(GstProfile profile) {
     showDialog(

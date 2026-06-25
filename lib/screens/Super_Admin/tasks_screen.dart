@@ -121,7 +121,10 @@ class _TasksPageState extends State<TasksPage> {
           ),
           IconButton(
             icon: Icon(Icons.add, color: _primary),
-            onPressed: () => _showCreateTaskModal(context),
+            onPressed: () {
+              final members = context.read<TaskBloc>().state.members;
+              _showCreateTaskModal(context, members: members);
+            },
           ),
         ],
       ),
@@ -979,7 +982,7 @@ class _ImportDataDialog extends StatelessWidget {
 
 // ─── KANBAN COLUMN (Wide) ─────────────────────────────────────────────────────
 
-class _KanbanColumn extends StatelessWidget {
+class _KanbanColumn extends StatefulWidget {
   final TaskStatus status;
   final List<TaskItem> tasks;
   final double width;
@@ -995,22 +998,80 @@ class _KanbanColumn extends StatelessWidget {
   });
 
   @override
+  State<_KanbanColumn> createState() => _KanbanColumnState();
+}
+
+class _KanbanColumnState extends State<_KanbanColumn> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      margin: const EdgeInsets.only(right: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _ColumnHeader(status: status, count: tasks.length),
-          const SizedBox(height: 10),
-          ...tasks.map((t) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: _TaskCard(task: t, onTap: () => onTaskTap(t)),
-          )),
-          _AddTaskButton(onTap: onAddTask),
-        ],
-      ),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return DragTarget<TaskItem>(
+      onWillAccept: (task) => task != null && task.status != widget.status,
+      onAccept: (task) {
+        context.read<TaskBloc>().add(UpdateTaskStatusEvent(task.id, widget.status));
+        setState(() {
+          _isHovered = false;
+        });
+      },
+      onMove: (details) {
+        if (!_isHovered) {
+          setState(() {
+            _isHovered = true;
+          });
+        }
+      },
+      onLeave: (task) {
+        setState(() {
+          _isHovered = false;
+        });
+      },
+      builder: (context, candidateData, rejectedData) {
+        return Container(
+          width: widget.width,
+          margin: const EdgeInsets.only(right: 14),
+          padding: _isHovered ? const EdgeInsets.all(4) : EdgeInsets.zero,
+          decoration: BoxDecoration(
+            color: _isHovered 
+                ? (isDark ? Colors.white10 : const Color(0xFF2196F3).withOpacity(0.05))
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            border: _isHovered 
+                ? Border.all(color: const Color(0xFF2196F3), width: 2)
+                : null,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ColumnHeader(status: widget.status, count: widget.tasks.length),
+              const SizedBox(height: 10),
+              ...widget.tasks.map((t) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: LongPressDraggable<TaskItem>(
+                  data: t,
+                  feedback: Material(
+                    color: Colors.transparent,
+                    child: SizedBox(
+                      width: widget.width,
+                      child: Opacity(
+                        opacity: 0.8,
+                        child: _TaskCard(task: t, onTap: () {}),
+                      ),
+                    ),
+                  ),
+                  childWhenDragging: Opacity(
+                    opacity: 0.3,
+                    child: _TaskCard(task: t, onTap: () {}),
+                  ),
+                  child: _TaskCard(task: t, onTap: () => widget.onTaskTap(t)),
+                ),
+              )),
+              _AddTaskButton(onTap: widget.onAddTask),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -1036,63 +1097,110 @@ class _KanbanColumnMobile extends StatefulWidget {
 
 class _KanbanColumnMobileState extends State<_KanbanColumnMobile> {
   bool _expanded = true;
+  bool _isHovered = false;
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.bgCardDark : Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.borderOf(context)),
-      ),
-      child: Column(
-        children: [
-          GestureDetector(
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              child: Row(
-                children: [
-                  Container(
-                    width: 8, height: 8,
-                    decoration: BoxDecoration(color: widget.status.color, shape: BoxShape.circle),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(widget.status.label,
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimaryOf(context))),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-                    decoration: BoxDecoration(color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(10)),
-                    child: Text('${widget.tasks.length}',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.textSecondaryOf(context))),
-                  ),
-                  const Spacer(),
-                  Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                    size: 18, color: AppTheme.textMutedOf(context)),
-                ],
-              ),
-            ),
+    return DragTarget<TaskItem>(
+      onWillAccept: (task) => task != null && task.status != widget.status,
+      onAccept: (task) {
+        context.read<TaskBloc>().add(UpdateTaskStatusEvent(task.id, widget.status));
+        setState(() {
+          _isHovered = false;
+        });
+      },
+      onMove: (details) {
+        if (!_isHovered) {
+          setState(() {
+            _isHovered = true;
+          });
+        }
+      },
+      onLeave: (task) {
+        setState(() {
+          _isHovered = false;
+        });
+      },
+      builder: (context, candidateData, rejectedData) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: _isHovered
+                ? (isDark ? Colors.white10 : const Color(0xFF2196F3).withOpacity(0.05))
+                : (isDark ? AppTheme.bgCardDark : Colors.white),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+                color: _isHovered 
+                    ? const Color(0xFF2196F3) 
+                    : AppTheme.borderOf(context),
+                width: _isHovered ? 2 : 1),
           ),
-          if (_expanded) ...[
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                children: [
-                  ...widget.tasks.map((t) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _TaskCard(task: t, onTap: () => widget.onTaskTap(t)),
-                  )),
-                  _AddTaskButton(onTap: widget.onAddTask),
-                ],
+          child: Column(
+            children: [
+              GestureDetector(
+                onTap: () => setState(() => _expanded = !_expanded),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 8, height: 8,
+                        decoration: BoxDecoration(color: widget.status.color, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(widget.status.label,
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimaryOf(context))),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                        decoration: BoxDecoration(color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(10)),
+                        child: Text('${widget.tasks.length}',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.textSecondaryOf(context))),
+                      ),
+                      const Spacer(),
+                      Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                        size: 18, color: AppTheme.textMutedOf(context)),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ],
-        ],
-      ),
+              if (_expanded) ...[
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Column(
+                    children: [
+                      ...widget.tasks.map((t) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: LongPressDraggable<TaskItem>(
+                          data: t,
+                          feedback: Material(
+                            color: Colors.transparent,
+                            child: SizedBox(
+                              width: MediaQuery.of(context).size.width - 60,
+                              child: Opacity(
+                                opacity: 0.8,
+                                child: _TaskCard(task: t, onTap: () {}),
+                              ),
+                            ),
+                          ),
+                          childWhenDragging: Opacity(
+                            opacity: 0.3,
+                            child: _TaskCard(task: t, onTap: () {}),
+                          ),
+                          child: _TaskCard(task: t, onTap: () => widget.onTaskTap(t)),
+                        ),
+                      )),
+                      _AddTaskButton(onTap: widget.onAddTask),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }
