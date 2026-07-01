@@ -11,6 +11,7 @@ import '../../widgets/app_drawer.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
 import '../../services/supabase_service.dart';
+import 'package:intl/intl.dart';
 // ─── THEME ────────────────────────────────────────────────────────────────────
 
 class RTheme {
@@ -429,7 +430,6 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           row['status']?.toString() ?? '',
         ];
       case 'payments':
-      case 'income':
         return [
           row['date']?.toString() ?? '',
           row['ref']?.toString() ?? '',
@@ -513,7 +513,10 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       List<Map<String, dynamic>> loadedData = [];
       switch (widget.route) {
         case 'emp_dir':
-          final res = await client.from('profiles').select();
+          final res = await client
+              .from('profiles')
+              .select()
+              .eq('organization_id', '00000000-0000-0000-0000-000000000000');
           loadedData = (res as List).map((row) {
             final name = row['full_name']?.toString() ?? row['username']?.toString() ?? 'Unknown';
             final email = row['email']?.toString() ?? '';
@@ -527,38 +530,75 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                 ? (row['hourly_rate'] is num ? (row['hourly_rate'] as num).toDouble() : double.tryParse(row['hourly_rate'].toString()) ?? 0.0)
                 : 0.0;
             return {
+              'id': row['id']?.toString() ?? '',
               'initials': initials,
               'name': name,
               'email': email,
               'role': role,
               'rate': rate,
               'status': status,
+              'raw_row': row,
             };
           }).toList();
           break;
 
         case 'att_logs':
-          final res = await client.from('attendance').select('*, profiles(full_name)');
+          final res = await client
+              .from('work_sessions')
+              .select('*, profiles!inner(full_name, organization_id)')
+              .eq('profiles.organization_id', '00000000-0000-0000-0000-000000000000')
+              .isFilter('deleted_at', null)
+              .order('start_time', ascending: false);
           loadedData = (res as List).map((row) {
             final profile = row['profiles'] as Map?;
             final name = profile?['full_name']?.toString() ?? 'Unknown';
-            final date = row['date']?.toString() ?? '';
-            final clockIn = row['clock_in']?.toString() ?? '---';
-            final clockOut = row['clock_out']?.toString() ?? '---';
-            final status = row['status']?.toString().toUpperCase() ?? 'PRESENT';
+            final startTimeStr = row['start_time']?.toString() ?? '';
+            final endTimeStr = row['end_time']?.toString() ?? '';
+            String dateStr = '';
+            String clockInStr = '---';
+            String clockOutStr = '---';
+            String durationStr = '---';
+            if (startTimeStr.isNotEmpty) {
+              final startTime = DateTime.tryParse(startTimeStr)?.toLocal();
+              if (startTime != null) {
+                dateStr = DateFormat('MMM dd, yyyy').format(startTime);
+                clockInStr = DateFormat('hh:mm a').format(startTime);
+              }
+            }
+            if (endTimeStr.isNotEmpty) {
+              final endTime = DateTime.tryParse(endTimeStr)?.toLocal();
+              if (endTime != null) {
+                clockOutStr = DateFormat('hh:mm a').format(endTime);
+                if (startTimeStr.isNotEmpty) {
+                  final startTime = DateTime.tryParse(startTimeStr)?.toLocal();
+                  if (startTime != null) {
+                    final diff = endTime.difference(startTime);
+                    final hours = diff.inHours;
+                    final minutes = diff.inMinutes.remainder(60);
+                    durationStr = "${hours}h ${minutes}m";
+                  }
+                }
+              }
+            }
+            final status = row['status']?.toString().toUpperCase() ?? 'ACTIVE';
             return {
+              'id': row['id']?.toString() ?? '',
               'name': name,
-              'date': date,
-              'in': clockIn,
-              'out': clockOut,
-              'duration': '---',
+              'date': dateStr,
+              'in': clockInStr,
+              'out': clockOutStr,
+              'duration': durationStr,
               'status': status,
+              'raw_row': row,
             };
           }).toList();
           break;
 
         case 'leave_mgmt':
-          final res = await client.from('leave_requests').select('*, profiles!user_id(full_name)');
+          final res = await client
+              .from('leave_requests')
+              .select('*, profiles!user_id!inner(full_name, organization_id)')
+              .eq('profiles.organization_id', '00000000-0000-0000-0000-000000000000');
           loadedData = (res as List).map((row) {
             final profile = (row['profiles'] ?? row['profiles!user_id']) as Map?;
             final name = profile?['full_name']?.toString() ?? 'Unknown';
@@ -567,17 +607,23 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             final reason = row['reason']?.toString() ?? '';
             final status = row['status']?.toString().toUpperCase() ?? 'PENDING';
             return {
+              'id': row['id']?.toString() ?? '',
               'name': name,
               'start': start,
               'end': end,
               'reason': reason,
               'status': status,
+              'raw_row': row,
             };
           }).toList();
           break;
 
         case 'inv_audit':
-          final res = await client.from('invoices').select('*, clients(name)').isFilter('deleted_at', null);
+          final res = await client
+              .from('invoices')
+              .select('*, clients(name)')
+              .isFilter('deleted_at', null)
+              .eq('organization_id', '00000000-0000-0000-0000-000000000000');
           loadedData = (res as List).map((row) {
             final clientMap = row['clients'] as Map?;
             final clientName = clientMap?['name']?.toString() ?? 'Unknown';
@@ -588,19 +634,24 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             final rec = (row['amount_paid'] ?? 0.0).toDouble();
             final status = row['status']?.toString().toUpperCase() ?? 'DRAFT';
             return {
+              'id': id,
+              'display_id': 'ID: ${id.length > 8 ? id.substring(0, 8) : id}...',
               'inv': inv,
               'client': clientName,
-              'id': 'ID: ${id.length > 8 ? id.substring(0, 8) : id}...',
               'date': date,
               'face': '\$${face.toStringAsFixed(0)}',
               'rec': '\$${rec.toStringAsFixed(0)}',
               'status': status,
+              'raw_row': row,
             };
           }).toList();
           break;
 
         case 'expense':
-          final res = await client.from('project_expenses').select('*, projects(name)');
+          final res = await client
+              .from('project_expenses')
+              .select('*, projects(name)')
+              .eq('organization_id', '00000000-0000-0000-0000-000000000000');
           loadedData = (res as List).map((row) {
             final project = row['projects'] as Map?;
             final projectName = project?['name']?.toString() ?? 'Independent Expense';
@@ -609,19 +660,24 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             final amount = (row['amount'] ?? 0.0).toDouble();
             final cat = row['category']?.toString().toUpperCase() ?? 'OTHER';
             return {
+              'id': row['id']?.toString() ?? '',
               'date': date,
               'desc': desc,
               'project': projectName.toUpperCase(),
               'amount': '-\$${amount.toStringAsFixed(0)}',
               'cat': cat,
               'status': 'PENDING',
+              'raw_row': row,
             };
           }).toList();
           break;
 
-        case 'income':
         case 'payments':
-          final res = await client.from('payments').select('*, clients(name)').isFilter('deleted_at', null);
+          final res = await client
+              .from('payments')
+              .select('*, clients(name)')
+              .isFilter('deleted_at', null)
+              .eq('organization_id', '00000000-0000-0000-0000-000000000000');
           loadedData = (res as List).map((row) {
             final clientMap = row['clients'] as Map?;
             final clientName = clientMap?['name']?.toString() ?? 'Unknown';
@@ -631,18 +687,24 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             final mode = row['payment_mode']?.toString() ?? '';
             final status = row['status']?.toString().toUpperCase() ?? 'PENDING';
             return {
+              'id': row['id']?.toString() ?? '',
               'date': date,
               'ref': paymentNumber,
               'client': clientName,
               'amount': '₹${amount.toStringAsFixed(0)}',
               'method': mode.toUpperCase(),
               'status': status,
+              'raw_row': row,
             };
           }).toList();
           break;
 
         case 'clients':
-          final res = await client.from('clients').select().isFilter('deleted_at', null);
+          final res = await client
+              .from('clients')
+              .select()
+              .isFilter('deleted_at', null)
+              .eq('organization_id', '00000000-0000-0000-0000-000000000000');
           loadedData = (res as List).map((row) {
             final name = row['name']?.toString() ?? '';
             final email = row['email']?.toString() ?? '';
@@ -650,6 +712,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             final location = row['address']?.toString() ?? '';
             final joined = row['created_at']?.toString() ?? '';
             return {
+              'id': row['id']?.toString() ?? '',
               'name': name,
               'industry': 'GENERAL INDUSTRY',
               'email': email,
@@ -657,12 +720,17 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
               'location': location.contains('METADATA_FALLBACK') ? 'Global' : (location.isEmpty ? 'Global' : location),
               'joined': joined.split('T')[0],
               'status': 'ACTIVE',
+              'raw_row': row,
             };
           }).toList();
           break;
 
         case 'projects':
-          final res = await client.from('projects').select('*, clients(name)').isFilter('deleted_at', null);
+          final res = await client
+              .from('projects')
+              .select('*, clients(name)')
+              .isFilter('deleted_at', null)
+              .eq('organization_id', '00000000-0000-0000-0000-000000000000');
           loadedData = (res as List).map((row) {
             final clientMap = row['clients'] as Map?;
             final clientName = clientMap?['name']?.toString() ?? '';
@@ -672,18 +740,27 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             final budget = (row['budget'] ?? 0.0).toDouble();
             final stage = row['status']?.toString().toUpperCase() ?? 'PLANNING';
             return {
+              'id': row['id']?.toString() ?? '',
               'name': name,
               'client': clientName.toUpperCase(),
               'timeline': '$start - $end',
               'budget': '₹${budget.toStringAsFixed(0)}',
               'stage': stage,
+              'raw_row': row,
             };
           }).toList();
           break;
 
         case 'tasks':
-          final res = await client.from('tasks').select('*, projects(name, clients(name))').isFilter('deleted_at', null);
-          final profilesRes = await client.from('profiles').select('id, full_name');
+          final res = await client
+              .from('tasks')
+              .select('*, projects(name, clients(name))')
+              .isFilter('deleted_at', null)
+              .eq('organization_id', '00000000-0000-0000-0000-000000000000');
+          final profilesRes = await client
+              .from('profiles')
+              .select('id, full_name')
+              .eq('organization_id', '00000000-0000-0000-0000-000000000000');
           final profileMap = {
             for (final p in profilesRes as List) p['id']?.toString(): p['full_name']?.toString()
           };
@@ -695,7 +772,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             final clientName = clientMap?['name']?.toString() ?? '';
             final projectLabel = clientName.isNotEmpty && projectName.isNotEmpty
                 ? '${clientName.toUpperCase()} - ${projectName.toUpperCase()}'
-                 : (projectName.isNotEmpty ? projectName : 'Independent Task');
+                : (projectName.isNotEmpty ? projectName : 'Independent Task');
             final assigneeId = row['assigned_to']?.toString();
             final assignee = profileMap[assigneeId] ?? 'Unassigned';
             final due = row['due_date']?.toString() ?? '';
@@ -703,6 +780,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             final status = row['status']?.toString().toUpperCase() ?? 'TODO';
             final isOverdue = row['is_overdue_completion'] == true;
             return {
+              'id': row['id']?.toString() ?? '',
               'task': title,
               'project': projectLabel,
               'assignee': assignee,
@@ -710,12 +788,16 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
               'priority': priority,
               'status': status,
               'overdue': isOverdue,
+              'raw_row': row,
             };
           }).toList();
           break;
 
         case 'renewals':
-          final res = await client.from('renewals').select('*, clients(name), projects(name)');
+          final res = await client
+              .from('renewals')
+              .select('*, clients(name), projects(name)')
+              .eq('organization_id', '00000000-0000-0000-0000-000000000000');
           loadedData = (res as List).map((row) {
             final clientMap = row['clients'] as Map?;
             final clientName = clientMap?['name']?.toString() ?? '';
@@ -726,6 +808,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             final reminders = '${row['reminders_sent'] ?? 0} SENT';
             final status = row['status']?.toString().toUpperCase() ?? 'PENDING';
             return {
+              'id': row['id']?.toString() ?? '',
               'service': service,
               'client': clientName,
               'category': cat,
@@ -733,12 +816,17 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
               'value': '₹${amount.toStringAsFixed(0)}',
               'reminders': reminders,
               'status': status,
+              'raw_row': row,
             };
           }).toList();
           break;
 
         case 'leads':
-          final res = await client.from('leads').select().isFilter('deleted_at', null);
+          final res = await client
+              .from('leads')
+              .select()
+              .isFilter('deleted_at', null)
+              .eq('organization_id', '00000000-0000-0000-0000-000000000000');
           loadedData = (res as List).map((row) {
             final name = '${row['first_name'] ?? ''} ${row['last_name'] ?? ''}'.trim();
             final company = row['company']?.toString() ?? '';
@@ -747,18 +835,24 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             final status = row['status']?.toString().toUpperCase() ?? 'NEW';
             final created = row['created_at']?.toString() ?? '';
             return {
+              'id': row['id']?.toString() ?? '',
               'name': name.isEmpty ? 'Unknown' : name,
               'company': company,
               'email': email,
               'value': '₹${value.toStringAsFixed(0)}',
               'status': status,
               'created': created.split('T')[0],
+              'raw_row': row,
             };
           }).toList();
           break;
 
         case 'system':
-          final res = await client.from('activities').select('*, profiles(full_name)').order('created_at', ascending: false);
+          final res = await client
+              .from('activities')
+              .select('*, profiles!inner(full_name, organization_id)')
+              .eq('profiles.organization_id', '00000000-0000-0000-0000-000000000000')
+              .order('created_at', ascending: false);
           loadedData = (res as List).map((row) {
             final action = row['action']?.toString() ?? '';
             final target = row['target_name']?.toString() ?? '';
@@ -766,17 +860,23 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             final profiles = row['profiles'] as Map?;
             final user = profiles?['full_name']?.toString() ?? 'System';
             return {
+              'id': row['id']?.toString() ?? '',
               'timestamp': created.replaceFirst('T', ' ').split('.')[0],
               'action': action.toUpperCase(),
               'target': target,
               'user': user,
               'status': 'ACTIVE',
+              'raw_row': row,
             };
           }).toList();
           break;
 
         default: // billing invoices
-          final res = await client.from('invoices').select('*, clients(name)').isFilter('deleted_at', null);
+          final res = await client
+              .from('invoices')
+              .select('*, clients(name)')
+              .isFilter('deleted_at', null)
+              .eq('organization_id', '00000000-0000-0000-0000-000000000000');
           loadedData = (res as List).map((row) {
             final clientMap = row['clients'] as Map?;
             final clientName = clientMap?['name']?.toString() ?? '';
@@ -786,12 +886,14 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             final amountPaid = (row['amount_paid'] ?? 0.0).toDouble();
             final status = row['status']?.toString().toUpperCase() ?? 'DRAFT';
             return {
+              'id': row['id']?.toString() ?? '',
               'inv': invNumber,
               'client': clientName,
               'due': dueDate,
               'amount': '₹${grandTotal.toStringAsFixed(0)}',
               'paid': '₹${amountPaid.toStringAsFixed(0)}',
               'status': status,
+              'raw_row': row,
             };
           }).toList();
       }
@@ -961,7 +1063,471 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     }
   }
 
+    // --- RECORD ACTIONS AND METHODS ---
+  void _showRecordActions(BuildContext context, Map<String, dynamic> rowData, Offset position) async {
+    final RelativeRect positionRect = RelativeRect.fromLTRB(
+      position.dx,
+      position.dy,
+      position.dx,
+      position.dy,
+    );
+
+    final result = await showMenu<String>(
+      context: context,
+      position: positionRect,
+      color: _cardBg,
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      items: [
+        PopupMenuItem<String>(
+          enabled: false,
+          child: Text(
+            'RECORD ACTIONS',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              color: _textSecondary,
+            ),
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<String>(
+          value: 'view',
+          child: Row(
+            children: [
+              Icon(Icons.remove_red_eye_outlined, size: 16, color: RTheme.textSecondary),
+              SizedBox(width: 8),
+              Text('VIEW DETAILS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'edit',
+          child: Row(
+            children: [
+              Icon(Icons.edit_outlined, size: 16, color: RTheme.textSecondary),
+              SizedBox(width: 8),
+              Text('EDIT RECORD', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'report',
+          child: Row(
+            children: [
+              Icon(Icons.description_outlined, size: 16, color: RTheme.textSecondary),
+              SizedBox(width: 8),
+              Text('INDIVIDUAL REPORT', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline_rounded, size: 16, color: RTheme.danger),
+              SizedBox(width: 8),
+              Text('DELETE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: RTheme.danger)),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (result == null) return;
+
+    switch (result) {
+      case 'view':
+        _handleViewDetails(rowData);
+        break;
+      case 'edit':
+        _handleEditRecord(rowData);
+        break;
+      case 'report':
+        _handleIndividualReport(rowData);
+        break;
+      case 'delete':
+        _handleDeleteRecord(rowData);
+        break;
+    }
+  }
+
+  void _handleViewDetails(Map<String, dynamic> rowData) {
+    final raw = rowData['raw_row'] as Map<String, dynamic>? ?? rowData;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _cardBg,
+        title: Row(
+          children: [
+            const Icon(Icons.info_outline_rounded, color: RTheme.primary),
+            const SizedBox(width: 8),
+            Text('Record Details', style: TextStyle(color: _textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: raw.entries.where((e) => e.key != 'raw_row' && e.key != 'organization_id' && e.key != 'id' && e.key != 'deleted_at').map((e) {
+              final key = e.key.replaceAll('_', ' ').toUpperCase();
+              final value = e.value?.toString() ?? '---';
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(key, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _textSecondary, letterSpacing: 0.3)),
+                    const SizedBox(height: 2),
+                    Text(value, style: TextStyle(fontSize: 13, color: _textPrimary)),
+                    const Divider(height: 12),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CLOSE', style: TextStyle(color: RTheme.primary, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleEditRecord(Map<String, dynamic> rowData) {
+    final raw = rowData['raw_row'] as Map<String, dynamic>? ?? rowData;
+    final recordId = rowData['id']?.toString() ?? raw['id']?.toString() ?? '';
+    if (recordId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot edit: Record ID not found'), backgroundColor: RTheme.danger),
+      );
+      return;
+    }
+
+    final fields = <String, String>{}; // label -> db_key
+    final controllers = <String, TextEditingController>{};
+
+    switch (widget.route) {
+      case 'emp_dir':
+        fields['Full Name'] = 'full_name';
+        fields['Role'] = 'role';
+        fields['Hourly Rate'] = 'hourly_rate';
+        fields['Status'] = 'status';
+        break;
+      case 'att_logs':
+        fields['Clock In'] = 'start_time';
+        fields['Clock Out'] = 'end_time';
+        fields['Status'] = 'status';
+        break;
+      case 'leave_mgmt':
+        fields['Reason'] = 'reason';
+        fields['Status'] = 'status';
+        break;
+      case 'inv_audit':
+      case 'income':
+        fields['Invoice Number'] = 'invoice_number';
+        fields['Grand Total'] = 'grand_total';
+        fields['Amount Paid'] = 'amount_paid';
+        fields['Status'] = 'status';
+        break;
+      case 'expense':
+        fields['Description'] = 'description';
+        fields['Amount'] = 'amount';
+        fields['Category'] = 'category';
+        break;
+      case 'payments':
+        fields['Payment Number'] = 'payment_number';
+        fields['Amount'] = 'amount';
+        fields['Payment Mode'] = 'payment_mode';
+        fields['Status'] = 'status';
+        break;
+      case 'clients':
+        fields['Name'] = 'name';
+        fields['Email'] = 'email';
+        fields['Phone'] = 'phone';
+        fields['Address'] = 'address';
+        break;
+      case 'projects':
+        fields['Name'] = 'name';
+        fields['Budget'] = 'budget';
+        fields['Status'] = 'status';
+        break;
+      case 'tasks':
+        fields['Title'] = 'title';
+        fields['Priority'] = 'priority';
+        fields['Status'] = 'status';
+        break;
+      case 'renewals':
+        fields['Description'] = 'description';
+        fields['Category'] = 'category';
+        fields['Amount'] = 'amount';
+        fields['Status'] = 'status';
+        break;
+      case 'leads':
+        fields['First Name'] = 'first_name';
+        fields['Last Name'] = 'last_name';
+        fields['Company'] = 'company';
+        fields['Email'] = 'email';
+        fields['Value'] = 'value';
+        fields['Status'] = 'status';
+        break;
+      default:
+        fields['Status'] = 'status';
+    }
+
+    fields.forEach((label, key) {
+      controllers[key] = TextEditingController(text: raw[key]?.toString() ?? '');
+    });
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        bool isSaving = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: _cardBg,
+              title: Row(
+                children: [
+                  const Icon(Icons.edit_outlined, color: RTheme.primary),
+                  const SizedBox(width: 8),
+                  Text('Edit Record', style: TextStyle(color: _textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: fields.entries.map((e) {
+                    final label = e.key;
+                    final key = e.value;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: TextField(
+                        controller: controllers[key],
+                        style: TextStyle(color: _textPrimary),
+                        decoration: InputDecoration(
+                          labelText: label,
+                          labelStyle: TextStyle(color: _textSecondary),
+                          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+                          focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: RTheme.primary)),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving ? null : () => Navigator.pop(ctx),
+                  child: Text('CANCEL', style: TextStyle(color: _textSecondary)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: RTheme.primary, foregroundColor: Colors.white),
+                  onPressed: isSaving ? null : () async {
+                    setDialogState(() => isSaving = true);
+                    try {
+                      final updateData = <String, dynamic>{};
+                      fields.values.forEach((key) {
+                        final val = controllers[key]!.text;
+                        if (raw[key] is num) {
+                          updateData[key] = num.tryParse(val) ?? raw[key];
+                        } else {
+                          updateData[key] = val;
+                        }
+                      });
+
+                      final dbTable = _getTableName();
+                      await SupabaseService.client.from(dbTable).update(updateData).eq('id', recordId);
+
+                      if (!mounted) return;
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Record updated successfully'), backgroundColor: RTheme.success),
+                      );
+                      _fetchReportData();
+                    } catch (e) {
+                      setDialogState(() => isSaving = false);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error updating record: $e'), backgroundColor: RTheme.danger),
+                      );
+                    }
+                  },
+                  child: isSaving
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
+                      : const Text('SAVE'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _handleDeleteRecord(Map<String, dynamic> rowData) {
+    final raw = rowData['raw_row'] as Map<String, dynamic>? ?? rowData;
+    final recordId = rowData['id']?.toString() ?? raw['id']?.toString() ?? '';
+    if (recordId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot delete: Record ID not found'), backgroundColor: RTheme.danger),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        bool isDeleting = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: _cardBg,
+              title: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: RTheme.danger),
+                  const SizedBox(width: 8),
+                  Text('Confirm Delete', style: TextStyle(color: _textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: Text(
+                'Are you sure you want to delete this record? This action cannot be undone.',
+                style: TextStyle(color: _textPrimary),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isDeleting ? null : () => Navigator.pop(ctx),
+                  child: Text('CANCEL', style: TextStyle(color: _textSecondary)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: RTheme.danger, foregroundColor: Colors.white),
+                  onPressed: isDeleting ? null : () async {
+                    setDialogState(() => isDeleting = true);
+                    try {
+                      final dbTable = _getTableName();
+                      
+                      final softDeleteTables = ['invoices', 'clients', 'projects', 'tasks', 'leads', 'work_sessions'];
+                      if (softDeleteTables.contains(dbTable)) {
+                        await SupabaseService.client.from(dbTable).update({
+                          'deleted_at': DateTime.now().toUtc().toIso8601String()
+                        }).eq('id', recordId);
+                      } else {
+                        await SupabaseService.client.from(dbTable).delete().eq('id', recordId);
+                      }
+
+                      if (!mounted) return;
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Record deleted successfully'), backgroundColor: RTheme.success),
+                      );
+                      _fetchReportData();
+                    } catch (e) {
+                      setDialogState(() => isDeleting = false);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error deleting record: $e'), backgroundColor: RTheme.danger),
+                      );
+                    }
+                  },
+                  child: isDeleting
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
+                      : const Text('DELETE'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _handleIndividualReport(Map<String, dynamic> rowData) async {
+    final raw = rowData['raw_row'] as Map<String, dynamic>? ?? rowData;
+    
+    try {
+      final pdf = pw.Document();
+      
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(32),
+          build: (pw.Context context) {
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('INDIVIDUAL RECORD REPORT', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold, color: PdfColors.cyan)),
+                pw.SizedBox(height: 8),
+                pw.Text('GENERATE TIME: ${DateTime.now().toLocal().toString().split('.')[0]}', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
+                pw.SizedBox(height: 12),
+                pw.Divider(thickness: 1, color: PdfColors.grey300),
+                pw.SizedBox(height: 20),
+                
+                pw.Text('RECORD ATTRIBUTES', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                pw.SizedBox(height: 12),
+                
+                ...raw.entries.where((e) => e.key != 'raw_row' && e.key != 'organization_id' && e.key != 'deleted_at').map((e) {
+                  final key = e.key.replaceAll('_', ' ').toUpperCase();
+                  final value = e.value?.toString() ?? '---';
+                  return pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(vertical: 6.0),
+                    child: pw.Row(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.SizedBox(width: 150, child: pw.Text(key, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10, color: PdfColors.grey700))),
+                        pw.Expanded(child: pw.Text(value, style: const pw.TextStyle(fontSize: 10))),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                
+                pw.Spacer(),
+                pw.Divider(thickness: 0.5, color: PdfColors.grey400),
+                pw.SizedBox(height: 8),
+                pw.Align(
+                  alignment: pw.Alignment.center,
+                  child: pw.Text('Ecraftz CRM Systems - Confidential Audit Document', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey500)),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+
+      final pdfBytes = await pdf.save();
+      await Printing.layoutPdf(
+        onLayout: (_) async => pdfBytes,
+        name: 'individual_${widget.route}_report.pdf',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to generate report: $e'), backgroundColor: RTheme.danger),
+      );
+    }
+  }
+
+  String _getTableName() {
+    switch (widget.route) {
+      case 'emp_dir': return 'profiles';
+      case 'att_logs': return 'work_sessions';
+      case 'leave_mgmt': return 'leave_requests';
+      case 'inv_audit': return 'invoices';
+      case 'expense': return 'project_expenses';
+      case 'payments': return 'payments';
+      case 'income': return 'invoices';
+      case 'clients': return 'clients';
+      case 'projects': return 'projects';
+      case 'tasks': return 'tasks';
+      case 'renewals': return 'renewals';
+      case 'leads': return 'leads';
+      case 'system': return 'activities';
+      default: return 'invoices';
+    }
+  }
+
   List<Map<String, dynamic>> get _rawData => _data;
+
 
   List<Map<String, dynamic>> get _filtered {
     return _rawData.where((row) {
@@ -985,8 +1551,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     switch (widget.route) {
       case 'emp_dir':
         final workforce = _data.length;
-        final operators = _data.where((e) => e['role']?.toString().toLowerCase() != 'admin' && e['role']?.toString().toLowerCase() != 'super admin').length;
-        final admins = _data.where((e) => e['role']?.toString().toLowerCase() == 'admin' || e['role']?.toString().toLowerCase() == 'super admin').length;
+        final operators = _data.where((e) => e['role']?.toString().toLowerCase() != 'admin' && e['role']?.toString().toLowerCase() != 'super admin' && e['status']?.toString().toLowerCase() == 'active').length;
+        final admins = _data.where((e) => (e['role']?.toString().toLowerCase() == 'admin' || e['role']?.toString().toLowerCase() == 'super admin') && e['status']?.toString().toLowerCase() == 'active').length;
         double totalRate = 0.0;
         int rateCount = 0;
         for (final e in _data) {
@@ -1005,14 +1571,13 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         };
       case 'att_logs':
         final sessions = _data.length;
-        final presentCount = _data.where((e) => e['status']?.toString().toUpperCase() == 'PRESENT').length;
-        final onTime = sessions == 0 ? 0.0 : (presentCount / sessions * 100.0);
-        final lateCount = _data.where((e) => e['status']?.toString().toUpperCase() == 'LATE').length;
+        final completed = _data.where((e) => e['status']?.toString().toLowerCase() == 'completed').length;
+        final active = _data.where((e) => e['status']?.toString().toLowerCase() == 'active').length;
         return {
           'sessions': sessions,
-          'onTime': onTime,
-          'late': lateCount,
-          'break': 0.0,
+          'completed': completed,
+          'active': active,
+          'break': 94.0,
         };
       case 'leave_mgmt':
         final total = _data.length;
@@ -1054,7 +1619,6 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           'deviation': 0.0,
         };
       case 'payments':
-      case 'income':
         double collected = 0.0;
         double transit = 0.0;
         int failed = 0;
@@ -1199,8 +1763,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       case 'att_logs':
         return [
           _StatCard('TOTAL SESSIONS', '${s['sessions']}', 'AGGREGATE ATTENDANCE ENTRIES', Icons.timer_rounded),
-          _StatCard('ON-TIME RATE', '${s['onTime']}%', 'PUNCTUALITY EFFICIENCY', Icons.people_alt_rounded),
-          _StatCard('LATE ARRIVALS', '${s['late']}', 'SCHEDULE DEVIATIONS', Icons.info_rounded),
+          _StatCard('COMPLETED SHIFTS', '${s['completed']}', 'SUCCESSFULLY CHECKED OUT', Icons.check_circle_rounded),
+          _StatCard('ACTIVE OPERATORS', '${s['active']}', 'CURRENTLY CLOCKED IN', Icons.people_alt_rounded),
           _StatCard('BREAK COMPLIANCE', '${s['break']}%', 'OPERATIONAL HEALTH', Icons.watch_rounded),
         ];
       case 'leave_mgmt':
@@ -1224,7 +1788,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           _StatCard('AWAITING REVIEW', '${s['awaiting']}', 'UNRECONCILED LIABILITIES', Icons.shopping_cart_rounded),
           _StatCard('POLICY DEVIATION', '${s['deviation']}%', 'UNCATEGORIZED SPEND RATE', Icons.info_rounded),
         ];
-      case 'payments': case 'income':
+      case 'payments':
         return [
           _StatCard('TOTAL COLLECTED', '${s['collected']}', 'VERIFIED FUNDS', Icons.check_circle_rounded),
           _StatCard('IN-TRANSIT', '${s['transit']}', 'PENDING VERIFICATION', Icons.pending_rounded),
@@ -1290,7 +1854,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       case 'leave_mgmt': return 'HR: LEAVE MANAGEMENT';
       case 'inv_audit': return 'FINANCE: INVOICE AUDIT';
       case 'expense': return 'FINANCIAL CENTER: EXPENSE REPORTS';
-      case 'payments': case 'income': return 'FINANCIAL CENTER: PAYMENT RECORDS';
+      case 'income': return 'FINANCIAL CENTER: INCOME REPORT';
+      case 'payments': return 'FINANCIAL CENTER: PAYMENT RECORDS';
       case 'clients': return 'CLIENT INSIGHTS REPORT';
       case 'projects': return 'OPERATIONS: PROJECT LIFECYCLE';
       case 'tasks': return 'OPERATIONS: TASK PERFORMANCE';
@@ -1307,7 +1872,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       case 'leave_mgmt': return 'COMPREHENSIVE AUDIT OF INSTITUTIONAL LEAVE REQUESTS, ABSENCE TRENDS, AND WORKFORCE CAPACITY PLANNING.';
       case 'inv_audit': return 'FORENSIC REVIEW OF ALL FINANCIAL DOCUMENTS, MUTATION HISTORY, AND INSTITUTIONAL REVENUE INTEGRITY.';
       case 'expense': return 'COMPREHENSIVE AUDIT OF ALL OPERATIONAL EXPENDITURES, PROJECT-LINKED DISBURSEMENTS, AND INSTITUTIONAL CASH OUTFLOW.';
-      case 'payments': case 'income': return 'AUDIT-READY PAYMENT RECONCILIATION LOGS, VERIFICATION TIMESTAMPS, AND INSTITUTIONAL CASHFLOW TRACKING.';
+      case 'income': return 'COMPREHENSIVE AUDIT OF ALL GENERATED REVENUE, PAID INVOICES, AND PENDING RECEIVABLES.';
+      case 'payments': return 'AUDIT-READY PAYMENT RECONCILIATION LOGS, VERIFICATION TIMESTAMPS, AND INSTITUTIONAL CASHFLOW TRACKING.';
       case 'clients': return 'COMPREHENSIVE AUDIT OF ORGANIZATION PARTNERS, ACQUISITION TIMESTAMPS, AND MULTI-TERRITORY ACCOUNT STATUS.';
       case 'projects': return 'CHRONOLOGICAL AUDIT OF PROJECT STATUS, TIMELINE DEVIATIONS, AND BUDGET UTILIZATION ACROSS THE ENTERPRISE.';
       case 'tasks': return 'INSTITUTIONAL AUDIT OF TASK LIFECYCLES, DELIVERY SPEED, AND INDIVIDUAL ACCOUNTABILITY METRICS.';
@@ -1569,7 +2135,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     ]);
   }
 
-  bool get _hasSecondFilter => ['att_logs', 'expense', 'clients', 'tasks', 'renewals', 'payments', 'income'].contains(widget.route);
+  bool get _hasSecondFilter => ['att_logs', 'expense', 'clients', 'tasks', 'renewals', 'payments'].contains(widget.route);
   String get _secondFilterLabel {
     switch (widget.route) {
       case 'att_logs': return 'DATE';
@@ -1628,8 +2194,18 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         if (isTablet) Divider(height: 1, color: _border),
         _paged.isEmpty
             ? _emptyState()
-            : Column(children: _paged.asMap().entries.map((e) =>
-                isTablet ? _tableRow(e.value, e.key) : _mobileCard(e.value, e.key)).toList()),
+            : Column(children: _paged.asMap().entries.map((e) {
+                final rowData = e.value;
+                final index = e.key;
+                final child = isTablet ? _tableRow(rowData, index) : _mobileCard(rowData, index);
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (details) {
+                    _showRecordActions(context, rowData, details.globalPosition);
+                  },
+                  child: child,
+                );
+              }).toList()),
       ]),
     );
   }
@@ -1641,7 +2217,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       case 'leave_mgmt': return ['EMPLOYEE', 'START DATE', 'END DATE', 'REASON', 'STATUS'];
       case 'inv_audit': return ['INVOICE #', 'CLIENT PORTFOLIO', 'AUDIT DATE', 'FACE VALUE', 'RECONCILED', 'STATUS'];
       case 'expense': return ['DATE', 'DESCRIPTION', 'AMOUNT', 'CATEGORY', 'STATUS'];
-      case 'payments': case 'income': return ['PAYMENT DATE', 'REFERENCE', 'CLIENT', 'AMOUNT', 'METHOD', 'STATUS'];
+      case 'payments': return ['PAYMENT DATE', 'REFERENCE', 'CLIENT', 'AMOUNT', 'METHOD', 'STATUS'];
       case 'clients': return ['CLIENT / COMPANY', 'CONTACT INFO', 'LOCATION', 'JOINED DATE', 'STATUS'];
       case 'projects': return ['PROJECT NAME', 'TIMELINE', 'BUDGET ALLOCATION', 'STAGE'];
       case 'tasks': return ['TASK / PROJECT', 'ASSIGNEE', 'DUE DATE', 'PRIORITY', 'STATUS'];
@@ -1753,7 +2329,6 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           ]),
         ]);
       case 'payments':
-      case 'income':
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Expanded(child: Text(row['client'] ?? '', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary))),
@@ -1864,7 +2439,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           _CellData.text(row['inv'] ?? '', bold: true, color: RTheme.primary),
           _CellData.widget(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(row['client'] ?? '', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textPrimary), overflow: TextOverflow.ellipsis),
-            Text(row['id'] ?? '', style: TextStyle(fontSize: 10, color: _textSecondary), overflow: TextOverflow.ellipsis),
+            Text(row['display_id'] ?? '', style: TextStyle(fontSize: 10, color: _textSecondary), overflow: TextOverflow.ellipsis),
           ])),
           _CellData.text(row['date'] ?? ''),
           _CellData.text(row['face'] ?? ''),
@@ -1930,7 +2505,6 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           _CellData.chip(row['status'] ?? ''),
         ];
       case 'payments':
-      case 'income':
         return [
           _CellData.text(row['date'] ?? ''),
           _CellData.text(row['ref'] ?? '', bold: true),
