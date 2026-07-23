@@ -26,9 +26,38 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.4
 
 flutter:
   uses-material-design: true
   assets:
     - assets/ecraftzlogodark.png
     - assets/ecraftzlogolight.png
+    - assets/logo3d.png
+    - assets/logo001.png
+    - assets/app_icon_master.png
+    - assets/app_icon_foreground.png
+    - assets/splash_3d_a12.png
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/app_icon_master.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/app_icon_foreground.png"
+  remove_alpha_ios: true
+
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: "assets/splash_3d_a12.png"
+  color_dark: "#0D1B2A"
+  image_dark: "assets/splash_3d_a12.png"
+  android_12:
+    color: "#FFFFFF"
+    image: "assets/splash_3d_a12.png"
+    color_dark: "#0D1B2A"
+    image_dark: "assets/splash_3d_a12.png"
+
+
+
