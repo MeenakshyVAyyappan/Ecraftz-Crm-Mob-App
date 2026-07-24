@@ -3,13 +3,13 @@ import 'dart:io';
 
 void main() async {
   final client = HttpClient();
-  final apiKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZib3Nvbnlyb3N4ZnR0eW9lbmd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczNTU3MDQsImV4cCI6MjA5MjkzMTcwNH0.OyJKw9QvXyp3DcnR_lYkc0ID9O64bnvk521hRtW1DcE';
+  final apiKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJuanZ1Z3h2Y29xZ2Z2dnZ3cHpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMTA4NTMsImV4cCI6MjA5ODg4Njg1M30.Fe5COvy60ezaVwrrDOR_Ec-1wDRizd6FiPp9vtHy2O4';
 
   // Sign up a user
   final email = 'tester_find_admin_${DateTime.now().millisecondsSinceEpoch}@ecraftz.com';
   final password = 'Password123!';
 
-  final signupUrl = Uri.parse('https://vbosonyrosxfttyoengz.supabase.co/auth/v1/signup');
+  final signupUrl = Uri.parse('https://bnjvugxvcoqgfvvvwpzc.supabase.co/auth/v1/signup');
   final signupReq = await client.postUrl(signupUrl);
   signupReq.headers.set('apikey', apiKey);
   signupReq.headers.set('Content-Type', 'application/json');
@@ -34,7 +34,7 @@ void main() async {
 
   // Update role to admin
   print('Updating role to admin...');
-  final updateProfUrl = Uri.parse('https://vbosonyrosxfttyoengz.supabase.co/rest/v1/profiles?id=eq.$userId');
+  final updateProfUrl = Uri.parse('https://bnjvugxvcoqgfvvvwpzc.supabase.co/rest/v1/profiles?id=eq.$userId');
   final updateProfReq = await client.patchUrl(updateProfUrl);
   updateProfReq.headers.set('apikey', apiKey);
   updateProfReq.headers.set('Authorization', 'Bearer $accessToken');
@@ -69,7 +69,7 @@ void main() async {
   print('\nSearching for ID: $targetId across tables as ADMIN...');
 
   for (final table in tables) {
-    final url = Uri.parse('https://vbosonyrosxfttyoengz.supabase.co/rest/v1/$table?id=eq.$targetId');
+    final url = Uri.parse('https://bnjvugxvcoqgfvvvwpzc.supabase.co/rest/v1/$table?id=eq.$targetId');
     final request = await client.getUrl(url);
     request.headers.set('apikey', apiKey);
     request.headers.set('Authorization', 'Bearer $accessToken');
@@ -84,7 +84,7 @@ void main() async {
     }
 
     // Also search by other possible columns if it's referenced
-    final url2 = Uri.parse('https://vbosonyrosxfttyoengz.supabase.co/rest/v1/$table?select=*');
+    final url2 = Uri.parse('https://bnjvugxvcoqgfvvvwpzc.supabase.co/rest/v1/$table?select=*');
     final request2 = await client.getUrl(url2);
     request2.headers.set('apikey', apiKey);
     request2.headers.set('Authorization', 'Bearer $accessToken');

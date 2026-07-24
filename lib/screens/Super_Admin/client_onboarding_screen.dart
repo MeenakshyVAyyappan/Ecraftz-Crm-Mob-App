@@ -192,11 +192,13 @@ class Submission {
 class ClientOnboardingPage extends StatefulWidget {
   final int selectedIndex;
   final Function(int) onItemSelected;
+  final bool showAppBar;
 
   const ClientOnboardingPage({
     super.key,
     required this.selectedIndex,
     required this.onItemSelected,
+    this.showAppBar = true,
   });
 
   @override
@@ -683,14 +685,14 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      drawer: AppDrawer(
+      drawer: widget.showAppBar ? AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: (i) {
           widget.onItemSelected(i);
           Navigator.pop(context);
         },
-      ),
-      appBar: AppBar(
+      ) : null,
+      appBar: widget.showAppBar ? AppBar(
         backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
         leading: isWide
@@ -731,7 +733,7 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
           preferredSize: const Size.fromHeight(1),
           child: Container(height: 1, color: AppTheme.borderOf(context)),
         ),
-      ),
+      ) : null,
       body: BlocConsumer<OnboardingBloc, OnboardingState>(
         listener: (context, state) {
           if (state.status == OnboardingStatus.error && state.errorMessage != null) {

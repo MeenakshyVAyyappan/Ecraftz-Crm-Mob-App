@@ -3,13 +3,13 @@ import 'dart:io';
 
 void main() async {
   final client = HttpClient();
-  final apiKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZib3Nvbnlyb3N4ZnR0eW9lbmd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczNTU3MDQsImV4cCI6MjA5MjkzMTcwNH0.OyJKw9QvXyp3DcnR_lYkc0ID9O64bnvk521hRtW1DcE';
+  final apiKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJuanZ1Z3h2Y29xZ2Z2dnZ3cHpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMTA4NTMsImV4cCI6MjA5ODg4Njg1M30.Fe5COvy60ezaVwrrDOR_Ec-1wDRizd6FiPp9vtHy2O4';
 
   // Sign up a user
   final email = 'tester_del_${DateTime.now().millisecondsSinceEpoch}@ecraftz.com';
   final password = 'Password123!';
 
-  final signupUrl = Uri.parse('https://vbosonyrosxfttyoengz.supabase.co/auth/v1/signup');
+  final signupUrl = Uri.parse('https://bnjvugxvcoqgfvvvwpzc.supabase.co/auth/v1/signup');
   final request = await client.postUrl(signupUrl);
   request.headers.set('apikey', apiKey);
   request.headers.set('Content-Type', 'application/json');
@@ -35,7 +35,7 @@ void main() async {
   // Let's check if there is an organization_id issue
   // Wait, let's update tester profile to set organization_id to '00000000-0000-0000-0000-000000000000'
   print('\nUpdating tester profile organization_id...');
-  final updateProfUrl = Uri.parse('https://vbosonyrosxfttyoengz.supabase.co/rest/v1/profiles?id=eq.$userId');
+  final updateProfUrl = Uri.parse('https://bnjvugxvcoqgfvvvwpzc.supabase.co/rest/v1/profiles?id=eq.$userId');
   final updateProfReq = await client.patchUrl(updateProfUrl);
   updateProfReq.headers.set('apikey', apiKey);
   updateProfReq.headers.set('Authorization', 'Bearer $accessToken');
@@ -51,7 +51,7 @@ void main() async {
   // But wait, what departments exist?
   // Let's fetch departments first
   print('\nFetching departments...');
-  final deptUrl = Uri.parse('https://vbosonyrosxfttyoengz.supabase.co/rest/v1/departments?select=*');
+  final deptUrl = Uri.parse('https://bnjvugxvcoqgfvvvwpzc.supabase.co/rest/v1/departments?select=*');
   final deptReq = await client.getUrl(deptUrl);
   deptReq.headers.set('apikey', apiKey);
   deptReq.headers.set('Authorization', 'Bearer $accessToken');
@@ -68,7 +68,7 @@ void main() async {
   String? dmId;
   if (deptId != null) {
     print('\nCreating department member for user...');
-    final dmUrl = Uri.parse('https://vbosonyrosxfttyoengz.supabase.co/rest/v1/department_members');
+    final dmUrl = Uri.parse('https://bnjvugxvcoqgfvvvwpzc.supabase.co/rest/v1/department_members');
     final dmReq = await client.postUrl(dmUrl);
     dmReq.headers.set('apikey', apiKey);
     dmReq.headers.set('Authorization', 'Bearer $accessToken');
@@ -89,7 +89,7 @@ void main() async {
 
   // Create a payroll record
   print('\nCreating payroll record for user...');
-  final payUrl = Uri.parse('https://vbosonyrosxfttyoengz.supabase.co/rest/v1/payroll');
+  final payUrl = Uri.parse('https://bnjvugxvcoqgfvvvwpzc.supabase.co/rest/v1/payroll');
   final payReq = await client.postUrl(payUrl);
   payReq.headers.set('apikey', apiKey);
   payReq.headers.set('Authorization', 'Bearer $accessToken');
@@ -111,7 +111,7 @@ void main() async {
 
   // Try updating payroll record
   print('\nUpdating payroll record...');
-  final payUpUrl = Uri.parse('https://vbosonyrosxfttyoengz.supabase.co/rest/v1/payroll?user_id=eq.$userId');
+  final payUpUrl = Uri.parse('https://bnjvugxvcoqgfvvvwpzc.supabase.co/rest/v1/payroll?user_id=eq.$userId');
   final payUpReq = await client.patchUrl(payUpUrl);
   payUpReq.headers.set('apikey', apiKey);
   payUpReq.headers.set('Authorization', 'Bearer $accessToken');
@@ -141,7 +141,7 @@ void main() async {
   // Let's delete department_members
   if (dmId != null) {
     print('\nDeleting department member record...');
-    final delDmUrl = Uri.parse('https://vbosonyrosxfttyoengz.supabase.co/rest/v1/department_members?id=eq.$dmId');
+    final delDmUrl = Uri.parse('https://bnjvugxvcoqgfvvvwpzc.supabase.co/rest/v1/department_members?id=eq.$dmId');
     final delDmReq = await client.deleteUrl(delDmUrl);
     delDmReq.headers.set('apikey', apiKey);
     delDmReq.headers.set('Authorization', 'Bearer $accessToken');
@@ -152,7 +152,7 @@ void main() async {
 
   // Let's delete payroll
   print('\nDeleting payroll record...');
-  final delPayUrl = Uri.parse('https://vbosonyrosxfttyoengz.supabase.co/rest/v1/payroll?user_id=eq.$userId');
+  final delPayUrl = Uri.parse('https://bnjvugxvcoqgfvvvwpzc.supabase.co/rest/v1/payroll?user_id=eq.$userId');
   final delPayReq = await client.deleteUrl(delPayUrl);
   delPayReq.headers.set('apikey', apiKey);
   delPayReq.headers.set('Authorization', 'Bearer $accessToken');
@@ -162,7 +162,7 @@ void main() async {
 
   // Let's delete profiles
   print('\nDeleting profile record...');
-  final delProfUrl = Uri.parse('https://vbosonyrosxfttyoengz.supabase.co/rest/v1/profiles?id=eq.$userId');
+  final delProfUrl = Uri.parse('https://bnjvugxvcoqgfvvvwpzc.supabase.co/rest/v1/profiles?id=eq.$userId');
   final delProfReq = await client.deleteUrl(delProfUrl);
   delProfReq.headers.set('apikey', apiKey);
   delProfReq.headers.set('Authorization', 'Bearer $accessToken');

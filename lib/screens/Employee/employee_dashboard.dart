@@ -14,6 +14,18 @@ import 'emply_project_screen.dart';
 import 'emply_tasks_screen.dart';
 import 'emply_my_timesheet.dart';
 import 'emply_leave_request.dart';
+import '../Super_Admin/crm_leads_page.dart';
+import '../Super_Admin/active_clients_screen.dart';
+import '../Super_Admin/client_onboarding_screen.dart';
+import '../Super_Admin/billing_invoice.dart';
+import '../Super_Admin/asset_renewal.dart';
+import '../Super_Admin/client_statement_screen.dart';
+import '../Super_Admin/scheduler_screen.dart';
+import '../Super_Admin/hr_and_payroll.dart';
+import '../Super_Admin/client_feedback_screen.dart';
+import '../Super_Admin/document_vault_screen.dart';
+import '../Super_Admin/crm_reports_screen.dart';
+import '../Super_Admin/team_timesheet_screen.dart';
 import '../../models/work_session_model.dart';
 import '../../blocs/client/client_bloc.dart';
 import '../../models/client_model.dart';
@@ -46,7 +58,6 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
   int _selectedIndex = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  late final List<Widget> _pages;
   Map<String, dynamic>? _profile;
   String _departmentName = 'Employee';
   bool _isLoadingProfile = false;
@@ -56,7 +67,43 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
     super.initState();
     _selectedIndex = 0;
     _loadProfileData();
-    _pages = [
+  }
+
+  bool get _isCrmDepartment {
+    final deptLower = _departmentName.toLowerCase();
+    final roleLower = _userRole.toLowerCase();
+    return deptLower.contains('crm') || roleLower.contains('admin') || roleLower.contains('super');
+  }
+
+  void _onSelectPage(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
+  List<Widget> get _pages {
+    if (_isCrmDepartment) {
+      return [
+        const EmployeeDashboardContent(),
+        CRMLeadsPage(selectedIndex: _selectedIndex, onItemSelected: _onSelectPage, showAppBar: false),
+        ActiveClientsPage(selectedIndex: _selectedIndex, onItemSelected: _onSelectPage, showAppBar: false),
+        ClientOnboardingPage(selectedIndex: _selectedIndex, onItemSelected: _onSelectPage, showAppBar: false),
+        ClientFeedbackScreen(selectedIndex: _selectedIndex, onItemSelected: _onSelectPage, showAppBar: false),
+        DocumentVaultScreen(selectedIndex: _selectedIndex, onItemSelected: _onSelectPage, showAppBar: false),
+        CrmReportsScreen(selectedIndex: _selectedIndex, onItemSelected: _onSelectPage, showAppBar: false),
+        TeamTimesheetScreen(selectedIndex: _selectedIndex, onItemSelected: _onSelectPage, showAppBar: false),
+        const ProjectsScreen(),
+        const EmployeeTasksScreen(),
+        BillingPage(selectedIndex: _selectedIndex, onItemSelected: _onSelectPage, showAppBar: false),
+        AssetRenewalsPage(selectedIndex: _selectedIndex, onItemSelected: _onSelectPage, showAppBar: false),
+        ClientStatementsScreen(selectedIndex: _selectedIndex, onItemSelected: _onSelectPage, showAppBar: false),
+        SchedulerScreen(selectedIndex: _selectedIndex, onItemSelected: _onSelectPage, showAppBar: false),
+        HRPayrollScreen(selectedIndex: _selectedIndex, onItemSelected: _onSelectPage, showAppBar: false),
+        const MyTimesheetScreen(),
+        const LeaveRequestsScreen(),
+      ];
+    }
+    return [
       const EmployeeDashboardContent(),
       const ProjectsScreen(),
       const EmployeeTasksScreen(),
@@ -160,6 +207,28 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
   }
 
   String _getPageTitle(int index) {
+    if (_isCrmDepartment) {
+      switch (index) {
+        case 0: return 'Dashboard';
+        case 1: return 'CRM Leads';
+        case 2: return 'Active Clients';
+        case 3: return 'Client Onboarding';
+        case 4: return 'Client Feedback';
+        case 5: return 'Document Vault';
+        case 6: return 'CRM Reports';
+        case 7: return 'Team Timesheet';
+        case 8: return 'Projects';
+        case 9: return 'Tasks';
+        case 10: return 'Billing';
+        case 11: return 'Asset Renewals';
+        case 12: return 'Client Statements';
+        case 13: return 'Scheduler';
+        case 14: return 'HR & Payroll';
+        case 15: return 'My Timesheet';
+        case 16: return 'Leave Requests';
+        default: return 'Dashboard';
+      }
+    }
     switch (index) {
       case 0:
         return 'Dashboard';
@@ -172,11 +241,33 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
       case 4:
         return 'Leave Requests';
       default:
-        return '';
+        return 'Dashboard';
     }
   }
 
   String _getPageSubtitle(int index) {
+    if (_isCrmDepartment) {
+      switch (index) {
+        case 0: return 'Operational command center';
+        case 1: return 'Manage and convert prospects';
+        case 2: return 'Manage active client directory & details';
+        case 3: return 'Onboard new clients & forms';
+        case 4: return 'Track client ratings and customer satisfaction';
+        case 5: return 'Organization-wide document repository';
+        case 6: return 'Real-time KPIs & CRM analytics';
+        case 7: return 'Monitor team punch-ins, work hours & overtime';
+        case 8: return 'Manage active and archived projects';
+        case 9: return 'Track and update your assigned tasks';
+        case 10: return 'Invoices and billing management';
+        case 11: return 'Domain and asset renewal management';
+        case 12: return 'Generate client financial statements';
+        case 13: return 'Meeting schedules & calendar';
+        case 14: return 'Human resources & payroll management';
+        case 15: return 'Evaluate your daily sign-ins and tasks';
+        case 16: return 'Manage your time off and track approvals';
+        default: return '';
+      }
+    }
     switch (index) {
       case 0:
         return 'Operational command center';
@@ -337,7 +428,25 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
         Expanded(
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            children: [
+            children: _isCrmDepartment ? [
+              _buildNavItem(context, 0, Icons.dashboard_rounded, 'Dashboard'),
+              _buildNavItem(context, 1, Icons.people_alt_outlined, 'CRM Leads'),
+              _buildNavItem(context, 2, Icons.person_outline_rounded, 'Active Clients'),
+              _buildNavItem(context, 3, Icons.how_to_reg_outlined, 'Client Onboarding'),
+              _buildNavItem(context, 4, Icons.rate_review_outlined, 'Client Feedback'),
+              _buildNavItem(context, 5, Icons.folder_special_outlined, 'Document Vault'),
+              _buildNavItem(context, 6, Icons.bar_chart_rounded, 'Reports & Analytics'),
+              _buildNavItem(context, 7, Icons.badge_outlined, 'Team Timesheets'),
+              _buildNavItem(context, 8, Icons.folder_outlined, 'Projects'),
+              _buildNavItem(context, 9, Icons.check_circle_outline_rounded, 'Tasks'),
+              _buildNavItem(context, 10, Icons.receipt_long_outlined, 'Billing'),
+              _buildNavItem(context, 11, Icons.autorenew_rounded, 'Asset Renewals'),
+              _buildNavItem(context, 12, Icons.description_outlined, 'Client Statements'),
+              _buildNavItem(context, 13, Icons.calendar_month_outlined, 'Scheduler'),
+              _buildNavItem(context, 14, Icons.group_work_outlined, 'HR & Payroll'),
+              _buildNavItem(context, 15, Icons.access_time_rounded, 'My Timesheet'),
+              _buildNavItem(context, 16, Icons.event_busy_outlined, 'Leave Requests'),
+            ] : [
               _buildNavItem(context, 0, Icons.dashboard_rounded, 'Dashboard'),
               _buildNavItem(context, 1, Icons.folder_outlined, 'Projects'),
               _buildNavItem(context, 2, Icons.check_circle_outline_rounded, 'Tasks'),
@@ -459,8 +568,47 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
   }
 
   Widget _buildBottomNavigationBar() {
+    if (_isCrmDepartment) {
+      int bottomIndex = 0;
+      if (_selectedIndex == 0) bottomIndex = 0;
+      else if (_selectedIndex == 1) bottomIndex = 1;
+      else if (_selectedIndex == 2) bottomIndex = 2;
+      else if (_selectedIndex == 4) bottomIndex = 3;
+      else if (_selectedIndex == 5) bottomIndex = 4;
+      else bottomIndex = 0;
+
+      return BottomNavigationBar(
+        currentIndex: bottomIndex,
+        onTap: (index) {
+          int targetPage = 0;
+          switch (index) {
+            case 0: targetPage = 0; break;
+            case 1: targetPage = 1; break; // CRM Leads
+            case 2: targetPage = 2; break; // Active Clients
+            case 3: targetPage = 4; break; // Projects
+            case 4: targetPage = 5; break; // Tasks
+          }
+          setState(() => _selectedIndex = targetPage);
+        },
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        selectedItemColor: AppTheme.sidebarAccent,
+        unselectedItemColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF8892B0) : const Color(0xFF6B7A99),
+        selectedFontSize: 11,
+        unselectedFontSize: 11,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded, size: 20), label: 'Dashboard'),
+          BottomNavigationBarItem(icon: Icon(Icons.people_alt_outlined, size: 20), label: 'Leads'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_outline_rounded, size: 20), label: 'Clients'),
+          BottomNavigationBarItem(icon: Icon(Icons.folder_outlined, size: 20), label: 'Projects'),
+          BottomNavigationBarItem(icon: Icon(Icons.check_circle_outline_rounded, size: 20), label: 'Tasks'),
+        ],
+      );
+    }
+
+    final safeIndex = _selectedIndex.clamp(0, 4);
     return BottomNavigationBar(
-      currentIndex: _selectedIndex,
+      currentIndex: safeIndex,
       onTap: (index) => setState(() => _selectedIndex = index),
       type: BottomNavigationBarType.fixed,
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -2790,8 +2938,8 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
     final isCw = dept.contains('content');
     final isCrm = dept.contains('crm') || dept.contains('relationship');
     final isGd = (dept.contains('graphic') || dept.contains('design')) && !dept.contains('web') && !dept.contains('development');
-    final isVe = (dept.contains('video') || dept.contains('edit')) && !dept.contains('videography');
-    final isVg = dept.contains('videography');
+    final isVe = (dept.contains('video') || dept.contains('edit')) && !dept.contains('videography') && !dept.contains('grapher');
+    final isVg = dept.contains('videography') || dept.contains('grapher');
     final isWebDev = dept.contains('web') || dept.contains('development');
     final isDm = dept.contains('digital') || dept.contains('marketing');
 
@@ -3396,8 +3544,8 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
     final isCw = dept.contains('content');
     final isCrm = dept.contains('crm') || dept.contains('relationship');
     final isGd = (dept.contains('graphic') || dept.contains('design')) && !dept.contains('web') && !dept.contains('development');
-    final isVe = (dept.contains('video') || dept.contains('edit')) && !dept.contains('videography');
-    final isVg = dept.contains('videography');
+    final isVe = (dept.contains('video') || dept.contains('edit')) && !dept.contains('videography') && !dept.contains('grapher');
+    final isVg = dept.contains('videography') || dept.contains('grapher');
     final isWebDev = dept.contains('web') || dept.contains('development');
     final isDm = dept.contains('digital') || dept.contains('marketing');
 

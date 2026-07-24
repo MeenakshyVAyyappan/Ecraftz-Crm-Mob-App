@@ -30,7 +30,13 @@ const _kAccent  = Color(0xFF1A2B4A);
 class BillingPage extends StatefulWidget {
   final int selectedIndex;
   final Function(int) onItemSelected;
-  const BillingPage({super.key, required this.selectedIndex, required this.onItemSelected});
+  final bool showAppBar;
+  const BillingPage({
+    super.key,
+    required this.selectedIndex,
+    required this.onItemSelected,
+    this.showAppBar = true,
+  });
 
   @override
   State<BillingPage> createState() => _BillingPageState();
@@ -138,15 +144,15 @@ class _BillingPageState extends State<BillingPage> {
         final filtered = _filtered(state.invoices);
         return Scaffold(
           key: _scaffoldKey,
-          drawer: AppDrawer(
+          drawer: widget.showAppBar ? AppDrawer(
             selectedIndex: widget.selectedIndex,
             onItemSelected: (i) {
               widget.onItemSelected(i);
               Navigator.pop(context);
             },
-          ),
+          ) : null,
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          appBar: AppBar(
+          appBar: widget.showAppBar ? AppBar(
             backgroundColor: Theme.of(context).colorScheme.surface,
             elevation: 0,
             leading: isWide
@@ -212,7 +218,7 @@ class _BillingPageState extends State<BillingPage> {
               preferredSize: const Size.fromHeight(1),
               child: Container(height: 1, color: AppTheme.borderOf(context)),
             ),
-          ),
+          ) : null,
           body: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [

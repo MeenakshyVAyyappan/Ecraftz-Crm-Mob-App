@@ -16,6 +16,11 @@ import 'blocs/billing/billing_bloc.dart';
 import 'blocs/dashboard/dashboard_bloc.dart';
 import 'blocs/department/department_bloc.dart';
 import 'blocs/onboarding/onboarding_bloc.dart';
+import 'blocs/client_feedback/client_feedback_bloc.dart';
+import 'blocs/meeting/meeting_bloc.dart';
+import 'blocs/document_vault/document_vault_bloc.dart';
+import 'blocs/crm_reports/crm_reports_bloc.dart';
+import 'blocs/team_timesheet/team_timesheet_bloc.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,6 +47,11 @@ void main() async {
         BlocProvider<DashboardBloc>(create: (_) => DashboardBloc()),
         BlocProvider<DepartmentBloc>(create: (_) => DepartmentBloc()),
         BlocProvider<OnboardingBloc>(create: (_) => OnboardingBloc()..add(LoadOnboardingDataEvent())),
+        BlocProvider<ClientFeedbackBloc>(create: (_) => ClientFeedbackBloc()),
+        BlocProvider<MeetingBloc>(create: (_) => MeetingBloc()),
+        BlocProvider<DocumentVaultBloc>(create: (_) => DocumentVaultBloc()),
+        BlocProvider<CrmReportsBloc>(create: (_) => CrmReportsBloc()),
+        BlocProvider<TeamTimesheetBloc>(create: (_) => TeamTimesheetBloc()),
       ],
       child: const EcraftzCRMApp(),
     ),

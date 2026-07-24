@@ -192,11 +192,13 @@ class HRTheme {
 class HRPayrollScreen extends StatefulWidget {
   final int selectedIndex;
   final Function(int) onItemSelected;
+  final bool showAppBar;
 
   const HRPayrollScreen({
     super.key,
     required this.selectedIndex,
     required this.onItemSelected,
+    this.showAppBar = true,
   });
 
   @override
@@ -355,15 +357,15 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
 
     return Scaffold(
       key: _scaffoldKey,
-      drawer: AppDrawer(
+      drawer: widget.showAppBar ? AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: widget.onItemSelected,
-      ),
+      ) : null,
       backgroundColor: HRTheme.backgroundOf(context),
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(isTablet),
+            if (widget.showAppBar) _buildHeader(isTablet),
             _buildTabBar(isTablet),
             Expanded(
               child: TabBarView(

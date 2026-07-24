@@ -27,11 +27,13 @@ Color _serviceColor(String service) {
 class ActiveClientsPage extends StatefulWidget {
   final int selectedIndex;
   final Function(int) onItemSelected;
+  final bool showAppBar;
 
   const ActiveClientsPage({
     super.key,
     required this.selectedIndex,
     required this.onItemSelected,
+    this.showAppBar = true,
   });
 
   @override
@@ -175,14 +177,14 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: _bg,
-      drawer: AppDrawer(
+      drawer: widget.showAppBar ? AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: (i) {
           widget.onItemSelected(i);
           Navigator.pop(context);
         },
-      ),
-      appBar: AppBar(
+      ) : null,
+      appBar: widget.showAppBar ? AppBar(
         backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
         leading: isWide
@@ -239,7 +241,7 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
           preferredSize: const Size.fromHeight(1),
           child: Container(height: 1, color: _border),
         ),
-      ),
+      ) : null,
       body: BlocBuilder<ClientBloc, ClientState>(
         builder: (context, state) {
           final allClients = state.clients;

@@ -4,6 +4,9 @@ import 'package:intl/intl.dart';
 import '../../widgets/app_drawer.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
+import '../../blocs/meeting/meeting_bloc.dart';
+import '../../blocs/client/client_bloc.dart';
+import '../../models/meeting_model.dart';
 
 // ─── MODELS ───────────────────────────────────────────────────────────────────
 
@@ -95,11 +98,13 @@ final List<UpcomingTask> upcomingTasks = [
 class SchedulerScreen extends StatefulWidget {
   final int selectedIndex;
   final Function(int) onItemSelected;  
+  final bool showAppBar;
   const SchedulerScreen({
     super.key,
     required this.selectedIndex,
     required this.onItemSelected,
-    });
+    this.showAppBar = true,
+  });
 
   @override
   State<SchedulerScreen> createState() => _SchedulerScreenState();
@@ -107,9 +112,17 @@ class SchedulerScreen extends StatefulWidget {
 
 class _SchedulerScreenState extends State<SchedulerScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  DateTime _currentMonth = DateTime(2026, 5, 1);
+  DateTime _currentMonth = DateTime.now();
   DateTime? _selectedDate;
   CalendarEvent? _selectedEvent;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
+    context.read<MeetingBloc>().add(LoadMeetingsEvent());
+    context.read<ClientBloc>().add(LoadClientsEvent());
+  }
 
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
   Color get _bg => Theme.of(context).scaffoldBackgroundColor;
@@ -155,14 +168,14 @@ class _SchedulerScreenState extends State<SchedulerScreen> {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: _bg,
-      drawer: AppDrawer(
+      drawer: widget.showAppBar ? AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: (i) {
           widget.onItemSelected(i);
           Navigator.pop(context);
         },
-      ),
-      appBar: AppBar(
+      ) : null,
+      appBar: widget.showAppBar ? AppBar(
         backgroundColor: _cardBg,
         elevation: 0,
         leading: isWide
@@ -209,7 +222,7 @@ class _SchedulerScreenState extends State<SchedulerScreen> {
           preferredSize: const Size.fromHeight(1),
           child: Container(height: 1, color: _border),
         ),
-      ),
+      ) : null,
       body: SafeArea(
         child: isDesktop
             ? _buildDesktopLayout()

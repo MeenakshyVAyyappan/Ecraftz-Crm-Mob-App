@@ -82,11 +82,13 @@ Future<void> _sendEmail(String email, BuildContext context) async {
 class CRMLeadsPage extends StatefulWidget {
   final int selectedIndex;
   final Function(int) onItemSelected;
+  final bool showAppBar;
 
   const CRMLeadsPage({
     super.key,
     required this.selectedIndex,
     required this.onItemSelected,
+    this.showAppBar = true,
   });
 
   @override
@@ -235,14 +237,14 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: _bg,
-      drawer: AppDrawer(
+      drawer: widget.showAppBar ? AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: (i) {
           widget.onItemSelected(i);
           Navigator.pop(context);
         },
-      ),
-      appBar: AppBar(
+      ) : null,
+      appBar: widget.showAppBar ? AppBar(
         backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
         leading: isWide
@@ -315,13 +317,50 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
           preferredSize: const Size.fromHeight(1),
           child: Container(height: 1, color: _border),
         ),
-      ),
+      ) : null,
       body: BlocBuilder<LeadBloc, LeadState>(
         builder: (context, state) {
           final leads = state.leads;
           final filtered = _filteredLeads(leads);
           return Column(
             children: [
+              if (!widget.showAppBar)
+                Container(
+                  color: Theme.of(context).colorScheme.surface,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              _isKanban ? Icons.view_list_rounded : Icons.view_kanban_rounded,
+                              color: const Color(0xFF00BCD4),
+                              size: 20,
+                            ),
+                            onPressed: () => setState(() => _isKanban = !_isKanban),
+                            tooltip: _isKanban ? 'List View' : 'Kanban View',
+                          ),
+                          Text(
+                            _isKanban ? 'Kanban View' : 'List View',
+                            style: TextStyle(color: _textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: () => _showAddLeadDialog(),
+                        icon: const Icon(Icons.add, size: 14, color: Colors.white),
+                        label: const Text('Add Lead', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00BCD4),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               // Search bar
               Container(
                 color: Theme.of(context).colorScheme.surface,

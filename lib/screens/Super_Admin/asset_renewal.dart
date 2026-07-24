@@ -172,11 +172,13 @@ class AssetRenewal {
 class AssetRenewalsPage extends StatefulWidget {
   final int selectedIndex;
   final Function(int) onItemSelected;  
+  final bool showAppBar;
   const AssetRenewalsPage({
     super.key,
     required this.selectedIndex,
     required this.onItemSelected,
-    });
+    this.showAppBar = true,
+  });
 
 
   @override
@@ -329,20 +331,20 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
 
     return Scaffold(
       key: _scaffoldKey,
-      drawer: AppDrawer(
+      drawer: widget.showAppBar ? AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: (i) {
           widget.onItemSelected(i);
           Navigator.pop(context);
         },
-      ),
+      ) : null,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       floatingActionButton: FloatingActionButton(
         onPressed: _showQuickCreate,
         backgroundColor: const Color(0xFF00BCD4),
         child: const Icon(Icons.add, color: Colors.white),
       ),
-      appBar: AppBar(
+      appBar: widget.showAppBar ? AppBar(
         backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
         leading: isWide
@@ -380,7 +382,7 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
           preferredSize: const Size.fromHeight(1),
           child: Container(height: 1, color: AppTheme.borderOf(context)),
         ),
-      ),
+      ) : null,
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

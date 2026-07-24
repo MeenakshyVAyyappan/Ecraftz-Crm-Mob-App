@@ -139,10 +139,12 @@ class CSTheme {
 class ClientStatementsScreen extends StatefulWidget {
   final int selectedIndex;
   final Function(int) onItemSelected;
+  final bool showAppBar;
   const ClientStatementsScreen({
     super.key,
     required this.selectedIndex,
     required this.onItemSelected,
+    this.showAppBar = true,
   });
 
   @override
@@ -261,14 +263,14 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      drawer: AppDrawer(
+      drawer: widget.showAppBar ? AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: (i) {
           widget.onItemSelected(i);
           Navigator.pop(context);
         },
-      ),
-      appBar: AppBar(
+      ) : null,
+      appBar: widget.showAppBar ? AppBar(
         backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
         leading: isTablet
@@ -376,7 +378,7 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
           preferredSize: const Size.fromHeight(1),
           child: Container(height: 1, color: AppTheme.borderOf(context)),
         ),
-      ),
+      ) : null,
       floatingActionButton: FloatingActionButton(
         backgroundColor: CSTheme.primary,
         onPressed: () => _showRecordPaymentDialog(),
