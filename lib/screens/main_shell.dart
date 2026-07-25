@@ -16,6 +16,9 @@ import 'Super_Admin/leave_approval.dart';
 import 'Super_Admin/roles_and_access.dart';
 import 'Super_Admin/time_monitoring_screen.dart';
 import 'Super_Admin/hr_and_payroll.dart';
+import 'Super_Admin/client_feedback_screen.dart';
+import 'Super_Admin/meeting_scheduler_screen.dart';
+import 'Super_Admin/attendance_device_screen.dart';
 
 
 class MainShell extends StatefulWidget {
@@ -123,6 +126,21 @@ class _MainShellState extends State<MainShell> {
         );
       case 17:
         return TimeMonitorScreen(
+          selectedIndex: _selectedIndex,
+          onItemSelected: _onItemSelected,
+        );
+      case 18:
+        return ClientFeedbackScreen(
+          selectedIndex: _selectedIndex,
+          onItemSelected: _onItemSelected,
+        );
+      case 19:
+        return MeetingSchedulerScreen(
+          selectedIndex: _selectedIndex,
+          onItemSelected: _onItemSelected,
+        );
+      case 20:
+        return AttendanceDeviceScreen(
           selectedIndex: _selectedIndex,
           onItemSelected: _onItemSelected,
         );

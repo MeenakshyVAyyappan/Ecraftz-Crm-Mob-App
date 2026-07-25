@@ -71,6 +71,28 @@ class Meeting {
       }
     }
 
+    DateTime parsedScheduled;
+    if (json['scheduled_at'] != null) {
+      final parsed = DateTime.parse(json['scheduled_at'].toString());
+      parsedScheduled = parsed.isUtc ? parsed.toLocal() : parsed;
+    } else {
+      parsedScheduled = DateTime.now();
+    }
+
+    DateTime parsedCreated;
+    if (json['created_at'] != null) {
+      final parsed = DateTime.parse(json['created_at'].toString());
+      parsedCreated = parsed.isUtc ? parsed.toLocal() : parsed;
+    } else {
+      parsedCreated = DateTime.now();
+    }
+
+    DateTime? parsedUpdated;
+    if (json['updated_at'] != null) {
+      final parsed = DateTime.parse(json['updated_at'].toString());
+      parsedUpdated = parsed.isUtc ? parsed.toLocal() : parsed;
+    }
+
     return Meeting(
       id: json['id']?.toString() ?? '',
       organizationId: json['organization_id']?.toString(),
@@ -80,7 +102,7 @@ class Meeting {
       meetingType: json['meeting_type']?.toString() ?? 'General',
       meetingMode: json['meeting_mode']?.toString() ?? 'online',
       location: json['location']?.toString(),
-      scheduledAt: json['scheduled_at'] != null ? DateTime.parse(json['scheduled_at'].toString()) : DateTime.now(),
+      scheduledAt: parsedScheduled,
       durationMinutes: json['duration_minutes'] is int ? json['duration_minutes'] as int : 30,
       meetingLink: json['meeting_link']?.toString(),
       leadId: json['lead_id']?.toString(),
@@ -91,8 +113,8 @@ class Meeting {
       projectName: pName,
       status: json['status']?.toString() ?? 'scheduled',
       outcomeNotes: json['outcome_notes']?.toString(),
-      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'].toString()) : DateTime.now(),
-      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at'].toString()) : null,
+      createdAt: parsedCreated,
+      updatedAt: parsedUpdated,
       attendeeIds: attendees,
     );
   }
