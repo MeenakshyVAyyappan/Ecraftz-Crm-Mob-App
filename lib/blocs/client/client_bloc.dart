@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../models/client_model.dart';
 import '../../services/supabase_service.dart';
+import '../branch/branch_cubit.dart';
 
 abstract class ClientEvent extends Equatable {
   const ClientEvent();
@@ -9,7 +10,13 @@ abstract class ClientEvent extends Equatable {
   List<Object?> get props => [];
 }
 
-class LoadClientsEvent extends ClientEvent {}
+class LoadClientsEvent extends ClientEvent {
+  /// Optional branch filter — pass from BranchCubit state.
+  final BranchState? branchState;
+  const LoadClientsEvent({this.branchState});
+  @override
+  List<Object?> get props => [branchState];
+}
 
 class AddClientEvent extends ClientEvent {
   final ActiveClient client;
@@ -50,15 +57,39 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
   ClientBloc() : super(const ClientState()) {
     on<LoadClientsEvent>((event, emit) async {
       try {
-        final res = await _client
+        // Build the filter query first, BEFORE adding order (transform builder)
+        var filterQuery = _client
             .from('clients')
             .select()
-            .isFilter('deleted_at', null)
-            .order('created_at', ascending: false);
+            .isFilter('deleted_at', null);
+
+        // Apply branch filter if a specific branch is selected
+        final branchState = event.branchState;
+        if (branchState != null &&
+            branchState.selectedBranch != BranchFilter.allBranches) {
+          final branchId = branchState.activeBranchId;
+          if (branchId != null && branchId.isNotEmpty) {
+            filterQuery = filterQuery.eq('branch_id', branchId);
+          }
+        }
+
+        // Apply ordering last (returns PostgrestTransformBuilder)
+        final res = await filterQuery.order('created_at', ascending: false);
         final list = (res as List).map((x) => ActiveClient.fromJson(x)).toList();
         emit(ClientState(clients: list));
       } catch (e) {
-        emit(state.copyWith());
+        // If branch filter fails (e.g. column doesn't exist), fall back to all clients
+        try {
+          final res = await _client
+              .from('clients')
+              .select()
+              .isFilter('deleted_at', null)
+              .order('created_at', ascending: false);
+          final list = (res as List).map((x) => ActiveClient.fromJson(x)).toList();
+          emit(ClientState(clients: list));
+        } catch (_) {
+          emit(state.copyWith());
+        }
       }
     });
 
@@ -67,7 +98,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
         final Map<String, dynamic> data = event.client.toJson();
         data.remove('id'); // let DB generate UUID
         await _client.from('clients').insert(data);
-        add(LoadClientsEvent());
+        add(const LoadClientsEvent());
       } catch (e) {
         // handle error
       }
@@ -81,7 +112,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
           return data;
         }).toList();
         await _client.from('clients').insert(dataList);
-        add(LoadClientsEvent());
+        add(const LoadClientsEvent());
       } catch (e) {
         // handle error
       }
@@ -92,7 +123,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
         await _client.from('clients').update({
           'deleted_at': DateTime.now().toUtc().toIso8601String(),
         }).eq('id', event.id);
-        add(LoadClientsEvent());
+        add(const LoadClientsEvent());
       } catch (e) {
         // handle error
       }

@@ -6,10 +6,12 @@ import '../../blocs/auth/auth_bloc.dart';
 import '../../theme/app_theme.dart';
 import '../../models/dashboard_models.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/branch_switcher.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/revenue_chart.dart';
 import '../../widgets/donut_chart.dart';
 import '../../blocs/dashboard/dashboard_bloc.dart';
+import '../../blocs/branch/branch_cubit.dart';
 import '../../blocs/department/department_bloc.dart';
 import '../../models/department_model.dart';
 import '../../blocs/task/task_bloc.dart';
@@ -62,8 +64,9 @@ class _DashboardScreenState extends State<DashboardScreen>
     // Load persisted notification read state
     _loadNotifReadState();
 
-    // Trigger initial data loading from Supabase
-    context.read<DashboardBloc>().add(LoadDashboardEvent(dateRange: _dateRange));
+    // Trigger initial data loading from Supabase (with branch filter)
+    final branchState = context.read<BranchCubit>().state;
+    context.read<DashboardBloc>().add(LoadDashboardEvent(dateRange: _dateRange, branchState: branchState));
     context.read<DepartmentBloc>().add(LoadDepartmentsEvent());
     context.read<TaskBloc>().add(LoadTasksEvent());
     context.read<ProjectBloc>().add(LoadProjectsEvent());
@@ -110,6 +113,17 @@ class _DashboardScreenState extends State<DashboardScreen>
       body: SafeArea(
         child: MultiBlocListener(
           listeners: [
+            BlocListener<BranchCubit, BranchState>(
+              listener: (context, branchState) {
+                // Reload dashboard data whenever branch changes
+                context.read<DashboardBloc>().add(
+                  LoadDashboardEvent(
+                    dateRange: _dateRange,
+                    branchState: branchState,
+                  ),
+                );
+              },
+            ),
             BlocListener<DepartmentBloc, DepartmentState>(
               listener: (context, deptState) {
                 if (_selectedDept == null && deptState.departments.isNotEmpty) {
@@ -256,7 +270,10 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
+          // Branch icon button — fixed 38×38 like other top bar actions
+          _buildBranchIconButton(),
+          const SizedBox(width: 8),
           _buildThemeToggleButton(),
           const SizedBox(width: 8),
           Stack(
@@ -315,6 +332,63 @@ class _DashboardScreenState extends State<DashboardScreen>
           size: 18,
         ),
       ),
+    );
+  }
+
+  /// Fixed 38×38 branch icon button — same footprint as other top bar actions.
+  /// Color-coded icon indicates the active branch; tap opens the full picker.
+  Widget _buildBranchIconButton() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return BlocBuilder<BranchCubit, BranchState>(
+      builder: (context, branchState) {
+        final filter = branchState.selectedBranch;
+        Color accent;
+        IconData icon;
+        switch (filter) {
+          case BranchFilter.allBranches:
+            accent = const Color(0xFF6B7280);
+            icon = Icons.public_rounded;
+            break;
+          case BranchFilter.calicut:
+            accent = const Color(0xFF0A84FF);
+            icon = Icons.location_on_rounded;
+            break;
+          case BranchFilter.dubai:
+            accent = const Color(0xFFF59E0B);
+            icon = Icons.business_rounded;
+            break;
+        }
+        return Tooltip(
+          message: filter.displayName,
+          child: GestureDetector(
+            onTap: () {
+              final cubit = context.read<BranchCubit>();
+              showModalBottomSheet(
+                context: context,
+                backgroundColor: Colors.transparent,
+                builder: (_) => BlocProvider.value(
+                  value: cubit,
+                  child: BranchSwitcher.buildPickerSheet(
+                    context: context,
+                    current: filter,
+                    isDark: isDark,
+                  ),
+                ),
+              );
+            },
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: accent.withOpacity(isDark ? 0.15 : 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: accent.withOpacity(0.3)),
+              ),
+              child: Icon(icon, color: accent, size: 18),
+            ),
+          ),
+        );
+      },
     );
   }
 

@@ -19,6 +19,7 @@ import 'Super_Admin/hr_and_payroll.dart';
 import 'Super_Admin/client_feedback_screen.dart';
 import 'Super_Admin/meeting_scheduler_screen.dart';
 import 'Super_Admin/attendance_device_screen.dart';
+import 'Super_Admin/create_invoices_screen.dart';
 
 
 class MainShell extends StatefulWidget {
@@ -141,6 +142,11 @@ class _MainShellState extends State<MainShell> {
         );
       case 20:
         return AttendanceDeviceScreen(
+          selectedIndex: _selectedIndex,
+          onItemSelected: _onItemSelected,
+        );
+      case 21:
+        return CreateInvoicesPage(
           selectedIndex: _selectedIndex,
           onItemSelected: _onItemSelected,
         );

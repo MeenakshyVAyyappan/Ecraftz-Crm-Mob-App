@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../theme/app_theme.dart';
 import '../blocs/auth/auth_bloc.dart';
+import '../blocs/branch/branch_cubit.dart';
 
 class AppDrawer extends StatelessWidget {
   final int selectedIndex;
@@ -37,6 +38,7 @@ class AppDrawer extends StatelessWidget {
                   _buildNavItem(5, Icons.check_circle_outline_rounded, 'Tasks'),
                   _buildNavItem(6, Icons.groups_outlined, 'Teams'),
                   _buildNavItem(7, Icons.receipt_long_outlined, 'Billing'),
+                  _buildNavItem(21, Icons.post_add_outlined, 'Create Invoices'),
                   _buildNavItem(8, Icons.autorenew_rounded, 'Asset Renewals'),
                   _buildNavItem(9, Icons.description_outlined, 'Client Statements'),
                   _buildNavItem(10, Icons.calendar_month_outlined, 'Scheduler'),
@@ -65,11 +67,89 @@ class AppDrawer extends StatelessWidget {
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-      alignment: Alignment.centerLeft,
-      child: Image.asset(
-        'assets/ecraftzlogolight.png',
-        height: 36,
-        fit: BoxFit.contain,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Image.asset(
+            'assets/ecraftzlogolight.png',
+            height: 36,
+            fit: BoxFit.contain,
+          ),
+          const SizedBox(height: 12),
+          // Branch Switcher in drawer
+          BlocBuilder<BranchCubit, BranchState>(
+            builder: (context, branchState) {
+              return GestureDetector(
+                onTap: () => _showBranchPicker(context, branchState),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.07),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white.withOpacity(0.12)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _branchIcon(branchState.selectedBranch),
+                        size: 14,
+                        color: _branchAccent(branchState.selectedBranch),
+                      ),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Text(
+                          branchState.selectedBranch.displayName,
+                          style: TextStyle(
+                            color: _branchAccent(branchState.selectedBranch),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 14,
+                        color: Colors.white.withOpacity(0.5),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _branchAccent(BranchFilter filter) {
+    switch (filter) {
+      case BranchFilter.allBranches: return const Color(0xFF8892B0);
+      case BranchFilter.calicut: return const Color(0xFF3B82F6);
+      case BranchFilter.dubai: return const Color(0xFFF59E0B);
+    }
+  }
+
+  IconData _branchIcon(BranchFilter filter) {
+    switch (filter) {
+      case BranchFilter.allBranches: return Icons.public_rounded;
+      case BranchFilter.calicut: return Icons.location_on_rounded;
+      case BranchFilter.dubai: return Icons.business_rounded;
+    }
+  }
+
+  void _showBranchPicker(BuildContext context, BranchState branchState) {
+    final cubit = context.read<BranchCubit>();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => BlocProvider.value(
+        value: cubit,
+        child: _DrawerBranchSheet(
+          current: branchState.selectedBranch,
+          isDark: Theme.of(context).brightness == Brightness.dark,
+        ),
       ),
     );
   }
@@ -196,6 +276,125 @@ class AppDrawer extends StatelessWidget {
               context.read<AuthBloc>().add(AuthLogoutEvent());
             },
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── DRAWER BRANCH SHEET ─────────────────────────────────────────────────────
+
+class _DrawerBranchSheet extends StatelessWidget {
+  final BranchFilter current;
+  final bool isDark;
+
+  const _DrawerBranchSheet({required this.current, required this.isDark});
+
+  Color _accent(BranchFilter f) {
+    switch (f) {
+      case BranchFilter.allBranches: return const Color(0xFF6B7280);
+      case BranchFilter.calicut: return const Color(0xFF0A84FF);
+      case BranchFilter.dubai: return const Color(0xFFF59E0B);
+    }
+  }
+
+  IconData _icon(BranchFilter f) {
+    switch (f) {
+      case BranchFilter.allBranches: return Icons.public_rounded;
+      case BranchFilter.calicut: return Icons.location_on_rounded;
+      case BranchFilter.dubai: return Icons.business_rounded;
+    }
+  }
+
+  String _subtitle(BranchFilter f) {
+    switch (f) {
+      case BranchFilter.allBranches: return 'Show data from all branches combined';
+      case BranchFilter.calicut: return 'Kozhikode, Kerala — Head Office';
+      case BranchFilter.dubai: return 'Dubai, UAE — International Branch';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? const Color(0xFF101B2B) : Colors.white;
+    final border = isDark ? const Color(0xFF1E2E42) : const Color(0xFFE8EDF5);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        border: Border(top: BorderSide(color: border)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 36, height: 4,
+            decoration: BoxDecoration(color: border, borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Row(
+              children: [
+                Icon(Icons.swap_horiz_rounded, size: 18, color: isDark ? const Color(0xFF8E9CB8) : const Color(0xFF6B7A99)),
+                const SizedBox(width: 8),
+                Text('Switch Branch', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: isDark ? Colors.white : const Color(0xFF0D1B2A))),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: border),
+          const SizedBox(height: 8),
+          ...BranchFilter.values.map((filter) {
+            final isSelected = filter == current;
+            final accent = _accent(filter);
+            return Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  context.read<BranchCubit>().selectBranch(filter);
+                  Navigator.pop(context);
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: isSelected ? accent.withOpacity(isDark ? 0.15 : 0.08) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: isSelected ? accent.withOpacity(0.3) : Colors.transparent, width: 1.2),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40, height: 40,
+                        decoration: BoxDecoration(color: accent.withOpacity(isDark ? 0.2 : 0.1), borderRadius: BorderRadius.circular(10)),
+                        child: Icon(_icon(filter), color: accent, size: 20),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(filter.displayName, style: TextStyle(fontSize: 14, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, color: isSelected ? accent : (isDark ? Colors.white : const Color(0xFF0D1B2A)))),
+                            const SizedBox(height: 2),
+                            Text(_subtitle(filter), style: TextStyle(fontSize: 11, color: isDark ? const Color(0xFF8E9CB8) : const Color(0xFF6B7A99))),
+                          ],
+                        ),
+                      ),
+                      if (isSelected)
+                        Icon(Icons.check_circle_rounded, color: accent, size: 20)
+                      else
+                        Icon(Icons.radio_button_unchecked_rounded, color: isDark ? const Color(0xFF596780) : const Color(0xFFADB5C9), size: 20),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+          const SizedBox(height: 16),
+          SizedBox(height: MediaQuery.of(context).padding.bottom),
         ],
       ),
     );

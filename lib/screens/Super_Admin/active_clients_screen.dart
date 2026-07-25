@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/branch_switcher.dart';
 import '../../models/client_model.dart';
 import '../../blocs/client/client_bloc.dart';
+import '../../blocs/branch/branch_cubit.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
 
@@ -53,7 +55,8 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
   @override
   void initState() {
     super.initState();
-    context.read<ClientBloc>().add(LoadClientsEvent());
+    final branchState = context.read<BranchCubit>().state;
+    context.read<ClientBloc>().add(LoadClientsEvent(branchState: branchState));
   }
 
   @override
@@ -206,6 +209,11 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
           ],
         ),
         actions: [
+          // Branch switcher — always visible in the AppBar
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: BranchSwitcher(compact: true),
+          ),
           BlocBuilder<ThemeBloc, ThemeState>(
             builder: (context, themeState) {
               final isDarkTheme = themeState.themeMode == ThemeMode.dark;
@@ -242,58 +250,64 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
           child: Container(height: 1, color: _border),
         ),
       ) : null,
-      body: BlocBuilder<ClientBloc, ClientState>(
-        builder: (context, state) {
-          final allClients = state.clients;
-          final clients = _filtered(allClients);
-          return Column(
-            children: [
-              // Stats strip
-              _buildStatsStrip(allClients),
-              // Search bar
-              Container(
-                color: Theme.of(context).colorScheme.surface,
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: TextField(
-                  controller: _searchCtrl,
-                  onChanged: (v) => setState(() => _searchQuery = v),
-                  style: TextStyle(color: _textPrimary, fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'Search active clients...',
-                    hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 13),
-                    prefixIcon: Icon(Icons.search, color: AppTheme.textMutedOf(context), size: 18),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: Icon(Icons.close, size: 16, color: _textSecondary),
-                            onPressed: () {
-                              _searchCtrl.clear();
-                              setState(() => _searchQuery = '');
-                            })
-                        : null,
-                    filled: true,
-                    fillColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: _border)),
-                    enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: _border)),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+      body: BlocListener<BranchCubit, BranchState>(
+        listener: (context, branchState) {
+          // Reload clients whenever branch selection changes
+          context.read<ClientBloc>().add(LoadClientsEvent(branchState: branchState));
+        },
+        child: BlocBuilder<ClientBloc, ClientState>(
+          builder: (context, state) {
+            final allClients = state.clients;
+            final clients = _filtered(allClients);
+            return Column(
+              children: [
+                // Stats strip
+                _buildStatsStrip(allClients),
+                // Search bar
+                Container(
+                  color: Theme.of(context).colorScheme.surface,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: TextField(
+                    controller: _searchCtrl,
+                    onChanged: (v) => setState(() => _searchQuery = v),
+                    style: TextStyle(color: _textPrimary, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Search active clients...',
+                      hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 13),
+                      prefixIcon: Icon(Icons.search, color: AppTheme.textMutedOf(context), size: 18),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.close, size: 16, color: _textSecondary),
+                              onPressed: () {
+                                _searchCtrl.clear();
+                                setState(() => _searchQuery = '');
+                              })
+                          : null,
+                      filled: true,
+                      fillColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: _border)),
+                      enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: _border)),
+                      focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
                   ),
                 ),
-              ),
-              // Table
-              Expanded(
-                child: clients.isEmpty
-                    ? _buildEmpty()
-                    : _buildTable(clients, isWide),
-              ),
-            ],
-          );
-        },
+                // Table
+                Expanded(
+                  child: clients.isEmpty
+                      ? _buildEmpty()
+                      : _buildTable(clients, isWide),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

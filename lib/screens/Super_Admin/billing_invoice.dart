@@ -10,6 +10,8 @@ import 'package:printing/printing.dart';
 import '../../blocs/billing/billing_bloc.dart';
 import '../../models/billing_model.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/branch_switcher.dart';
+import '../../blocs/branch/branch_cubit.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
 
@@ -53,7 +55,8 @@ class _BillingPageState extends State<BillingPage> {
   @override
   void initState() {
     super.initState();
-    context.read<BillingBloc>().add(LoadInvoicesEvent());
+    final branchState = context.read<BranchCubit>().state;
+    context.read<BillingBloc>().add(LoadInvoicesEvent(branchState: branchState));
   }
 
   @override
@@ -91,13 +94,14 @@ class _BillingPageState extends State<BillingPage> {
   }
 
   void _showNewInvoice(GstProfile profile) {
+    final branchState = context.read<BranchCubit>().state;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _NewInvoiceSheet(
         gstProfile: profile,
-        onSave: (inv) => context.read<BillingBloc>().add(AddInvoiceEvent(inv)),
+        onSave: (inv) => context.read<BillingBloc>().add(AddInvoiceEvent(inv, branchState: branchState)),
       ),
     );
   }
@@ -139,10 +143,14 @@ class _BillingPageState extends State<BillingPage> {
     final isWide = MediaQuery.of(context).size.width > 650;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return BlocBuilder<BillingBloc, BillingState>(
-      builder: (context, state) {
-        final filtered = _filtered(state.invoices);
-        return Scaffold(
+    return BlocListener<BranchCubit, BranchState>(
+      listener: (context, branchState) {
+        context.read<BillingBloc>().add(LoadInvoicesEvent(branchState: branchState));
+      },
+      child: BlocBuilder<BillingBloc, BillingState>(
+        builder: (context, state) {
+          final filtered = _filtered(state.invoices);
+          return Scaffold(
           key: _scaffoldKey,
           drawer: widget.showAppBar ? AppDrawer(
             selectedIndex: widget.selectedIndex,
@@ -175,6 +183,11 @@ class _BillingPageState extends State<BillingPage> {
               ],
             ),
             actions: [
+              // Branch switcher
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: BranchSwitcher(compact: true),
+              ),
               // GST settings
               IconButton(
                 icon: Icon(Icons.shield_outlined,
@@ -241,8 +254,9 @@ class _BillingPageState extends State<BillingPage> {
                 ),
         );
       },
-    );
-  }
+    ),
+  );
+}
 
   // ── STATS ────────────────────────────────────────────────────────────────────
 

@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../models/billing_model.dart';
 import '../../services/supabase_service.dart';
+import '../branch/branch_cubit.dart';
 
 // ─── EVENTS ───────────────────────────────────────────────────────────────────
 
@@ -11,13 +12,19 @@ abstract class BillingEvent extends Equatable {
   List<Object?> get props => [];
 }
 
-class LoadInvoicesEvent extends BillingEvent {}
+class LoadInvoicesEvent extends BillingEvent {
+  final BranchState? branchState;
+  const LoadInvoicesEvent({this.branchState});
+  @override
+  List<Object?> get props => [branchState];
+}
 
 class AddInvoiceEvent extends BillingEvent {
   final Invoice invoice;
-  const AddInvoiceEvent(this.invoice);
+  final BranchState? branchState;
+  const AddInvoiceEvent(this.invoice, {this.branchState});
   @override
-  List<Object?> get props => [invoice];
+  List<Object?> get props => [invoice, branchState];
 }
 
 class UpdateInvoiceStatusEvent extends BillingEvent {
@@ -74,12 +81,21 @@ class BillingBloc extends Bloc<BillingEvent, BillingState> {
     // ── Load invoices with full joins ──────────────────────────────────────────
     on<LoadInvoicesEvent>((event, emit) async {
       try {
-        // Join invoice_items and invoice_taxes for each invoice
-        final invoicesRes = await _client
+        var query = _client
             .from('invoices')
             .select('*, invoice_items(*), invoice_taxes(*), clients(name, email, phone, address), projects(name)')
-            .isFilter('deleted_at', null)
-            .order('created_at', ascending: false);
+            .isFilter('deleted_at', null);
+
+        final branchState = event.branchState;
+        if (branchState != null &&
+            branchState.selectedBranch != BranchFilter.allBranches) {
+          final branchId = branchState.activeBranchId;
+          if (branchId != null && branchId.isNotEmpty) {
+            query = query.eq('branch_id', branchId);
+          }
+        }
+
+        final invoicesRes = await query.order('created_at', ascending: false);
 
         final gstRes = await _client
             .from('gst_profiles')
@@ -133,6 +149,11 @@ class BillingBloc extends Bloc<BillingEvent, BillingState> {
         invData['client_id'] = clientId;
         invData['project_id'] = projectId;
         invData['created_at'] = DateTime.now().toUtc().toIso8601String();
+
+        final branchId = event.branchState?.activeBranchId;
+        if (branchId != null && branchId.isNotEmpty) {
+          invData['branch_id'] = branchId;
+        }
 
         // Insert invoice and get back the ID
         final insertedRes = await _client.from('invoices').insert(invData).select('id').single();

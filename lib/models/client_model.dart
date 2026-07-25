@@ -7,6 +7,7 @@ class ActiveClient {
   final double contractValue;
   final DateTime onboardedAt;
   final String templateUsed;
+  final String? branchId;
 
   const ActiveClient({
     required this.id,
@@ -17,6 +18,7 @@ class ActiveClient {
     required this.contractValue,
     required this.onboardedAt,
     required this.templateUsed,
+    this.branchId,
   });
 
   String get initials {
@@ -40,6 +42,7 @@ class ActiveClient {
       contractValue: (json['contract_value'] is num) ? (json['contract_value'] as num).toDouble() : double.tryParse(json['contract_value']?.toString() ?? '') ?? 0.0,
       onboardedAt: json['created_at'] != null ? DateTime.parse(json['created_at'].toString()) : DateTime.now(),
       templateUsed: json['gst_treatment']?.toString() ?? 'General Template',
+      branchId: json['branch_id']?.toString(),
     );
   }
 
@@ -53,6 +56,7 @@ class ActiveClient {
       'contract_value': contractValue,
       'gst_treatment': templateUsed.isEmpty ? 'unregistered' : templateUsed,
       'organization_id': '00000000-0000-0000-0000-000000000000',
+      if (branchId != null) 'branch_id': branchId,
     };
   }
 }

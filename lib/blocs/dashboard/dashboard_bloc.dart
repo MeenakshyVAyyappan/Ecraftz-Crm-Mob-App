@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../models/dashboard_models.dart';
 import '../../services/supabase_service.dart';
+import '../branch/branch_cubit.dart';
 
 abstract class DashboardEvent extends Equatable {
   const DashboardEvent();
@@ -12,9 +13,10 @@ abstract class DashboardEvent extends Equatable {
 
 class LoadDashboardEvent extends DashboardEvent {
   final DateTimeRange? dateRange;
-  const LoadDashboardEvent({this.dateRange});
+  final BranchState? branchState;
+  const LoadDashboardEvent({this.dateRange, this.branchState});
   @override
-  List<Object?> get props => [dateRange];
+  List<Object?> get props => [dateRange, branchState];
 }
 
 abstract class DashboardState extends Equatable {
@@ -69,12 +71,18 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         final start = event.dateRange?.start;
         final end = event.dateRange?.end;
 
+        // Determine branch_id filter (null = All Branches)
+        final branchId = event.branchState?.activeBranchId;
+
         // 1. Fetch Invoices
         var invoiceQuery = _client.from('invoices').select('*, clients(name)').isFilter('deleted_at', null);
         if (start != null && end != null) {
           invoiceQuery = invoiceQuery
               .gte('date', start.toIso8601String().split('T')[0])
               .lte('date', end.toIso8601String().split('T')[0]);
+        }
+        if (branchId != null && branchId.isNotEmpty) {
+          invoiceQuery = invoiceQuery.eq('branch_id', branchId);
         }
         final invoicesRes = await invoiceQuery;
         final invoices = invoicesRes as List;
@@ -85,6 +93,9 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           projectQuery = projectQuery
               .gte('created_at', start.toIso8601String())
               .lte('created_at', end.toIso8601String());
+        }
+        if (branchId != null && branchId.isNotEmpty) {
+          projectQuery = projectQuery.eq('branch_id', branchId);
         }
         final projectsRes = await projectQuery;
         final projects = projectsRes as List;

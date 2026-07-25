@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../models/project_model.dart';
 import '../../services/supabase_service.dart';
+import '../branch/branch_cubit.dart';
 
 abstract class ProjectEvent extends Equatable {
   const ProjectEvent();
@@ -9,7 +10,12 @@ abstract class ProjectEvent extends Equatable {
   List<Object?> get props => [];
 }
 
-class LoadProjectsEvent extends ProjectEvent {}
+class LoadProjectsEvent extends ProjectEvent {
+  final BranchState? branchState;
+  const LoadProjectsEvent({this.branchState});
+  @override
+  List<Object?> get props => [branchState];
+}
 
 class AddProjectEvent extends ProjectEvent {
   final Project project;
@@ -57,11 +63,21 @@ class ProjectBloc extends Bloc<ProjectEvent, ProjectState> {
   ProjectBloc() : super(const ProjectState()) {
     on<LoadProjectsEvent>((event, emit) async {
       try {
-        final projectsRes = await _client
+        var filterQuery = _client
             .from('projects')
             .select('*, clients(name)')
-            .isFilter('deleted_at', null)
-            .order('created_at', ascending: false);
+            .isFilter('deleted_at', null);
+
+        final branchState = event.branchState;
+        if (branchState != null &&
+            branchState.selectedBranch != BranchFilter.allBranches) {
+          final branchId = branchState.activeBranchId;
+          if (branchId != null && branchId.isNotEmpty) {
+            filterQuery = filterQuery.eq('branch_id', branchId);
+          }
+        }
+
+        final projectsRes = await filterQuery.order('created_at', ascending: false);
             
         final tasksRes = await _client
             .from('tasks')
