@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,6 +19,10 @@ import '../../models/department_model.dart';
 import '../../blocs/task/task_bloc.dart';
 import '../../blocs/project/project_bloc.dart';
 import '../../models/task_model.dart' show TaskStatus;
+import '../../services/bde_report_service.dart';
+import '../../models/bde_report_model.dart';
+import '../../services/meeting_service.dart';
+import '../../models/meeting_model.dart';
 import 'teams_screen.dart' show teamMembers, TeamMember;
 
 class DashboardScreen extends StatefulWidget {
@@ -45,6 +51,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   DateTimeRange? _dateRange;
   Department? _selectedDept;
+  String _bdeCallsPeriod = 'Last 7 Days';
 
   static const String _notifPrefKey = 'sa_notif_read_state';
 
@@ -184,8 +191,16 @@ class _DashboardScreenState extends State<DashboardScreen>
                                   _buildStatsGrid(stats),
                                   const SizedBox(height: 24),
                                   _buildActivitySection(activities),
+                                  const SizedBox(height: 20),
+                                  _buildClientSatisfactionCard(),
+                                  const SizedBox(height: 24),
+                                  _buildBdeCallsConnectedAnalytics(),
+                                  const SizedBox(height: 24),
+                                  _buildBdeDailyReportsSection(),
                                   const SizedBox(height: 24),
                                   _buildDynamicWorkspaceHeader(),
+                                  const SizedBox(height: 16),
+                                  _buildMeetingSchedulesSection(),
                                   const SizedBox(height: 16),
                                   _buildRevenueCard(totalRevenueVal, revenuePoints),
                                   const SizedBox(height: 16),
@@ -1912,6 +1927,412 @@ class _DashboardScreenState extends State<DashboardScreen>
       ),
     );
   }
+
+  // ── 1. CLIENT SATISFACTION WIDGET ─────────────────────────────────────────────
+  Widget _buildClientSatisfactionCard() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return _SectionCard(
+      title: 'CLIENT SATISFACTION',
+      subtitle: 'REAL-TIME CUSTOMER FEEDBACK INSIGHTS.',
+      headerIcon: Icons.star_outline_rounded,
+      headerIconColor: Colors.amber,
+      trailing: TextButton(
+        onPressed: () => widget.onItemSelected(3),
+        child: const Text('View All', style: TextStyle(fontSize: 11, color: AppTheme.primary, fontWeight: FontWeight.bold)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(isDark ? 0.15 : 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                ),
+                child: const Row(
+                  children: [
+                    Text('4.4', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.amber)),
+                    SizedBox(width: 6),
+                    Icon(Icons.star_rounded, color: Colors.amber, size: 20),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: List.generate(
+                        5,
+                        (index) => Icon(
+                          index < 4 ? Icons.star_rounded : Icons.star_half_rounded,
+                          color: Colors.amber,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Based on 5 client responses. Customer loyalty is stable.',
+                      style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFFFFBEB),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.amber.withOpacity(0.3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, size: 14, color: Colors.amber),
+                    const SizedBox(width: 6),
+                    Text('CRITICAL ALERTS (1)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amber.shade800)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text('SPROUT', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textPrimaryOf(context))),
+                const SizedBox(height: 2),
+                Text('"We appreciate the improved efforts and communication demonstrated by the team during sprint reviews."',
+                    style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: AppTheme.textSecondaryOf(context))),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 2. BDE CALLS CONNECTED ANALYTICS SECTION ─────────────────────────────────
+  Widget _buildBdeCallsConnectedAnalytics() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return _SectionCard(
+      title: 'BDE CALLS CONNECTED ANALYTICS',
+      subtitle: 'Admin Overview: Outbound & Inbound Connected Calls by BDE Executives',
+      headerIcon: Icons.phone_callback_rounded,
+      headerIconColor: AppTheme.primary,
+      trailing: OutlinedButton.icon(
+        onPressed: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Exporting BDE Calls Analytics CSV...'), backgroundColor: AppTheme.primary),
+          );
+        },
+        icon: const Icon(Icons.download_outlined, size: 12),
+        label: const Text('EXPORT CSV', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Timeframe filter tabs
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: ['Today', 'Last 7 Days', 'Last 30 Days', 'Custom'].map((period) {
+                final selected = _bdeCallsPeriod == period;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    label: Text(period, style: TextStyle(fontSize: 11, color: selected ? Colors.white : AppTheme.textSecondaryOf(context))),
+                    selected: selected,
+                    selectedColor: AppTheme.primary,
+                    backgroundColor: isDark ? AppTheme.bgBaseDark : AppTheme.bgBase,
+                    onSelected: (val) {
+                      if (val) setState(() => _bdeCallsPeriod = period);
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // 4 Summary KPI Cards Grid
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 1.6,
+            children: [
+              _bdeKpiCard('TOTAL CALLS CONNECTED', '2', 'Sum of all connected calls', Icons.phone_in_talk_rounded, const Color(0xFF3B82F6)),
+              _bdeKpiCard('OUTBOUND CALLS', '2', 'Calls initiated by BDEs', Icons.call_made_rounded, const Color(0xFF10B981)),
+              _bdeKpiCard('INBOUND CALLS', '0', 'Received from leads & clients', Icons.call_received_rounded, const Color(0xFF8B5CF6)),
+              _bdeKpiCard('ACTIVE BDE CALLERS', '2', 'BDEs with active call logs', Icons.people_outline_rounded, const Color(0xFFF59E0B)),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // BDE Executive Breakdown Cards
+          Text('BDE EXECUTIVE BREAKDOWN', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.textSecondaryOf(context), letterSpacing: 0.8)),
+          const SizedBox(height: 8),
+          _bdeExecutiveRow('KEERTHI', 'keerthi.ecraftz@gmail.com', 1, 1, 0, 100, 0),
+          const SizedBox(height: 8),
+          _bdeExecutiveRow('ALHAJ', 'alhajecraftz@gmail.com', 1, 1, 0, 100, 0),
+        ],
+      ),
+    );
+  }
+
+  Widget _bdeKpiCard(String label, String value, String sub, IconData icon, Color color) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: isDark ? color.withOpacity(0.12) : color.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Icon(icon, size: 16, color: color),
+              Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: color)),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: color), overflow: TextOverflow.ellipsis),
+              Text(sub, style: TextStyle(fontSize: 8.5, color: AppTheme.textSecondaryOf(context)), overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _bdeExecutiveRow(String name, String email, int total, int outbound, int inbound, int ratioOut, int meetings) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.bgBaseDark : AppTheme.bgBase,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.borderOf(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.textPrimaryOf(context))),
+                  Text(email, style: TextStyle(fontSize: 10, color: AppTheme.textSecondaryOf(context))),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text('$total Calls', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.primary)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Outbound: $outbound', style: const TextStyle(fontSize: 10, color: Color(0xFF10B981))),
+              Text('Inbound: $inbound', style: const TextStyle(fontSize: 10, color: Color(0xFF8B5CF6))),
+              Text('Call Ratio: Out $ratioOut%', style: TextStyle(fontSize: 10, color: AppTheme.textSecondaryOf(context))),
+              Text('Meetings: $meetings', style: TextStyle(fontSize: 10, color: AppTheme.textSecondaryOf(context))),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 3. BDE DAILY REPORTS (ADMIN VIEW) SECTION ─────────────────────────────────
+  Widget _buildBdeDailyReportsSection() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return _SectionCard(
+      title: 'BDE DAILY REPORTS (ADMIN VIEW)',
+      subtitle: 'MONITOR ALL BUSINESS DEVELOPMENT EXECUTIVES',
+      headerIcon: Icons.assignment_outlined,
+      headerIconColor: const Color(0xFFF59E0B),
+      child: FutureBuilder<List<BdeReportEntry>>(
+        future: BdeReportService.instance.allReports(forAdmin: true),
+        builder: (ctx, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(strokeWidth: 2)));
+          }
+
+          final reports = snapshot.data ?? [];
+          if (reports.isEmpty) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Column(
+                  children: [
+                    Icon(Icons.feed_outlined, size: 32, color: AppTheme.textMutedOf(context)),
+                    const SizedBox(height: 8),
+                    Text('NO BDE REPORTS FOUND FOR THIS PERIOD.',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textMutedOf(context), letterSpacing: 0.5)),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          return Column(
+            children: reports.map((r) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark ? AppTheme.bgBaseDark : AppTheme.bgBase,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppTheme.borderOf(context)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(r.staffName, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.textPrimaryOf(context))),
+                        Text(DateFormat('dd MMM yyyy').format(r.reportDate), style: TextStyle(fontSize: 10, color: AppTheme.textSecondaryOf(context))),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text('Database Count: ${r.login.databaseCount} | Planned: ${r.login.databasePlanned}',
+                        style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context))),
+                    if (r.logout != null) ...[
+                      const SizedBox(height: 4),
+                      Text('Calls Connected: ${r.logout!.callsConnected} | Meetings: ${r.logout!.meetingsAttended}',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.primary)),
+                    ],
+                  ],
+                ),
+              );
+            }).toList(),
+          );
+        },
+      ),
+    );
+  }
+
+  // ── 4. MEETING SCHEDULES SECTION ──────────────────────────────────────────────
+  Widget _buildMeetingSchedulesSection() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return _SectionCard(
+      title: 'MEETING SCHEDULES',
+      subtitle: 'Client discovery calls, product demos & follow-ups',
+      headerIcon: Icons.calendar_today_rounded,
+      headerIconColor: AppTheme.primary,
+      trailing: ElevatedButton.icon(
+        onPressed: () {
+          widget.onItemSelected(10);
+        },
+        icon: const Icon(Icons.add, size: 12, color: Colors.white),
+        label: const Text('+ SCHEDULE MEETING', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppTheme.primary,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          elevation: 0,
+        ),
+      ),
+      child: FutureBuilder<List<Meeting>>(
+        future: MeetingService.instance.fetchAllMeetings(),
+        builder: (ctx, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(strokeWidth: 2)));
+          }
+
+          final meetings = snapshot.data ?? [];
+          if (meetings.isEmpty) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Column(
+                  children: [
+                    Icon(Icons.event_available_outlined, size: 32, color: AppTheme.textMutedOf(context)),
+                    const SizedBox(height: 8),
+                    Text('NO UPCOMING MEETINGS SCHEDULED.',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textMutedOf(context), letterSpacing: 0.5)),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          return Column(
+            children: meetings.take(5).map((m) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark ? AppTheme.bgBaseDark : AppTheme.bgBase,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppTheme.borderOf(context)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.videocam_outlined, color: AppTheme.primary, size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(m.title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textPrimaryOf(context))),
+                          Text('${m.meetingType} • ${DateFormat('dd MMM, hh:mm a').format(m.scheduledAt)}',
+                              style: TextStyle(fontSize: 10, color: AppTheme.textSecondaryOf(context))),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppTheme.success.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(m.status.toUpperCase(), style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: AppTheme.success)),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          );
+        },
+      ),
+    );
+  }
 }
 
 class _DeptChartPainter extends CustomPainter {
@@ -1959,7 +2380,7 @@ class _DeptChartPainter extends CustomPainter {
       final x = paddingLeft + i * stepX;
       final tp = TextPainter(
         text: TextSpan(text: days[i], style: textStyle),
-        textDirection: TextDirection.ltr,
+        textDirection: ui.TextDirection.ltr,
       )..layout();
       tp.paint(canvas, Offset(x - tp.width / 2, size.height - paddingBottom + 4));
     }

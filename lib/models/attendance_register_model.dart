@@ -141,3 +141,9 @@ class AttendanceSnapshotData {
   int get absentCount => absentList.length;
   int get wfhCount => wfhList.length;
 }
+  });
+
+  int get presentCount => presentList.length;
+  int get absentCount => absentList.length;
+  int get wfhCount => wfhList.length;
+}

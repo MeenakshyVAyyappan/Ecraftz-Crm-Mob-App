@@ -419,3 +419,9 @@ class AttendanceRegisterService {
   }
 }
 
+      return s;
+    }
+  }
+}
+
+

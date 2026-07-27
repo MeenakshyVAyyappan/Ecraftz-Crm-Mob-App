@@ -116,16 +116,24 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
 
         // --- Aggregations & Calculations ---
         
-        // Total Revenue (grand_total of paid invoices)
-        double totalRev = 0.0;
+        // Total Invoiced Amount (grand_total of all non-cancelled invoices)
+        double totalInvoiced = 0.0;
         double unpaidRev = 0.0;
         for (final inv in invoices) {
-          final amt = (inv['grand_total'] is num) ? (inv['grand_total'] as num).toDouble() : double.tryParse(inv['grand_total']?.toString() ?? '') ?? 0.0;
+          final amt = (inv['grand_total'] is num)
+              ? (inv['grand_total'] as num).toDouble()
+              : double.tryParse(inv['grand_total']?.toString() ?? '') ?? 0.0;
+          final paidAmt = (inv['amount_paid'] is num)
+              ? (inv['amount_paid'] as num).toDouble()
+              : double.tryParse(inv['amount_paid']?.toString() ?? '') ?? 0.0;
+          final dueAmt = (inv['amount_due'] is num)
+              ? (inv['amount_due'] as num).toDouble()
+              : double.tryParse(inv['amount_due']?.toString() ?? '') ?? 0.0;
           final status = inv['status']?.toString().toLowerCase() ?? '';
-          if (status == 'paid') {
-            totalRev += amt;
-          } else {
-            unpaidRev += amt;
+
+          if (status != 'cancelled') {
+            totalInvoiced += amt;
+            unpaidRev += (status == 'paid' ? 0.0 : (dueAmt > 0 ? dueAmt : (amt - paidAmt)));
           }
         }
 
@@ -149,18 +157,18 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         int inProgressTasksCount = tasks.where((t) => t['status']?.toString().toLowerCase() == 'in_progress').length;
         int resourceLoadPercent = tasks.isNotEmpty ? ((inProgressTasksCount / tasks.length) * 100).round() : 0;
 
-        // Stats Cards List
+        // Stats Cards List matching Web CRM
         final statsList = [
           DashboardStats(
-            label: 'TOTAL REVENUE',
-            value: '₹${totalRev.toStringAsFixed(0)}',
-            subtitle: start != null && end != null ? 'FILTERED TIMEFRAME' : 'ALL TIME EARNINGS',
+            label: 'PERIOD REVENUE',
+            value: '₹${totalInvoiced.toStringAsFixed(0)}',
+            subtitle: start != null && end != null ? 'FOR SELECTED PERIOD' : 'FOR SELECTED PERIOD',
             status: 'STABLE',
             icon: 'currency_rupee',
             colorIndex: 0,
           ),
           DashboardStats(
-            label: 'ACTIVE PROJECTS',
+            label: 'PROJECTS IN PERIOD',
             value: '$activeProjectsCount',
             subtitle: 'ONGOING OPERATIONS',
             status: 'STABLE',
@@ -168,9 +176,9 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
             colorIndex: 1,
           ),
           DashboardStats(
-            label: 'OVERDUE TASKS',
-            value: '$overdueTasksCount',
-            subtitle: overdueTasksCount == 0 ? 'ALL CLEAR' : '$overdueTasksCount REQUIRES ACTION',
+            label: 'TASKS IN PERIOD',
+            value: '${tasks.length}',
+            subtitle: overdueTasksCount == 0 ? 'ALL CLEAR' : '$overdueTasksCount OVERDUE',
             status: overdueTasksCount == 0 ? 'STABLE' : 'ALERT',
             icon: 'warning_amber_rounded',
             colorIndex: 2,
@@ -178,20 +186,21 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           DashboardStats(
             label: 'RESOURCE LOAD',
             value: '$resourceLoadPercent%',
-            subtitle: '$inProgressTasksCount IN PROGRESS / ${tasks.length} TOTAL',
+            subtitle: '0H LOGGED / 7D',
             status: 'STABLE',
             icon: 'access_time',
             colorIndex: 3,
           ),
         ];
 
-        // Format Activities
+        // Format Activities with real-time actor names
         final activityList = activities.map((a) {
-          final action = a['action']?.toString() ?? '';
-          final target = a['target_name']?.toString() ?? '';
-          final user = 'Viswajith E'; 
+          final action = a['action']?.toString() ?? 'action';
+          final target = a['target_name']?.toString() ?? a['target']?.toString() ?? a['entity_type']?.toString() ?? '';
+          final rawUser = a['actor_name']?.toString() ?? a['user_name']?.toString() ?? a['created_by_name']?.toString() ?? a['user']?.toString() ?? '';
+          final user = rawUser.isNotEmpty ? rawUser : (a['role']?.toString().toUpperCase() ?? 'Admin');
           final dateStr = a['created_at']?.toString() ?? '';
-          final date = dateStr.isNotEmpty ? DateTime.parse(dateStr) : DateTime.now();
+          final date = dateStr.isNotEmpty ? (DateTime.tryParse(dateStr) ?? DateTime.now()) : DateTime.now();
           return ActivityItem(
             user: user,
             action: action.toUpperCase(),
@@ -284,7 +293,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           tasks: taskList,
           revenueData: revenuePoints,
           dateRange: event.dateRange,
-          totalRevenue: totalRev,
+          totalRevenue: totalInvoiced,
           receivables: unpaidRev,
         ));
       } catch (e) {

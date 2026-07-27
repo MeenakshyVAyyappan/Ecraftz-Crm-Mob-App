@@ -176,8 +176,11 @@ class BillingBloc extends Bloc<BillingEvent, BillingState> {
           try {
             await _client.from('invoice_audit_logs').insert({
               'invoice_id': newInvoiceId,
+              'organization_id': '00000000-0000-0000-0000-000000000000',
+              'actor_id': _client.auth.currentUser?.id,
               'action': 'created',
-              'new_status': event.invoice.status.name,
+              'previous_state': null,
+              'new_state': event.invoice.status.name,
               'created_at': DateTime.now().toUtc().toIso8601String(),
             });
           } catch (_) {
@@ -194,16 +197,17 @@ class BillingBloc extends Bloc<BillingEvent, BillingState> {
     // ── Update invoice status ──────────────────────────────────────────────────
     on<UpdateInvoiceStatusEvent>((event, emit) async {
       try {
-        final oldStatus = state.invoices.firstWhere((inv) => inv.id == event.id).status;
+        final oldInv = state.invoices.firstWhere((inv) => inv.id == event.id);
+        final oldStatus = oldInv.status;
 
         await _client.from('invoices').update({
           'status': event.status.name,
           'amount_paid': event.status == InvoiceStatus.paid
-              ? state.invoices.firstWhere((inv) => inv.id == event.id).grossAmount
+              ? oldInv.grossAmount
               : 0.0,
           'amount_due': event.status == InvoiceStatus.paid
               ? 0.0
-              : state.invoices.firstWhere((inv) => inv.id == event.id).grossAmount,
+              : oldInv.grossAmount,
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         }).eq('id', event.id);
 
@@ -211,9 +215,11 @@ class BillingBloc extends Bloc<BillingEvent, BillingState> {
         try {
           await _client.from('invoice_audit_logs').insert({
             'invoice_id': event.id,
+            'organization_id': oldInv.organizationId ?? '00000000-0000-0000-0000-000000000000',
+            'actor_id': _client.auth.currentUser?.id,
             'action': 'status_changed',
-            'old_status': oldStatus.name,
-            'new_status': event.status.name,
+            'previous_state': oldStatus.name,
+            'new_state': event.status.name,
             'created_at': DateTime.now().toUtc().toIso8601String(),
           });
         } catch (_) {}
@@ -227,6 +233,7 @@ class BillingBloc extends Bloc<BillingEvent, BillingState> {
     // ── Delete invoice (soft delete) ──────────────────────────────────────────
     on<DeleteInvoiceEvent>((event, emit) async {
       try {
+        final oldInv = state.invoices.firstWhere((inv) => inv.id == event.id);
         await _client.from('invoices').update({
           'deleted_at': DateTime.now().toUtc().toIso8601String(),
         }).eq('id', event.id);
@@ -235,7 +242,11 @@ class BillingBloc extends Bloc<BillingEvent, BillingState> {
         try {
           await _client.from('invoice_audit_logs').insert({
             'invoice_id': event.id,
+            'organization_id': oldInv.organizationId ?? '00000000-0000-0000-0000-000000000000',
+            'actor_id': _client.auth.currentUser?.id,
             'action': 'deleted',
+            'previous_state': oldInv.status.name,
+            'new_state': 'deleted',
             'created_at': DateTime.now().toUtc().toIso8601String(),
           });
         } catch (_) {}

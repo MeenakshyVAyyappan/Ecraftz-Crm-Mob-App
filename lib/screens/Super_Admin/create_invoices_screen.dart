@@ -1068,76 +1068,812 @@ class _CreateInvoicesPageState extends State<CreateInvoicesPage> {
 
   void _showInvoiceDetail(
       BuildContext context, Invoice inv, GstProfile profile) {
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        height: MediaQuery.of(context).size.height * 0.85,
-        decoration: BoxDecoration(
-          color: Theme.of(context).brightness == Brightness.dark
-              ? AppTheme.bgCardDark
-              : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      barrierDismissible: true,
+      builder: (ctx) {
+        final screenWidth = MediaQuery.of(ctx).size.width;
+        final isCompact = screenWidth < 600;
+
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: isCompact ? 6 : 16,
+            vertical: isCompact ? 10 : 24,
+          ),
+          child: Container(
+            constraints: BoxConstraints(
+              maxWidth: 900,
+              maxHeight: MediaQuery.of(ctx).size.height * 0.94,
+            ),
+            decoration: BoxDecoration(
+              color: Theme.of(ctx).brightness == Brightness.dark
+                  ? const Color(0xFF1E293B)
+                  : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 20,
+                  offset: Offset(0, 10),
+                )
+              ],
+            ),
+            child: Column(
               children: [
-                Text(
-                  'Invoice Details — ${inv.invoiceNumber}',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.textPrimaryOf(context),
+                // Top Action Header Bar (Responsive for Mobile & Desktop)
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isCompact ? 12 : 20,
+                    vertical: isCompact ? 10 : 14,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(ctx).brightness == Brightness.dark
+                        ? AppTheme.bgCardDark
+                        : Colors.white,
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(16)),
+                    border: Border(
+                      bottom: BorderSide(color: AppTheme.borderOf(ctx)),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Invoice PREVIEW',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: isCompact ? 15 : 18,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.textPrimaryOf(ctx),
+                              ),
+                            ),
+                            if (!isCompact) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                'Review and print or export this document to standard PDF.',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppTheme.textSecondaryOf(ctx),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      if (isCompact) ...[
+                        IconButton(
+                          icon: const Icon(Icons.download_rounded,
+                              color: Color(0xFF0F172A), size: 20),
+                          tooltip: 'Export PDF',
+                          onPressed: () =>
+                              _generateAndDownloadPdf(inv, profile),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.print_outlined,
+                              color: Color(0xFF0F172A), size: 20),
+                          tooltip: 'Print',
+                          onPressed: () => _printInvoice(inv, profile),
+                        ),
+                      ] else ...[
+                        ElevatedButton.icon(
+                          onPressed: () =>
+                              _generateAndDownloadPdf(inv, profile),
+                          icon: const Icon(Icons.download_rounded, size: 16),
+                          label: const Text('Export PDF'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0F172A),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          onPressed: () => _printInvoice(inv, profile),
+                          icon: const Icon(Icons.print_outlined, size: 16),
+                          label: const Text('Print'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.textPrimaryOf(ctx),
+                            side: BorderSide(color: AppTheme.borderOf(ctx)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(width: 4),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
+
+                // Scrollable Document Canvas (Supports Horizontal + Vertical Scrolling on Mobile)
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.all(isCompact ? 8 : 20),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Center(
+                        child: Container(
+                          width: isCompact ? 680.0 : 820.0,
+                          padding: EdgeInsets.all(isCompact ? 18 : 32),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(6),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 15,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // 1. Company Header Banner
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Logo
+                                  Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF1E293B),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Center(
+                                      child: Text(
+                                        'E',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 26,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  // Company Address
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Ecraftz Info Solutions LLP',
+                                          style: TextStyle(
+                                            color: Color(0xFF0F172A),
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          profile.brandName.isNotEmpty
+                                              ? profile.brandName
+                                              : 'Head Office',
+                                          style: const TextStyle(
+                                            color: Color(0xFF64748B),
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        Text(
+                                          profile.address.isNotEmpty
+                                              ? profile.address
+                                              : 'Ecraftz, A9, First floor, NV Tower, M20/265, Kallai, Kozhikode, Kerala 673003',
+                                          style: const TextStyle(
+                                            color: Color(0xFF64748B),
+                                            fontSize: 10,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  // Flags & Contact
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.end,
+                                    children: [
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: const [
+                                          Text('🇬🇧 UK  ',
+                                              style: TextStyle(fontSize: 10)),
+                                          Text('🇦🇪 UAE  ',
+                                              style: TextStyle(fontSize: 10)),
+                                          Text('🇮🇳 INDIA',
+                                              style: TextStyle(fontSize: 10)),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        profile.website.isNotEmpty
+                                            ? profile.website
+                                            : 'www.vbecraftz.com',
+                                        style: const TextStyle(
+                                            color: Color(0xFF64748B),
+                                            fontSize: 10),
+                                      ),
+                                      Text(
+                                        profile.email.isNotEmpty
+                                            ? profile.email
+                                            : 'mail@ecraftz.in',
+                                        style: const TextStyle(
+                                            color: Color(0xFF64748B),
+                                            fontSize: 10),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+
+                              const SizedBox(height: 18),
+                              const Divider(
+                                  height: 1, color: Color(0xFFE2E8F0)),
+                              const SizedBox(height: 14),
+
+                              // 2. Invoice Meta Bar
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Invoice #  ${inv.invoiceNumber}',
+                                    style: const TextStyle(
+                                      color: Color(0xFF0F172A),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Place Of Supply  ${inv.placeOfSupply ?? "32"}',
+                                    style: const TextStyle(
+                                      color: Color(0xFF0F172A),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Invoice Date  ${DateFormat("dd-MM-yyyy").format(inv.issuedDate)}',
+                                style: const TextStyle(
+                                  color: Color(0xFF0F172A),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+
+                              const SizedBox(height: 16),
+
+                              // 3. BILLED BY & BILLED TO Section
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border:
+                                      Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 8),
+                                      color: const Color(0xFFF1F5F9),
+                                      child: Row(
+                                        children: const [
+                                          Expanded(
+                                            child: Text(
+                                              'BILLED BY',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w800,
+                                                color: Color(0xFF475569),
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: Text(
+                                              'BILLED TO',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w800,
+                                                color: Color(0xFF475569),
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.all(14),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          // From (Billed By)
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                const Text('From:',
+                                                    style: TextStyle(
+                                                        fontSize: 10,
+                                                        color: Color(0xFF64748B))),
+                                                Text(
+                                                  profile.legalName.isNotEmpty
+                                                      ? profile.legalName
+                                                      : 'Ecraftz Info Solutions LLP',
+                                                  style: const TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: Color(0xFF0F172A),
+                                                  ),
+                                                ),
+                                                Text(
+                                                  profile.address.isNotEmpty
+                                                      ? profile.address
+                                                      : 'Ecraftz, A9, First floor, NV Tower, M20/265, Kallai, Kozhikode, Kerala 673003',
+                                                  style: const TextStyle(
+                                                      fontSize: 10,
+                                                      color: Color(0xFF64748B)),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  'GSTIN: ${profile.gstin.isNotEmpty ? profile.gstin : "32AAYFE1819K1Z4"}',
+                                                  style: const TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: Color(0xFF0F172A),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 16),
+                                          // To (Billed To)
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                const Text('To:',
+                                                    style: TextStyle(
+                                                        fontSize: 10,
+                                                        color: Color(0xFF64748B))),
+                                                Text(
+                                                  inv.clientName.isNotEmpty
+                                                      ? inv.clientName
+                                                          .toUpperCase()
+                                                      : 'CLIENT NAME',
+                                                  style: const TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: Color(0xFF0F172A),
+                                                  ),
+                                                ),
+                                                Text(
+                                                  inv.clientAddress?.isNotEmpty ==
+                                                          true
+                                                      ? inv.clientAddress!
+                                                      : (inv.clientEntity
+                                                              .isNotEmpty
+                                                          ? inv.clientEntity
+                                                          : 'INDIA'),
+                                                  style: const TextStyle(
+                                                      fontSize: 10,
+                                                      color: Color(0xFF64748B)),
+                                                ),
+                                                if (inv.clientPhone != null)
+                                                  Text(
+                                                      'Phone: ${inv.clientPhone}',
+                                                      style: const TextStyle(
+                                                          fontSize: 10,
+                                                          color:
+                                                              Color(0xFF64748B))),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              const SizedBox(height: 18),
+
+                              // 4. Products / Services Itemized Table
+                              Table(
+                                border: TableBorder.all(
+                                  color: const Color(0xFFCBD5E1),
+                                  width: 0.8,
+                                ),
+                                columnWidths: const {
+                                  0: FlexColumnWidth(0.6), // S.No
+                                  1: FlexColumnWidth(2.6), // Description
+                                  2: FlexColumnWidth(1.1), // HSN/SAC
+                                  3: FlexColumnWidth(0.8), // Unit
+                                  4: FlexColumnWidth(1.2), // Rate
+                                  5: FlexColumnWidth(0.8), // Disc
+                                  6: FlexColumnWidth(0.8), // SGST %
+                                  7: FlexColumnWidth(1.0), // SGST Amt
+                                  8: FlexColumnWidth(0.8), // CGST %
+                                  9: FlexColumnWidth(1.0), // CGST Amt
+                                  10: FlexColumnWidth(1.3), // Net Amt
+                                },
+                                children: [
+                                  // Table Header
+                                  TableRow(
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFF1F5F9),
+                                    ),
+                                    children: const [
+                                      _DocTableCell('S.No', isHeader: true),
+                                      _DocTableCell('Description',
+                                          isHeader: true),
+                                      _DocTableCell('HSN/SAC CODE',
+                                          isHeader: true),
+                                      _DocTableCell('Unit', isHeader: true),
+                                      _DocTableCell('Rate',
+                                          isHeader: true, alignRight: true),
+                                      _DocTableCell('Disc',
+                                          isHeader: true, alignRight: true),
+                                      _DocTableCell('SGST',
+                                          isHeader: true, alignRight: true),
+                                      _DocTableCell('Amount',
+                                          isHeader: true, alignRight: true),
+                                      _DocTableCell('CGST',
+                                          isHeader: true, alignRight: true),
+                                      _DocTableCell('Amount',
+                                          isHeader: true, alignRight: true),
+                                      _DocTableCell('Net Amt',
+                                          isHeader: true, alignRight: true),
+                                    ],
+                                  ),
+                                  // Table Rows
+                                  ...inv.items.asMap().entries.map((entry) {
+                                    final idx = entry.key + 1;
+                                    final item = entry.value;
+                                    return TableRow(
+                                      children: [
+                                        _DocTableCell('$idx',
+                                            alignCenter: true),
+                                        _DocTableCell(item.description,
+                                            isBold: true),
+                                        _DocTableCell(item.hsnSac ?? '-'),
+                                        _DocTableCell(item.category ?? 'Nos'),
+                                        _DocTableCell(
+                                            item.unitPrice.toStringAsFixed(2),
+                                            alignRight: true),
+                                        _DocTableCell(
+                                          item.discountAmount > 0
+                                              ? '₹${item.discountAmount.toStringAsFixed(0)}'
+                                              : '0.0%',
+                                          alignRight: true,
+                                        ),
+                                        _DocTableCell(
+                                            '${item.sgstRate.toStringAsFixed(1)}%',
+                                            alignRight: true),
+                                        _DocTableCell(
+                                            item.sgstAmount.toStringAsFixed(2),
+                                            alignRight: true),
+                                        _DocTableCell(
+                                            '${item.cgstRate.toStringAsFixed(1)}%',
+                                            alignRight: true),
+                                        _DocTableCell(
+                                            item.cgstAmount.toStringAsFixed(2),
+                                            alignRight: true),
+                                        _DocTableCell(
+                                            item.total.toStringAsFixed(2),
+                                            alignRight: true,
+                                            isBold: true),
+                                      ],
+                                    );
+                                  }),
+                                ],
+                              ),
+
+                              const SizedBox(height: 22),
+
+                              // 5. Totals & Words & Bank Account Details
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Left: Words & Bank Account Details
+                                  Expanded(
+                                    flex: 6,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'TOTAL IN WORDS',
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF64748B),
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          _numberToWordsIndian(
+                                              inv.grossAmount),
+                                          style: const TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w700,
+                                            fontStyle: FontStyle.italic,
+                                            color: Color(0xFF0F172A),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 20),
+                                        const Text(
+                                          'BANK ACCOUNT DETAILS:',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w800,
+                                            color: Color(0xFF0F172A),
+                                            decoration:
+                                                TextDecoration.underline,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        _buildBankDetailRow('Company Name',
+                                            ': ECRAFTZ TECHNOLOGIES PVT LTD'),
+                                        _buildBankDetailRow(
+                                            'Account No', ': 751405500282'),
+                                        _buildBankDetailRow(
+                                            'IFSC Code', ': ICIC0007514'),
+                                        _buildBankDetailRow(
+                                            'Bank', ': ICICI Bank (ICIC1)'),
+                                        _buildBankDetailRow('Branch',
+                                            ': Calicut, Medical College'),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  // Right: Calculation Summary Table
+                                  Expanded(
+                                    flex: 5,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                            color: const Color(0xFFE2E8F0)),
+                                        borderRadius:
+                                            BorderRadius.circular(4),
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          _buildDocSummaryRow('Sub Total',
+                                              inv.subtotal.toStringAsFixed(2)),
+                                          if (inv.totalDiscount > 0)
+                                            _buildDocSummaryRow(
+                                                'Discount',
+                                                '- ${inv.totalDiscount.toStringAsFixed(2)}'),
+                                          if (inv.totalCgst > 0 ||
+                                              inv.totalTax == 0)
+                                            _buildDocSummaryRow(
+                                                'CGST (${(inv.items.firstOrNull?.cgstRate ?? 0.0).toStringAsFixed(1)}%)',
+                                                inv.totalCgst
+                                                    .toStringAsFixed(2)),
+                                          if (inv.totalSgst > 0 ||
+                                              inv.totalTax == 0)
+                                            _buildDocSummaryRow(
+                                                'SGST (${(inv.items.firstOrNull?.sgstRate ?? 0.0).toStringAsFixed(1)}%)',
+                                                inv.totalSgst
+                                                    .toStringAsFixed(2)),
+                                          if (inv.totalIgst > 0)
+                                            _buildDocSummaryRow(
+                                                'IGST (${(inv.items.firstOrNull?.igstRate ?? 0.0).toStringAsFixed(1)}%)',
+                                                inv.totalIgst
+                                                    .toStringAsFixed(2)),
+                                          if (inv.totalCess > 0)
+                                            _buildDocSummaryRow('Cess',
+                                                inv.totalCess.toStringAsFixed(2)),
+                                          if (inv.roundOff != 0)
+                                            _buildDocSummaryRow(
+                                                'Round Off',
+                                                inv.roundOff.toStringAsFixed(2)),
+                                          const Divider(
+                                              height: 12,
+                                              color: Color(0xFFCBD5E1)),
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              const Text(
+                                                'Total',
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w900,
+                                                  color: Color(0xFF0F172A),
+                                                ),
+                                              ),
+                                              Text(
+                                                _fmtMoney(inv.grossAmount),
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w900,
+                                                  color: Color(0xFF0F172A),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          if (inv.amountPaid > 0) ...[
+                                            const SizedBox(height: 4),
+                                            _buildDocSummaryRow('Amount Paid',
+                                                _fmtMoney(inv.amountPaid)),
+                                            _buildDocSummaryRow('Amount Due',
+                                                _fmtMoney(inv.amountDue),
+                                                isBold: true),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+
+                              const SizedBox(height: 36),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      width: 140,
+                                      height: 1,
+                                      color: const Color(0xFF94A3B8),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    const Text(
+                                      'Authorized Signature',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF475569),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
-            const Divider(),
-            Expanded(
-              child: ListView(
-                children: [
-                  ListTile(
-                    title: const Text('Client Name'),
-                    subtitle: Text(inv.clientName),
-                  ),
-                  ListTile(
-                    title: const Text('Project / Entity'),
-                    subtitle: Text(inv.clientEntity),
-                  ),
-                  ListTile(
-                    title: const Text('Issued Date'),
-                    subtitle:
-                        Text(DateFormat('dd/MM/yyyy').format(inv.issuedDate)),
-                  ),
-                  ListTile(
-                    title: const Text('Due Date'),
-                    subtitle:
-                        Text(DateFormat('dd/MM/yyyy').format(inv.dueDate)),
-                  ),
-                  ListTile(
-                    title: const Text('Total Amount'),
-                    subtitle: Text(_fmtMoney(inv.grossAmount)),
-                  ),
-                  ListTile(
-                    title: const Text('Status'),
-                    subtitle: _buildStatusPill(inv.status),
-                  ),
-                ],
+          ),
+        );
+      },
+    );
+  }
+
+  static Widget _buildBankDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 10, color: Color(0xFF64748B)),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0F172A),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+  }
+
+  static Widget _buildDocSummaryRow(String label, String value, {bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: isBold ? FontWeight.w800 : FontWeight.w500,
+              color: const Color(0xFF475569),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: isBold ? FontWeight.w800 : FontWeight.w700,
+              color: const Color(0xFF0F172A),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _numberToWordsIndian(double amount) {
+    final int val = amount.round();
+    if (val <= 0) return 'Rupees Zero Only';
+
+    final units = [
+      '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+      'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
+      'Seventeen', 'Eighteen', 'Nineteen'
+    ];
+    final tens = [
+      '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'
+    ];
+
+    String convertBelowThousand(int n) {
+      if (n == 0) return '';
+      if (n < 20) return units[n];
+      if (n < 100) {
+        final t = tens[n ~/ 10];
+        final u = units[n % 10];
+        return u.isEmpty ? t : '$t $u';
+      }
+      final h = units[n ~/ 100];
+      final rem = convertBelowThousand(n % 100);
+      return rem.isEmpty ? '$h Hundred' : '$h Hundred $rem';
+    }
+
+    int temp = val;
+    int crore = temp ~/ 10000000;
+    temp %= 10000000;
+    int lakh = temp ~/ 100000;
+    temp %= 100000;
+    int thousand = temp ~/ 1000;
+    temp %= 1000;
+    int remainder = temp;
+
+    List<String> parts = [];
+    if (crore > 0) parts.add('${convertBelowThousand(crore)} Crore');
+    if (lakh > 0) parts.add('${convertBelowThousand(lakh)} Lakh');
+    if (thousand > 0) parts.add('${convertBelowThousand(thousand)} Thousand');
+    if (remainder > 0) parts.add(convertBelowThousand(remainder));
+
+    return 'Rupees ${parts.join(' ')} Only';
   }
 
   void _recordPaymentDialog(BuildContext context, Invoice inv) {
@@ -1219,32 +1955,428 @@ class _CreateInvoicesPageState extends State<CreateInvoicesPage> {
   }
 
   void _generateAndDownloadPdf(Invoice inv, GstProfile profile) async {
+    try {
+      final String fileName =
+          'Invoice_${inv.invoiceNumber.replaceAll('/', '_')}.pdf';
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Generating PDF for Invoice #${inv.invoiceNumber}...'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: const Color(0xFF0F172A),
+          ),
+        );
+      }
+
+      final pdfBytes = await _buildInvoicePdfBytes(inv, profile);
+
+      await Printing.sharePdf(
+        bytes: pdfBytes,
+        filename: fileName,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('PDF Ready: $fileName'),
+            duration: const Duration(seconds: 3),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error generating PDF: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _printInvoice(Invoice inv, GstProfile profile) async {
+    final pdfBytes = await _buildInvoicePdfBytes(inv, profile);
+    await Printing.layoutPdf(
+      onLayout: (_) async => pdfBytes,
+      name: 'Invoice_${inv.invoiceNumber}',
+    );
+  }
+
+  Future<Uint8List> _buildInvoicePdfBytes(Invoice inv, GstProfile profile) async {
     final pdf = pw.Document();
+
     pdf.addPage(
       pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
         build: (pw.Context ctx) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Text('INVOICE ${inv.invoiceNumber}',
-                style: pw.TextStyle(
-                    fontSize: 24, fontWeight: pw.FontWeight.bold)),
+            // Company Header
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Container(
+                  width: 45,
+                  height: 45,
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.blueGrey900,
+                    borderRadius: pw.BorderRadius.circular(4),
+                  ),
+                  child: pw.Center(
+                    child: pw.Text(
+                      'E',
+                      style: pw.TextStyle(
+                        color: PdfColors.white,
+                        fontSize: 24,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                pw.SizedBox(width: 14),
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        profile.legalName.isNotEmpty
+                            ? profile.legalName
+                            : 'Ecraftz Info Solutions LLP',
+                        style: pw.TextStyle(
+                          fontSize: 16,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.blueGrey900,
+                        ),
+                      ),
+                      pw.Text(
+                        profile.address.isNotEmpty
+                            ? profile.address
+                            : 'Ecraftz, A9, First floor, NV Tower, M20/265, Kallai, Kozhikode, Kerala 673003',
+                        style: const pw.TextStyle(
+                            fontSize: 9, color: PdfColors.grey700),
+                      ),
+                    ],
+                  ),
+                ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text('UK | UAE | INDIA',
+                        style: const pw.TextStyle(
+                            fontSize: 9, color: PdfColors.grey800)),
+                    pw.Text(profile.website.isNotEmpty ? profile.website : 'www.vbecraftz.com',
+                        style: const pw.TextStyle(
+                            fontSize: 9, color: PdfColors.grey700)),
+                    pw.Text(profile.email.isNotEmpty ? profile.email : 'mail@ecraftz.in',
+                        style: const pw.TextStyle(
+                            fontSize: 9, color: PdfColors.grey700)),
+                  ],
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 14),
+            pw.Divider(color: PdfColors.grey300),
             pw.SizedBox(height: 10),
-            pw.Text('Client: ${inv.clientName}'),
-            pw.Text('Project: ${inv.clientEntity}'),
-            pw.Text('Date: ${DateFormat('dd/MM/yyyy').format(inv.issuedDate)}'),
-            pw.Text('Due Date: ${DateFormat('dd/MM/yyyy').format(inv.dueDate)}'),
-            pw.SizedBox(height: 20),
-            pw.Text('Total Amount: ₹${inv.grossAmount.toStringAsFixed(2)}',
-                style: pw.TextStyle(
-                    fontSize: 16, fontWeight: pw.FontWeight.bold)),
+
+            // Meta bar
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('Invoice #: ${inv.invoiceNumber}',
+                    style: pw.TextStyle(
+                        fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                pw.Text('Place Of Supply: ${inv.placeOfSupply ?? "32"}',
+                    style: pw.TextStyle(
+                        fontSize: 11, fontWeight: pw.FontWeight.bold)),
+              ],
+            ),
+            pw.Text(
+                'Invoice Date: ${DateFormat("dd-MM-yyyy").format(inv.issuedDate)}',
+                style: const pw.TextStyle(fontSize: 10)),
+            pw.SizedBox(height: 14),
+
+            // Billed By / To Box
+            pw.Container(
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey300),
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Column(
+                children: [
+                  pw.Container(
+                    color: PdfColors.grey200,
+                    padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    child: pw.Row(
+                      children: [
+                        pw.Expanded(
+                            child: pw.Text('BILLED BY',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold))),
+                        pw.Expanded(
+                            child: pw.Text('BILLED TO',
+                                style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold))),
+                      ],
+                    ),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(12),
+                    child: pw.Row(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Expanded(
+                          child: pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              pw.Text('Ecraftz Info Solutions LLP',
+                                  style: pw.TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: pw.FontWeight.bold)),
+                              pw.Text(
+                                profile.address.isNotEmpty
+                                    ? profile.address
+                                    : 'Ecraftz, A9, First floor, NV Tower, Kallai, Kozhikode 673003',
+                                style: const pw.TextStyle(
+                                    fontSize: 8, color: PdfColors.grey700),
+                              ),
+                              pw.Text(
+                                'GSTIN: ${profile.gstin.isNotEmpty ? profile.gstin : "32AAYFE1819K1Z4"}',
+                                style: pw.TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: pw.FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                        pw.SizedBox(width: 12),
+                        pw.Expanded(
+                          child: pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              pw.Text(
+                                inv.clientName.isNotEmpty
+                                    ? inv.clientName
+                                    : 'CLIENT NAME',
+                                style: pw.TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: pw.FontWeight.bold),
+                              ),
+                              pw.Text(
+                                inv.clientAddress?.isNotEmpty == true
+                                    ? inv.clientAddress!
+                                    : 'INDIA',
+                                style: const pw.TextStyle(
+                                    fontSize: 8, color: PdfColors.grey700),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 14),
+
+            // Itemized Table
+            pw.TableHelper.fromTextArray(
+              border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+              headerStyle: pw.TextStyle(
+                  fontSize: 8, fontWeight: pw.FontWeight.bold),
+              cellStyle: const pw.TextStyle(fontSize: 8),
+              headerDecoration:
+                  const pw.BoxDecoration(color: PdfColors.grey200),
+              headers: [
+                'S.No',
+                'Description',
+                'HSN/SAC',
+                'Unit',
+                'Rate',
+                'Disc',
+                'SGST %',
+                'SGST Amt',
+                'CGST %',
+                'CGST Amt',
+                'Net Amt'
+              ],
+              data: inv.items.asMap().entries.map((e) {
+                final idx = e.key + 1;
+                final item = e.value;
+                return [
+                  '$idx',
+                  item.description,
+                  item.hsnSac ?? '-',
+                  item.category ?? 'Nos',
+                  item.unitPrice.toStringAsFixed(2),
+                  item.discountAmount > 0
+                      ? item.discountAmount.toStringAsFixed(0)
+                      : '0.0%',
+                  '${item.sgstRate.toStringAsFixed(1)}%',
+                  item.sgstAmount.toStringAsFixed(2),
+                  '${item.cgstRate.toStringAsFixed(1)}%',
+                  item.cgstAmount.toStringAsFixed(2),
+                  item.total.toStringAsFixed(2),
+                ];
+              }).toList(),
+            ),
+
+            pw.SizedBox(height: 16),
+
+            // Totals and Bank Details
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  flex: 6,
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('TOTAL IN WORDS:',
+                          style: pw.TextStyle(
+                              fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                      pw.Text(_numberToWordsIndian(inv.grossAmount),
+                          style: pw.TextStyle(
+                              fontSize: 9,
+                              fontWeight: pw.FontWeight.bold,
+                              fontStyle: pw.FontStyle.italic)),
+                      pw.SizedBox(height: 14),
+                      pw.Text('BANK ACCOUNT DETAILS:',
+                          style: pw.TextStyle(
+                              fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                      pw.Text('Company: ECRAFTZ TECHNOLOGIES PVT LTD',
+                          style: const pw.TextStyle(fontSize: 8)),
+                      pw.Text('Account No: 751405500282',
+                          style: const pw.TextStyle(fontSize: 8)),
+                      pw.Text('IFSC Code: ICIC0007514',
+                          style: const pw.TextStyle(fontSize: 8)),
+                      pw.Text('Bank: ICICI Bank (ICIC1)',
+                          style: const pw.TextStyle(fontSize: 8)),
+                      pw.Text('Branch: Calicut, Medical College',
+                          style: const pw.TextStyle(fontSize: 8)),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(width: 16),
+                pw.Expanded(
+                  flex: 4,
+                  child: pw.Container(
+                    padding: const pw.EdgeInsets.all(8),
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border.all(color: PdfColors.grey300),
+                    ),
+                    child: pw.Column(
+                      children: [
+                        pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text('Sub Total',
+                                style: const pw.TextStyle(fontSize: 8)),
+                            pw.Text(inv.subtotal.toStringAsFixed(2),
+                                style: const pw.TextStyle(fontSize: 8)),
+                          ],
+                        ),
+                        pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text(
+                                'CGST (${(inv.items.firstOrNull?.cgstRate ?? 0.0).toStringAsFixed(1)}%)',
+                                style: const pw.TextStyle(fontSize: 8)),
+                            pw.Text(inv.totalCgst.toStringAsFixed(2),
+                                style: const pw.TextStyle(fontSize: 8)),
+                          ],
+                        ),
+                        pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text(
+                                'SGST (${(inv.items.firstOrNull?.sgstRate ?? 0.0).toStringAsFixed(1)}%)',
+                                style: const pw.TextStyle(fontSize: 8)),
+                            pw.Text(inv.totalSgst.toStringAsFixed(2),
+                                style: const pw.TextStyle(fontSize: 8)),
+                          ],
+                        ),
+                        pw.Divider(color: PdfColors.grey400),
+                        pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text('Total',
+                                style: pw.TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: pw.FontWeight.bold)),
+                            pw.Text('₹${inv.grossAmount.toStringAsFixed(2)}',
+                                style: pw.TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: pw.FontWeight.bold)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            pw.Spacer(),
+            pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: pw.Column(
+                children: [
+                  pw.Container(width: 120, height: 0.5, color: PdfColors.grey700),
+                  pw.SizedBox(height: 2),
+                  pw.Text('Authorized Signature',
+                      style: pw.TextStyle(
+                          fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
 
-    await Printing.sharePdf(
-      bytes: await pdf.save(),
-      filename: 'Invoice_${inv.invoiceNumber}.pdf',
+    return pdf.save();
+  }
+}
+
+class _DocTableCell extends StatelessWidget {
+  final String text;
+  final bool isHeader;
+  final bool isBold;
+  final bool alignRight;
+  final bool alignCenter;
+
+  const _DocTableCell(
+    this.text, {
+    this.isHeader = false,
+    this.isBold = false,
+    this.alignRight = false,
+    this.alignCenter = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    TextAlign align = TextAlign.left;
+    if (alignRight) align = TextAlign.right;
+    if (alignCenter) align = TextAlign.center;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      child: Text(
+        text,
+        textAlign: align,
+        style: TextStyle(
+          fontSize: isHeader ? 9.5 : 9.0,
+          fontWeight: isHeader || isBold ? FontWeight.w800 : FontWeight.w500,
+          color: isHeader ? const Color(0xFF334155) : const Color(0xFF0F172A),
+        ),
+      ),
     );
   }
 }
@@ -1364,213 +2496,643 @@ class _InvoiceFormModal extends StatefulWidget {
 class _InvoiceFormModalState extends State<_InvoiceFormModal> {
   final _formKey = GlobalKey<FormState>();
 
+  late String _documentType;
+  late String _branch;
   late String _invoiceNum;
-  String? _selectedClient;
+  late DateTime _issueDate;
+  late DateTime _dueDate;
+  late String _placeOfSupply;
+  String? _selectedCrmClient;
+  late TextEditingController _clientNameCtrl;
+  late TextEditingController _clientAddressCtrl;
   String? _selectedProject;
-  DateTime _issueDate = DateTime.now();
-  DateTime _dueDate = DateTime.now().add(const Duration(days: 15));
-  InvoiceStatus _status = InvoiceStatus.draft;
+  late InvoiceStatus _status;
+
+  late TextEditingController _notesCtrl;
+  late TextEditingController _termsCtrl;
 
   final List<InvoiceItem> _items = [];
-  double _discount = 0.0;
-  double _taxRate = 18.0;
+
+  final List<String> _docTypeOptions = [
+    'Invoice',
+    'Proforma Invoice',
+    'Estimate',
+    'Credit Note'
+  ];
+  final List<String> _branchOptions = [
+    'Head Office (HO)',
+    'Calicut Branch',
+    'Cochin Branch'
+  ];
+  final List<String> _stateCodeOptions = [
+    '(32) Kerala',
+    '(33) Tamil Nadu',
+    '(27) Maharashtra',
+    '(29) Karnataka',
+    '(07) Delhi',
+    'Outside India'
+  ];
 
   @override
   void initState() {
     super.initState();
     if (widget.existingInvoice != null) {
       final inv = widget.existingInvoice!;
+      _documentType = inv.documentType ?? 'Invoice';
+      _branch = inv.branchId ?? 'Head Office (HO)';
       _invoiceNum = inv.invoiceNumber;
-      _selectedClient = inv.clientName;
-      _selectedProject = inv.clientEntity;
       _issueDate = inv.issuedDate;
       _dueDate = inv.dueDate;
+      _placeOfSupply = inv.placeOfSupply ?? '(32) Kerala';
+      _selectedCrmClient = inv.clientName.isNotEmpty ? inv.clientName : null;
+      _clientNameCtrl = TextEditingController(text: inv.clientName);
+      _clientAddressCtrl =
+          TextEditingController(text: inv.clientAddress ?? '');
+      _selectedProject =
+          inv.clientEntity.isNotEmpty ? inv.clientEntity : null;
       _status = inv.status;
-      _items.addAll(inv.items);
+      _notesCtrl = TextEditingController(
+          text: (inv.notes != null && inv.notes!.isNotEmpty)
+              ? inv.notes!
+              : 'Thank you for your business!');
+      _termsCtrl = TextEditingController(
+          text: (inv.terms != null && inv.terms!.isNotEmpty)
+              ? inv.terms!
+              : '1. Payment should be made to our official bank account.\n2. Invoices are subject to 18% GST.');
+
+      if (inv.items.isNotEmpty) {
+        for (final item in inv.items) {
+          _items.add(InvoiceItem(
+            id: item.id,
+            invoiceId: item.invoiceId,
+            itemName: item.itemName,
+            description: item.description,
+            hsnSac: item.hsnSac,
+            category: item.category ?? 'Nos',
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            discountAmount: item.discountAmount,
+            taxableValue: item.taxableValue,
+            taxRuleId: item.taxRuleId,
+            cgstAmount: item.cgstAmount,
+            sgstAmount: item.sgstAmount,
+            igstAmount: item.igstAmount,
+            cessAmount: item.cessAmount,
+            totalAmount: item.totalAmount,
+            taxPercent: item.taxPercent,
+          ));
+        }
+      } else {
+        _items.add(InvoiceItem(
+          description: 'Services',
+          quantity: 1,
+          unitPrice: 10000,
+          cgstAmount: 900,
+          sgstAmount: 900,
+        ));
+      }
     } else {
-      _invoiceNum = 'INV-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
-      _items.add(InvoiceItem(description: 'Services', quantity: 1, unitPrice: 10000));
+      _documentType = 'Invoice';
+      _branch = 'Head Office (HO)';
+      _invoiceNum =
+          'INV-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+      _issueDate = DateTime.now();
+      _dueDate = DateTime.now().add(const Duration(days: 15));
+      _placeOfSupply = '(32) Kerala';
+      _clientNameCtrl = TextEditingController();
+      _clientAddressCtrl = TextEditingController();
+      _status = InvoiceStatus.draft;
+      _notesCtrl = TextEditingController(text: 'Thank you for your business!');
+      _termsCtrl = TextEditingController(
+          text:
+              '1. Payment should be made to our official bank account.\n2. Invoices are subject to 18% GST.');
+      _items.add(InvoiceItem(
+        description: 'Web Development Services',
+        quantity: 1,
+        unitPrice: 10000,
+        cgstAmount: 900,
+        sgstAmount: 900,
+      ));
     }
   }
 
-  double get subtotal => _items.fold(0.0, (sum, i) => sum + i.total);
-  double get taxAmount => (subtotal - _discount) * (_taxRate / 100);
-  double get grandTotal => (subtotal - _discount) + taxAmount;
+  @override
+  void dispose() {
+    _clientNameCtrl.dispose();
+    _clientAddressCtrl.dispose();
+    _notesCtrl.dispose();
+    _termsCtrl.dispose();
+    super.dispose();
+  }
+
+  double get subtotal =>
+      _items.fold(0.0, (sum, i) => sum + (i.quantity * i.unitPrice));
+  double get totalDiscount =>
+      _items.fold(0.0, (sum, i) => sum + i.discountAmount);
+  double get taxableValue => subtotal - totalDiscount;
+  double get totalCgst => _items.fold(0.0, (sum, i) => sum + i.cgstAmount);
+  double get totalSgst => _items.fold(0.0, (sum, i) => sum + i.sgstAmount);
+  double get totalIgst => _items.fold(0.0, (sum, i) => sum + i.igstAmount);
+  double get totalTax => totalCgst + totalSgst + totalIgst;
+  double get grandTotal => taxableValue + totalTax;
+
+  void _recalculateItemTax(InvoiceItem item, double taxPercent) {
+    item.taxPercent = taxPercent;
+    final itemTaxable =
+        (item.quantity * item.unitPrice) - item.discountAmount;
+    if (taxPercent > 0) {
+      item.cgstAmount = itemTaxable * ((taxPercent / 2) / 100);
+      item.sgstAmount = itemTaxable * ((taxPercent / 2) / 100);
+      item.igstAmount = 0.0;
+    } else {
+      item.cgstAmount = 0.0;
+      item.sgstAmount = 0.0;
+      item.igstAmount = 0.0;
+    }
+  }
+
+  Future<void> _pickDate(
+      BuildContext context, DateTime initial, Function(DateTime) onPicked) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+    );
+    if (picked != null) {
+      onPicked(picked);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWide = screenWidth >= 768;
+
     final clientState = context.watch<ClientBloc>().state;
     final projectState = context.watch<ProjectBloc>().state;
 
+    // Build CRM client choices
+    final List<String> crmClientOptions = clientState.clients
+        .map((c) => c.name)
+        .where((n) => n.trim().isNotEmpty)
+        .toSet()
+        .toList();
+    if (_selectedCrmClient != null &&
+        _selectedCrmClient!.trim().isNotEmpty &&
+        !crmClientOptions.contains(_selectedCrmClient)) {
+      crmClientOptions.insert(0, _selectedCrmClient!);
+    }
+
+    // Build project choices
+    final List<String> projectOptions = projectState.projects
+        .map((p) => p.name)
+        .where((n) => n.trim().isNotEmpty)
+        .toSet()
+        .toList();
+    if (_selectedProject != null &&
+        _selectedProject!.trim().isNotEmpty &&
+        !projectOptions.contains(_selectedProject)) {
+      projectOptions.insert(0, _selectedProject!);
+    }
+
     return Container(
-      height: MediaQuery.of(context).size.height * 0.9,
+      height: MediaQuery.of(context).size.height * 0.94,
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.bgCardDark : Colors.white,
+        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      padding: EdgeInsets.only(
-        top: 20,
-        left: 20,
-        right: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
       ),
       child: Form(
         key: _formKey,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  widget.existingInvoice == null ? 'Create Invoice' : 'Edit Invoice',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.textPrimaryOf(context),
-                  ),
+            // Modal Top Header
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: BoxDecoration(
+                color: isDark ? AppTheme.bgCardDark : Colors.white,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(20)),
+                border: Border(
+                  bottom: BorderSide(color: AppTheme.borderOf(context)),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-            const Divider(),
-            Expanded(
-              child: ListView(
+              ),
+              child: Row(
                 children: [
-                  // Invoice Number
-                  TextFormField(
-                    initialValue: _invoiceNum,
-                    decoration: const InputDecoration(labelText: 'Invoice Number'),
-                    onChanged: (val) => _invoiceNum = val,
-                    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Client Selection Dropdown
-                  DropdownButtonFormField<String>(
-                    value: _selectedClient,
-                    decoration: const InputDecoration(labelText: 'Select Client'),
-                    items: clientState.clients
-                        .map((c) => DropdownMenuItem(
-                              value: c.name,
-                              child: Text(c.name),
-                            ))
-                        .toList(),
-                    onChanged: (val) => setState(() => _selectedClient = val),
-                    validator: (v) => v == null || v.isEmpty ? 'Please select a client' : null,
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Project Dropdown
-                  DropdownButtonFormField<String>(
-                    value: _selectedProject,
-                    decoration: const InputDecoration(labelText: 'Select Project'),
-                    items: projectState.projects
-                        .map((p) => DropdownMenuItem(
-                              value: p.name,
-                              child: Text(p.name),
-                            ))
-                        .toList(),
-                    onChanged: (val) => setState(() => _selectedProject = val),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Line items header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Line Items', style: TextStyle(fontWeight: FontWeight.bold)),
-                      TextButton.icon(
-                        icon: const Icon(Icons.add, size: 16),
-                        label: const Text('Add Item'),
-                        onPressed: () {
-                          setState(() {
-                            _items.add(InvoiceItem(description: '', quantity: 1, unitPrice: 0));
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                  ..._items.asMap().entries.map((entry) {
-                    final idx = entry.key;
-                    final item = entry.value;
-                    return Row(
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          flex: 3,
-                          child: TextFormField(
-                            initialValue: item.description,
-                            decoration: const InputDecoration(hintText: 'Item Description'),
-                            onChanged: (v) => item.description = v,
+                        Text(
+                          widget.existingInvoice == null
+                              ? 'Create Invoice'
+                              : 'Edit Invoice',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.textPrimaryOf(context),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 1,
-                          child: TextFormField(
-                            initialValue: item.quantity.toString(),
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(hintText: 'Qty'),
-                            onChanged: (v) => setState(() => item.quantity = double.tryParse(v) ?? 1.0),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'ECRAFTZ TEMPLATE BUILDER',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: _kPrimary,
+                            letterSpacing: 1.0,
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 2,
-                          child: TextFormField(
-                            initialValue: item.unitPrice.toString(),
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(hintText: 'Price'),
-                            onChanged: (v) => setState(() => item.unitPrice = double.tryParse(v) ?? 0),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.red),
-                          onPressed: () {
-                            if (_items.length > 1) {
-                              setState(() => _items.removeAt(idx));
-                            }
-                          },
                         ),
                       ],
-                    );
-                  }),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+
+            // Form Body (Responsive Layout)
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isWide ? 24 : 14,
+                  vertical: 16,
+                ),
+                children: [
+                  // SECTION 1: Document Details Card
+                  _buildFormSectionCard(
+                    context,
+                    title: 'DOCUMENT & CLIENT METADATA',
+                    isDark: isDark,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Row 1: Document Type, Branch, Invoice #
+                        _buildResponsiveFieldGrid(
+                          isWide: isWide,
+                          children: [
+                            DropdownButtonFormField<String>(
+                              value: _docTypeOptions.contains(_documentType)
+                                  ? _documentType
+                                  : _docTypeOptions.first,
+                              decoration: _formInputDec(context, 'DOCUMENT TYPE', isDark: isDark),
+                              items: _docTypeOptions
+                                  .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                                  .toList(),
+                              onChanged: (v) => setState(() => _documentType = v!),
+                            ),
+                            DropdownButtonFormField<String>(
+                              value: _branchOptions.contains(_branch)
+                                  ? _branch
+                                  : _branchOptions.first,
+                              decoration: _formInputDec(context, 'BRANCH', isDark: isDark),
+                              items: _branchOptions
+                                  .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                                  .toList(),
+                              onChanged: (v) => setState(() => _branch = v!),
+                            ),
+                            TextFormField(
+                              initialValue: _invoiceNum,
+                              decoration: _formInputDec(context, 'INVOICE/ESTIMATE #', isDark: isDark),
+                              onChanged: (v) => _invoiceNum = v,
+                              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Row 2: Issue Date, Due Date, Place of Supply
+                        _buildResponsiveFieldGrid(
+                          isWide: isWide,
+                          children: [
+                            InkWell(
+                              onTap: () => _pickDate(context, _issueDate,
+                                  (d) => setState(() => _issueDate = d)),
+                              child: IgnorePointer(
+                                child: TextFormField(
+                                  controller: TextEditingController(
+                                      text: DateFormat('dd-MM-yyyy')
+                                          .format(_issueDate)),
+                                  decoration: _formInputDec(
+                                    context,
+                                    'ISSUE DATE',
+                                    isDark: isDark,
+                                    suffixIcon: Icons.calendar_today_outlined,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () => _pickDate(context, _dueDate,
+                                  (d) => setState(() => _dueDate = d)),
+                              child: IgnorePointer(
+                                child: TextFormField(
+                                  controller: TextEditingController(
+                                      text: DateFormat('dd-MM-yyyy')
+                                          .format(_dueDate)),
+                                  decoration: _formInputDec(
+                                    context,
+                                    'DUE DATE',
+                                    isDark: isDark,
+                                    suffixIcon: Icons.calendar_today_outlined,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            DropdownButtonFormField<String>(
+                              value: _stateCodeOptions.contains(_placeOfSupply)
+                                  ? _placeOfSupply
+                                  : _stateCodeOptions.first,
+                              decoration: _formInputDec(context, 'PLACE OF SUPPLY', isDark: isDark),
+                              items: _stateCodeOptions
+                                  .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                                  .toList(),
+                              onChanged: (v) => setState(() => _placeOfSupply = v!),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Row 3: Link CRM Client & Client Name & Address
+                        _buildResponsiveFieldGrid(
+                          isWide: isWide,
+                          children: [
+                            DropdownButtonFormField<String>(
+                              value: _selectedCrmClient,
+                              decoration: _formInputDec(
+                                  context, 'LINK CRM CLIENT (OPTIONAL)',
+                                  isDark: isDark),
+                              items: crmClientOptions
+                                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                                  .toList(),
+                              onChanged: (val) {
+                                setState(() {
+                                  _selectedCrmClient = val;
+                                  if (val != null) {
+                                    _clientNameCtrl.text = val;
+                                  }
+                                });
+                              },
+                            ),
+                            TextFormField(
+                              controller: _clientNameCtrl,
+                              decoration: _formInputDec(context, 'CLIENT NAME', isDark: isDark),
+                              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                            ),
+                            TextFormField(
+                              controller: _clientAddressCtrl,
+                              decoration: _formInputDec(context, 'CLIENT ADDRESS', isDark: isDark),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Row 4: Project & Status
+                        _buildResponsiveFieldGrid(
+                          isWide: isWide,
+                          children: [
+                            DropdownButtonFormField<String>(
+                              value: _selectedProject,
+                              decoration: _formInputDec(context, 'PROJECT (OPTIONAL)', isDark: isDark),
+                              items: projectOptions
+                                  .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                                  .toList(),
+                              onChanged: (v) => setState(() => _selectedProject = v),
+                            ),
+                            DropdownButtonFormField<InvoiceStatus>(
+                              value: _status,
+                              decoration: _formInputDec(context, 'STATUS', isDark: isDark),
+                              items: InvoiceStatus.values
+                                  .map((s) => DropdownMenuItem(
+                                        value: s,
+                                        child: Text(s.label.toUpperCase()),
+                                      ))
+                                  .toList(),
+                              onChanged: (v) => setState(() => _status = v!),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
                   const SizedBox(height: 20),
 
-                  // Summary
+                  // SECTION 2: Line Items Card
+                  _buildFormSectionCard(
+                    context,
+                    title: 'LINE ITEMS',
+                    isDark: isDark,
+                    headerAction: ElevatedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _items.add(InvoiceItem(
+                            description: '',
+                            quantity: 1,
+                            unitPrice: 0,
+                            cgstAmount: 0,
+                            sgstAmount: 0,
+                          ));
+                        });
+                      },
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Add Row'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _kPrimary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                    ),
+                    child: Column(
+                      children: _items.asMap().entries.map((entry) {
+                        final idx = entry.key;
+                        final item = entry.value;
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 14),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppTheme.borderOf(context)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'ITEM #${idx + 1}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                      color: _kPrimary,
+                                    ),
+                                  ),
+                                  if (_items.length > 1)
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                                      onPressed: () {
+                                        setState(() => _items.removeAt(idx));
+                                      },
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              _buildResponsiveFieldGrid(
+                                isWide: isWide,
+                                children: [
+                                  TextFormField(
+                                    initialValue: item.itemName ?? item.description,
+                                    decoration: _formInputDec(context, 'Item Name', isDark: isDark),
+                                    onChanged: (v) {
+                                      item.itemName = v;
+                                      if (item.description.isEmpty) item.description = v;
+                                    },
+                                  ),
+                                  TextFormField(
+                                    initialValue: item.hsnSac ?? '',
+                                    decoration: _formInputDec(context, 'HSN/SAC Code', isDark: isDark),
+                                    onChanged: (v) => item.hsnSac = v,
+                                  ),
+                                  TextFormField(
+                                    initialValue: item.description,
+                                    decoration: _formInputDec(context, 'Description / Category', isDark: isDark),
+                                    onChanged: (v) => item.description = v,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              _buildResponsiveFieldGrid(
+                                isWide: isWide,
+                                children: [
+                                  TextFormField(
+                                    initialValue: item.quantity.toString(),
+                                    keyboardType: TextInputType.number,
+                                    decoration: _formInputDec(context, 'Quantity', isDark: isDark),
+                                    onChanged: (v) {
+                                      setState(() {
+                                        item.quantity = double.tryParse(v) ?? 1.0;
+                                        _recalculateItemTax(item, item.taxPercent);
+                                      });
+                                    },
+                                  ),
+                                  TextFormField(
+                                    initialValue: item.unitPrice.toString(),
+                                    keyboardType: TextInputType.number,
+                                    decoration: _formInputDec(context, 'Unit Price (₹)', isDark: isDark),
+                                    onChanged: (v) {
+                                      setState(() {
+                                        item.unitPrice = double.tryParse(v) ?? 0.0;
+                                        _recalculateItemTax(item, item.taxPercent);
+                                      });
+                                    },
+                                  ),
+                                  TextFormField(
+                                    initialValue: item.discountAmount.toString(),
+                                    keyboardType: TextInputType.number,
+                                    decoration: _formInputDec(context, 'Discount (₹)', isDark: isDark),
+                                    onChanged: (v) {
+                                      setState(() {
+                                        item.discountAmount = double.tryParse(v) ?? 0.0;
+                                        _recalculateItemTax(item, item.taxPercent);
+                                      });
+                                    },
+                                  ),
+                                  DropdownButtonFormField<double>(
+                                    value: item.taxPercent,
+                                    decoration: _formInputDec(context, 'GST Slab', isDark: isDark),
+                                    items: const [
+                                      DropdownMenuItem(value: 0.0, child: Text('Exempt (0%)')),
+                                      DropdownMenuItem(value: 5.0, child: Text('GST 5%')),
+                                      DropdownMenuItem(value: 12.0, child: Text('GST 12%')),
+                                      DropdownMenuItem(value: 18.0, child: Text('GST 18% (Standard)')),
+                                      DropdownMenuItem(value: 28.0, child: Text('GST 28%')),
+                                    ],
+                                    onChanged: (v) {
+                                      if (v != null) {
+                                        setState(() {
+                                          _recalculateItemTax(item, v);
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // SECTION 3: Remarks, Terms & Conditions
+                  _buildFormSectionCard(
+                    context,
+                    title: 'REMARKS & TERMS',
+                    isDark: isDark,
+                    child: Column(
+                      children: [
+                        TextFormField(
+                          controller: _notesCtrl,
+                          maxLines: 2,
+                          decoration: _formInputDec(context, 'REMARKS / NOTES', isDark: isDark),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _termsCtrl,
+                          maxLines: 3,
+                          decoration: _formInputDec(context, 'TERMS & CONDITIONS', isDark: isDark),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // SECTION 4: Financial Summary Card
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(10),
+                      color: isDark ? AppTheme.bgCardDark : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _kPrimary.withValues(alpha: 0.3)),
                     ),
                     child: Column(
                       children: [
+                        _formSummaryRow('Subtotal', '₹${subtotal.toStringAsFixed(2)}'),
+                        if (totalDiscount > 0)
+                          _formSummaryRow('Total Discount', '- ₹${totalDiscount.toStringAsFixed(2)}'),
+                        _formSummaryRow('Taxable Value', '₹${taxableValue.toStringAsFixed(2)}'),
+                        _formSummaryRow('CGST Amount', '₹${totalCgst.toStringAsFixed(2)}'),
+                        _formSummaryRow('SGST Amount', '₹${totalSgst.toStringAsFixed(2)}'),
+                        const Divider(height: 16),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Subtotal'),
-                            Text('₹${subtotal.toStringAsFixed(2)}'),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('GST Tax ($_taxRate%)'),
-                            Text('₹${taxAmount.toStringAsFixed(2)}'),
-                          ],
-                        ),
-                        const Divider(),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Grand Total', style: TextStyle(fontWeight: FontWeight.bold)),
-                            Text('₹${grandTotal.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            Text(
+                              'Grand Total',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: AppTheme.textPrimaryOf(context),
+                              ),
+                            ),
+                            Text(
+                              '₹${grandTotal.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                color: _kPrimary,
+                              ),
+                            ),
                           ],
                         ),
                       ],
@@ -1579,37 +3141,192 @@ class _InvoiceFormModalState extends State<_InvoiceFormModal> {
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: () {
-                  if (_formKey.currentState!.validate()) {
-                    final invoice = Invoice(
-                      id: widget.existingInvoice?.id ?? '',
-                      invoiceNumber: _invoiceNum,
-                      clientName: _selectedClient ?? '',
-                      clientEntity: _selectedProject ?? 'No project',
-                      issuedDate: _issueDate,
-                      dueDate: _dueDate,
-                      dbGrandTotal: grandTotal,
-                      status: _status,
-                      items: _items,
-                    );
-                    widget.onSave(invoice);
-                    Navigator.pop(context);
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _kPrimary,
-                  foregroundColor: Colors.white,
+
+            // Bottom Action Controls
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? AppTheme.bgCardDark : Colors.white,
+                border: Border(
+                  top: BorderSide(color: AppTheme.borderOf(context)),
                 ),
-                child: const Text('Save Invoice', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: BorderSide(color: AppTheme.borderOf(context)),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        if (_formKey.currentState!.validate()) {
+                          final invoice = Invoice(
+                            id: widget.existingInvoice?.id ?? '',
+                            invoiceNumber: _invoiceNum,
+                            clientName: _clientNameCtrl.text.trim().isNotEmpty
+                                ? _clientNameCtrl.text.trim()
+                                : (_selectedCrmClient ?? 'Client'),
+                            clientEntity: _selectedProject ?? 'No project',
+                            clientAddress: _clientAddressCtrl.text.trim(),
+                            issuedDate: _issueDate,
+                            dueDate: _dueDate,
+                            placeOfSupply: _placeOfSupply,
+                            documentType: _documentType,
+                            branchId: _branch,
+                            status: _status,
+                            notes: _notesCtrl.text.trim(),
+                            terms: _termsCtrl.text.trim(),
+                            dbGrandTotal: grandTotal,
+                            items: _items,
+                          );
+                          widget.onSave(invoice);
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  'Invoice #${invoice.invoiceNumber} saved successfully!'),
+                              backgroundColor: const Color(0xFF10B981),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.check_circle_outline, size: 18),
+                      label: const Text(
+                        'SAVE & GENERATE',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w800),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0F172A),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  static Widget _buildFormSectionCard(
+    BuildContext context, {
+    required String title,
+    required Widget child,
+    required bool isDark,
+    Widget? headerAction,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.borderOf(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textSecondaryOf(context),
+                  letterSpacing: 0.8,
+                ),
+              ),
+              if (headerAction != null) headerAction,
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+
+  static Widget _buildResponsiveFieldGrid({
+    required bool isWide,
+    required List<Widget> children,
+  }) {
+    if (isWide && children.length > 1) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children
+            .map((c) => Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: c,
+                  ),
+                ))
+            .toList(),
+      );
+    }
+
+    return Column(
+      children: children
+          .map((c) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: c,
+              ))
+          .toList(),
+    );
+  }
+
+  static InputDecoration _formInputDec(BuildContext context, String label,
+      {required bool isDark, IconData? suffixIcon}) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle:
+          TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context)),
+      suffixIcon: suffixIcon != null ? Icon(suffixIcon, size: 18) : null,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: AppTheme.borderOf(context)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: AppTheme.borderOf(context)),
+      ),
+      focusedBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(8)),
+        borderSide: BorderSide(color: _kPrimary, width: 1.5),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      filled: true,
+      fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+    );
+  }
+
+  static Widget _formSummaryRow(String label, String val) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+          Text(val,
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF0F172A))),
+        ],
       ),
     );
   }

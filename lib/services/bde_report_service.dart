@@ -105,16 +105,20 @@ class BdeReportService {
     };
   }
 
-  Future<List<BdeReportEntry>> allReports() async {
+  Future<List<BdeReportEntry>> allReports({bool forAdmin = true}) async {
     try {
-      final user = SupabaseService.currentUser;
-      if (user == null) return [];
-      final response = await SupabaseService.client
+      var query = SupabaseService.client
           .from('tasks')
           .select()
-          .ilike('title', '[BDE REPORT] %')
-          .eq('assigned_to', user.id);
+          .ilike('title', '[BDE REPORT] %');
+          
+      if (!forAdmin) {
+        final user = SupabaseService.currentUser;
+        if (user == null) return [];
+        query = query.eq('assigned_to', user.id);
+      }
 
+      final response = await query;
       final rows = (response as List).cast<Map<String, dynamic>>();
       return rows.map((r) => _fromTaskMap(r)).toList();
     } catch (e) {

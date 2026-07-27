@@ -1921,3 +1921,17 @@ class _DeviceSettingsDialogState extends State<_DeviceSettingsDialog> {
     );
   }
 }
+          style: TextStyle(color: _textPrimary, fontSize: 13),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(color: _textMuted, fontSize: 12),
+            filled: true,
+            fillColor: _isDark ? const Color(0xFF1E2E42) : const Color(0xFFF8FAFC),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _border)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          ),
+        ),
+      ],
+    );
+  }
+}
