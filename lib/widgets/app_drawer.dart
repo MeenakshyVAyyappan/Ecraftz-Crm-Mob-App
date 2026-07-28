@@ -53,7 +53,7 @@ class AppDrawer extends StatelessWidget {
                   _buildNavItem(15, Icons.admin_panel_settings_outlined, 'Super Admin'),
                   _buildNavItem(16, Icons.group_work_outlined, 'HR & Payroll'),
                   _buildNavItem(17, Icons.monitor_heart_outlined, 'Time Monitoring'),
-                  _buildNavItem(20, Icons.developer_board_outlined, 'Attendance Devices'),
+                  _buildNavItem(20, Icons.developer_board_outlined, 'Attendance Dashboard'),
                 ],
               ),
             ),

@@ -21,7 +21,7 @@ import 'blocs/meeting/meeting_bloc.dart';
 import 'blocs/document_vault/document_vault_bloc.dart';
 import 'blocs/crm_reports/crm_reports_bloc.dart';
 import 'blocs/team_timesheet/team_timesheet_bloc.dart';
-import 'blocs/attendance_device/attendance_device_bloc.dart';
+
 import 'blocs/branch/branch_cubit.dart';
 
 void main() async {
@@ -54,7 +54,7 @@ void main() async {
         BlocProvider<DocumentVaultBloc>(create: (_) => DocumentVaultBloc()),
         BlocProvider<CrmReportsBloc>(create: (_) => CrmReportsBloc()),
         BlocProvider<TeamTimesheetBloc>(create: (_) => TeamTimesheetBloc()),
-        BlocProvider<AttendanceDeviceBloc>(create: (_) => AttendanceDeviceBloc()),
+
         BlocProvider<BranchCubit>(create: (_) => BranchCubit()),
       ],
       child: const EcraftzCRMApp(),
