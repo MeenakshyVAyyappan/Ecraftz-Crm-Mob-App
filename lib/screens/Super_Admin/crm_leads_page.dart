@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/app_refresh_button.dart';
+import '../../widgets/branch_switcher.dart';
 import '../../models/lead_model.dart';
 import '../../blocs/lead/lead_bloc.dart';
+import '../../blocs/branch/branch_cubit.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
 
@@ -178,7 +181,9 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: LeadStatus.values.length, vsync: this);
-    context.read<LeadBloc>().add(LoadLeadsEvent());
+    context.read<LeadBloc>().add(
+          LoadLeadsEvent(branchState: context.read<BranchCubit>().state),
+        );
   }
 
   @override
@@ -268,6 +273,20 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
           ],
         ),
         actions: [
+          // Branch switcher
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: BranchSwitcher(compact: true),
+          ),
+          AppRefreshButton(
+            onRefresh: () async {
+              context.read<LeadBloc>().add(
+                    LoadLeadsEvent(branchState: context.read<BranchCubit>().state),
+                  );
+              await Future.delayed(const Duration(milliseconds: 600));
+            },
+          ),
+          const SizedBox(width: 4),
           IconButton(
             icon: Icon(
               _isKanban ? Icons.view_list_rounded : Icons.view_kanban_rounded,
@@ -319,7 +338,13 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
           child: Container(height: 1, color: _border),
         ),
       ) : null,
-      body: BlocBuilder<LeadBloc, LeadState>(
+      body: BlocListener<BranchCubit, BranchState>(
+        listener: (context, branchState) {
+          context.read<LeadBloc>().add(
+                LoadLeadsEvent(branchState: branchState),
+              );
+        },
+        child: BlocBuilder<LeadBloc, LeadState>(
         builder: (context, state) {
           final leads = state.leads;
           final filtered = _filteredLeads(leads);
@@ -410,8 +435,9 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
           );
         },
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildStatsStrip(List<Lead> filteredLeads) {
     final total = filteredLeads.length;

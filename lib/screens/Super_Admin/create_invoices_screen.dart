@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_refresh_button.dart';
 import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -151,6 +152,13 @@ class _CreateInvoicesPageState extends State<CreateInvoicesPage> {
                   ],
                 ),
                 actions: [
+          AppRefreshButton(
+            onRefresh: () async {
+              context.read<BillingBloc>().add(LoadInvoicesEvent(branchState: context.read<BranchCubit>().state));
+              await Future.delayed(const Duration(milliseconds: 600));
+            },
+          ),
+          const SizedBox(width: 4),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: BranchSwitcher(compact: true),

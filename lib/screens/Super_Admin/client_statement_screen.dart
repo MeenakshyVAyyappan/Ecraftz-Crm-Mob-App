@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_refresh_button.dart';
 import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -491,6 +492,16 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
                 ],
               ),
               actions: [
+          AppRefreshButton(
+            onRefresh: () async {
+              await _fetchClients();
+              if (_selectedClient != null) {
+                await _fetchStatements(_selectedClient!.id);
+              }
+              await Future.delayed(const Duration(milliseconds: 600));
+            },
+          ),
+          const SizedBox(width: 4),
                 BlocBuilder<ThemeBloc, ThemeState>(
                   builder: (context, themeState) {
                     final isDarkTheme = themeState.themeMode == ThemeMode.dark;

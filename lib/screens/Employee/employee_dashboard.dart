@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_refresh_button.dart';
 import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
@@ -363,6 +364,13 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
         ],
       ),
       actions: [
+          AppRefreshButton(
+            onRefresh: () async {
+              await _loadProfileData();
+              await Future.delayed(const Duration(milliseconds: 600));
+            },
+          ),
+          const SizedBox(width: 4),
         BlocBuilder<ThemeBloc, ThemeState>(
           builder: (context, state) {
             final isDarkTheme = state.themeMode == ThemeMode.dark;

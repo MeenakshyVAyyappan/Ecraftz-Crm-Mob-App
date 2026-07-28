@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/app_refresh_button.dart';
 import '../../widgets/branch_switcher.dart';
 import '../../models/client_model.dart';
 import '../../blocs/client/client_bloc.dart';
@@ -210,6 +211,17 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
           ],
         ),
         actions: [
+          AppRefreshButton(
+            onRefresh: () async {
+              context.read<ClientBloc>().add(
+                LoadClientsEvent(
+                  branchState: context.read<BranchCubit>().state,
+                ),
+              );
+              await Future.delayed(const Duration(milliseconds: 600));
+            },
+          ),
+          const SizedBox(width: 4),
           // Branch switcher — always visible in the AppBar
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),

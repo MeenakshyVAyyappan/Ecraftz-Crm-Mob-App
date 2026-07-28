@@ -1,5 +1,6 @@
 // billing_page.dart
 
+import 'package:ecraftz_crm/widgets/app_refresh_button.dart';
 import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -161,78 +162,183 @@ class _BillingPageState extends State<BillingPage> {
             },
           ) : null,
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          appBar: widget.showAppBar ? AppBar(
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            elevation: 0,
-            leading: isWide
-                ? null
-                : IconButton(
-                    icon: Icon(Icons.menu_rounded,
-                        color: isDark ? Colors.white : const Color(0xFF374151)),
-                    onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-                  ),
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Billing & Invoices',
-                    style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.textPrimaryOf(context))),
-                Text('Manage client invoicing, payments, and financial records.',
-                    style: TextStyle(fontSize: 10, color: AppTheme.textSecondaryOf(context))),
-              ],
-            ),
-            actions: [
-              // Branch switcher
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: BranchSwitcher(compact: true),
-              ),
-              // GST settings
-              IconButton(
-                icon: Icon(Icons.shield_outlined,
-                    color: isDark ? Colors.white : const Color(0xFF374151), size: 20),
-                tooltip: 'GST Settings',
-                onPressed: () => _showGstSettings(state.gstProfile),
-              ),
-              // Theme toggle
-              BlocBuilder<ThemeBloc, ThemeState>(
-                builder: (context, themeState) {
-                  final isDarkTheme = themeState.themeMode == ThemeMode.dark;
-                  return IconButton(
-                    icon: Icon(
-                      isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-                      color: isDarkTheme ? Colors.white : const Color(0xFF374151),
-                      size: 20,
+          appBar: widget.showAppBar
+              ? AppBar(
+                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  elevation: 0,
+                  leading: isWide
+                      ? null
+                      : IconButton(
+                          icon: Icon(Icons.menu_rounded,
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF374151)),
+                          onPressed: () =>
+                              _scaffoldKey.currentState?.openDrawer(),
+                        ),
+                  title: isWide
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Billing & Invoices',
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.textPrimaryOf(context),
+                              ),
+                            ),
+                            Text(
+                              'Manage client invoicing, payments, and financial records.',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: AppTheme.textSecondaryOf(context),
+                              ),
+                            ),
+                          ],
+                        )
+                      : Text(
+                          'Billing',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.textPrimaryOf(context),
+                          ),
+                        ),
+                  actions: [
+                    // Branch switcher
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: BranchSwitcher(compact: true),
                     ),
-                    onPressed: () => context.read<ThemeBloc>().add(ToggleThemeEvent()),
-                  );
-                },
-              ),
-              // New Invoice button
-              Padding(
-                padding: const EdgeInsets.only(right: 12, left: 4),
-                child: ElevatedButton.icon(
-                  onPressed: () => _showNewInvoice(state.gstProfile),
-                  icon: const Icon(Icons.add, size: 15),
-                  label: const Text('New Invoice',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _kPrimary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    elevation: 0,
+                    // Refresh button
+                    AppRefreshButton(
+                      onRefresh: () async {
+                        context.read<BillingBloc>().add(LoadInvoicesEvent(
+                            branchState: context.read<BranchCubit>().state));
+                        await Future.delayed(const Duration(milliseconds: 600));
+                      },
+                    ),
+                    if (isWide) ...[
+                      // GST settings
+                      IconButton(
+                        icon: Icon(
+                          Icons.shield_outlined,
+                          color:
+                              isDark ? Colors.white : const Color(0xFF374151),
+                          size: 20,
+                        ),
+                        tooltip: 'GST Settings',
+                        onPressed: () => _showGstSettings(state.gstProfile),
+                      ),
+                      // Theme toggle
+                      BlocBuilder<ThemeBloc, ThemeState>(
+                        builder: (context, themeState) {
+                          final isDarkTheme =
+                              themeState.themeMode == ThemeMode.dark;
+                          return IconButton(
+                            icon: Icon(
+                              isDarkTheme
+                                  ? Icons.light_mode_rounded
+                                  : Icons.dark_mode_rounded,
+                              color: isDarkTheme
+                                  ? Colors.white
+                                  : const Color(0xFF374151),
+                              size: 20,
+                            ),
+                            onPressed: () => context
+                                .read<ThemeBloc>()
+                                .add(ToggleThemeEvent()),
+                          );
+                        },
+                      ),
+                      // New Invoice button
+                      Padding(
+                        padding: const EdgeInsets.only(right: 12, left: 4),
+                        child: ElevatedButton.icon(
+                          onPressed: () => _showNewInvoice(state.gstProfile),
+                          icon: const Icon(Icons.add, size: 15),
+                          label: const Text('New Invoice',
+                              style: TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w700)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _kPrimary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            elevation: 0,
+                          ),
+                        ),
+                      ),
+                    ] else ...[
+                      // Mobile compact actions
+                      IconButton(
+                        icon: const Icon(Icons.add_circle_outline_rounded,
+                            color: _kPrimary, size: 22),
+                        tooltip: 'New Invoice',
+                        onPressed: () => _showNewInvoice(state.gstProfile),
+                      ),
+                      PopupMenuButton<String>(
+                        icon: Icon(
+                          Icons.more_vert_rounded,
+                          color:
+                              isDark ? Colors.white : const Color(0xFF374151),
+                          size: 20,
+                        ),
+                        onSelected: (val) {
+                          if (val == 'gst') {
+                            _showGstSettings(state.gstProfile);
+                          } else if (val == 'theme') {
+                            context.read<ThemeBloc>().add(ToggleThemeEvent());
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'gst',
+                            child: Row(
+                              children: [
+                                Icon(Icons.shield_outlined, size: 18),
+                                SizedBox(width: 8),
+                                Text('GST Settings',
+                                    style: TextStyle(fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'theme',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Icons.light_mode_rounded
+                                      : Icons.dark_mode_rounded,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? 'Light Theme'
+                                      : 'Dark Theme',
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                  bottom: PreferredSize(
+                    preferredSize: const Size.fromHeight(1),
+                    child:
+                        Container(height: 1, color: AppTheme.borderOf(context)),
                   ),
-                ),
-              ),
-            ],
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(1),
-              child: Container(height: 1, color: AppTheme.borderOf(context)),
-            ),
-          ) : null,
+                )
+              : null,
           body: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [

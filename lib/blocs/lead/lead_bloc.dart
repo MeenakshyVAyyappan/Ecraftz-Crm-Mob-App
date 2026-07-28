@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../models/lead_model.dart';
 import '../../services/supabase_service.dart';
+import '../branch/branch_cubit.dart';
 
 abstract class LeadEvent extends Equatable {
   const LeadEvent();
@@ -9,7 +10,13 @@ abstract class LeadEvent extends Equatable {
   List<Object?> get props => [];
 }
 
-class LoadLeadsEvent extends LeadEvent {}
+class LoadLeadsEvent extends LeadEvent {
+  /// Optional branch filter — pass from BranchCubit state.
+  final BranchState? branchState;
+  const LoadLeadsEvent({this.branchState});
+  @override
+  List<Object?> get props => [branchState];
+}
 
 class AddLeadEvent extends LeadEvent {
   final Lead lead;
@@ -58,16 +65,80 @@ class LeadBloc extends Bloc<LeadEvent, LeadState> {
   LeadBloc() : super(const LeadState()) {
     on<LoadLeadsEvent>((event, emit) async {
       try {
-        final res = await _client
+        var filterQuery = _client
             .from('leads')
             .select()
-            .isFilter('deleted_at', null)
-            .order('created_at', ascending: false);
-        final list = (res as List).map((x) => Lead.fromJson(x)).toList();
+            .isFilter('deleted_at', null);
+
+        final branchState = event.branchState;
+        if (branchState != null &&
+            branchState.selectedBranch != BranchFilter.allBranches) {
+          final branchId = branchState.activeBranchId;
+          if (branchId != null && branchId.isNotEmpty) {
+            filterQuery = filterQuery.eq('branch_id', branchId);
+          }
+        }
+
+        final res = await filterQuery.order('created_at', ascending: false);
+        var list = (res as List).map((x) => Lead.fromJson(x)).toList();
+
+        // Secondary in-memory filtering fallback for branch matching
+        if (branchState != null &&
+            branchState.selectedBranch != BranchFilter.allBranches) {
+          if (branchState.selectedBranch == BranchFilter.calicut) {
+            list = list.where((l) {
+              if (l.branchId != null && branchState.calicutBranchId != null) {
+                return l.branchId == branchState.calicutBranchId;
+              }
+              final b = (l.branchName ?? '').toLowerCase();
+              return b.contains('calicut') || b.contains('head office') || b.isEmpty;
+            }).toList();
+          } else if (branchState.selectedBranch == BranchFilter.dubai) {
+            list = list.where((l) {
+              if (l.branchId != null && branchState.dubaiBranchId != null) {
+                return l.branchId == branchState.dubaiBranchId;
+              }
+              final b = (l.branchName ?? '').toLowerCase();
+              return b.contains('dubai');
+            }).toList();
+          }
+        }
+
         emit(LeadState(leads: list));
       } catch (e) {
-        // Emit current leads on failure to prevent blanking
-        emit(state.copyWith());
+        try {
+          final res = await _client
+              .from('leads')
+              .select()
+              .isFilter('deleted_at', null)
+              .order('created_at', ascending: false);
+          var list = (res as List).map((x) => Lead.fromJson(x)).toList();
+
+          final branchState = event.branchState;
+          if (branchState != null &&
+              branchState.selectedBranch != BranchFilter.allBranches) {
+            if (branchState.selectedBranch == BranchFilter.calicut) {
+              list = list.where((l) {
+                if (l.branchId != null && branchState.calicutBranchId != null) {
+                  return l.branchId == branchState.calicutBranchId;
+                }
+                final b = (l.branchName ?? '').toLowerCase();
+                return b.contains('calicut') || b.contains('head office') || b.isEmpty;
+              }).toList();
+            } else if (branchState.selectedBranch == BranchFilter.dubai) {
+              list = list.where((l) {
+                if (l.branchId != null && branchState.dubaiBranchId != null) {
+                  return l.branchId == branchState.dubaiBranchId;
+                }
+                final b = (l.branchName ?? '').toLowerCase();
+                return b.contains('dubai');
+              }).toList();
+            }
+          }
+          emit(LeadState(leads: list));
+        } catch (_) {
+          emit(state.copyWith());
+        }
       }
     });
 

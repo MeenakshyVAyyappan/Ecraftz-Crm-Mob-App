@@ -1,4 +1,5 @@
 // client_onboarding_page.dart
+import 'package:ecraftz_crm/widgets/app_refresh_button.dart';
 import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -511,6 +512,13 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
             ],
           ),
           actions: [
+          AppRefreshButton(
+            onRefresh: () async {
+              context.read<OnboardingBloc>().add(LoadOnboardingDataEvent());
+              await Future.delayed(const Duration(milliseconds: 600));
+            },
+          ),
+          const SizedBox(width: 4),
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Close'),

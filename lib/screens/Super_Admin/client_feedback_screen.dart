@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_refresh_button.dart';
 import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -306,6 +307,13 @@ class _ClientFeedbackScreenState extends State<ClientFeedbackScreen> {
               ),
             ),
             actions: [
+          AppRefreshButton(
+            onRefresh: () async {
+              context.read<ClientFeedbackBloc>().add(LoadClientFeedbackEvent());
+              await Future.delayed(const Duration(milliseconds: 600));
+            },
+          ),
+          const SizedBox(width: 4),
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('Cancel', style: TextStyle(color: Colors.grey)),

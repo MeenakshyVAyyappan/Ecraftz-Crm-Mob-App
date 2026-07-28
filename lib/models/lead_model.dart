@@ -80,6 +80,8 @@ class Lead {
   LeadStatus status;
   AcquisitionSource source;
   double value;
+  final String? branchId;
+  final String? branchName;
   final DateTime createdAt;
 
   Lead({
@@ -93,6 +95,8 @@ class Lead {
     required this.status,
     this.source = AcquisitionSource.website,
     this.value = 0,
+    this.branchId,
+    this.branchName,
     required this.createdAt,
   });
 
@@ -115,12 +119,14 @@ class Lead {
       status: _parseLeadStatus(json['status']?.toString()),
       source: _parseSource(json['source']?.toString()),
       value: (json['value'] is num) ? (json['value'] as num).toDouble() : double.tryParse(json['value']?.toString() ?? '') ?? 0.0,
+      branchId: json['branch_id']?.toString(),
+      branchName: json['branch_name']?.toString() ?? json['branch']?.toString(),
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'].toString()) : DateTime.now(),
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {
+    final map = <String, dynamic>{
       'id': id,
       'first_name': firstName,
       'last_name': lastName,
@@ -133,6 +139,10 @@ class Lead {
       'value': value,
       'organization_id': '00000000-0000-0000-0000-000000000000',
     };
+    if (branchId != null && branchId!.isNotEmpty) {
+      map['branch_id'] = branchId;
+    }
+    return map;
   }
 }
 

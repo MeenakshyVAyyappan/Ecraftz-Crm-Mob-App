@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_refresh_button.dart';
 import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -600,6 +601,19 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
             ],
           ),
           actions: [
+          AppRefreshButton(
+            onRefresh: () async {
+              await Future.wait([
+                _fetchDepartments(),
+                _fetchEmployees(),
+                _fetchLeaves(),
+                _fetchProfiles(),
+                _fetchLeaveTypes(),
+              ]);
+              await Future.delayed(const Duration(milliseconds: 600));
+            },
+          ),
+          const SizedBox(width: 4),
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text('Cancel', style: TextStyle(color: _textSecondary)),

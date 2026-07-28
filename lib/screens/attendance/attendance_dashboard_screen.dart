@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_refresh_button.dart';
 import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -266,6 +267,13 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen>
         ),
         centerTitle: false,
         actions: [
+          AppRefreshButton(
+            onRefresh: () async {
+              await _fetchData();
+              await Future.delayed(const Duration(milliseconds: 600));
+            },
+          ),
+          const SizedBox(width: 4),
           IconButton(
             tooltip: 'Refresh',
             icon: const Icon(Icons.refresh),

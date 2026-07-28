@@ -1,4 +1,5 @@
 // asset_renewals_page.dart
+import 'package:ecraftz_crm/widgets/app_refresh_button.dart';
 import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -466,6 +467,13 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
         title: const Text('Delete Renewal'),
         content: Text('Delete "${r.serviceName}"?'),
         actions: [
+          AppRefreshButton(
+            onRefresh: () async {
+              await _fetchRenewals();
+              await Future.delayed(const Duration(milliseconds: 600));
+            },
+          ),
+          const SizedBox(width: 4),
           TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Cancel')),

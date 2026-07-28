@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../blocs/project/project_bloc.dart';
 import '../../models/project_model.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/app_refresh_button.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
 
@@ -113,6 +114,13 @@ class _ProjectsPageState extends State<ProjectsPage>
           ],
         ),
         actions: [
+          AppRefreshButton(
+            onRefresh: () async {
+              context.read<ProjectBloc>().add(LoadProjectsEvent());
+              await Future.delayed(const Duration(milliseconds: 600));
+            },
+          ),
+          const SizedBox(width: 4),
           BlocBuilder<ThemeBloc, ThemeState>(
             builder: (context, themeState) {
               final isDarkTheme = themeState.themeMode == ThemeMode.dark;

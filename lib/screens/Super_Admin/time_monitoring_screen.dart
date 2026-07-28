@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_refresh_button.dart';
 import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -233,6 +234,13 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
         ],
       ),
       actions: [
+          AppRefreshButton(
+            onRefresh: () async {
+              if (mounted) setState(() {});
+              await Future.delayed(const Duration(milliseconds: 600));
+            },
+          ),
+          const SizedBox(width: 4),
         BlocBuilder<ThemeBloc, ThemeState>(
           builder: (context, themeState) {
             final isDarkTheme = themeState.themeMode == ThemeMode.dark;

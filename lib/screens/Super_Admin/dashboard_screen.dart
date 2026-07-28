@@ -9,6 +9,7 @@ import '../../blocs/auth/auth_bloc.dart';
 import '../../theme/app_theme.dart';
 import '../../models/dashboard_models.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/app_refresh_button.dart';
 import '../../widgets/branch_switcher.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/revenue_chart.dart';
@@ -291,6 +292,18 @@ class _DashboardScreenState extends State<DashboardScreen>
           _buildBranchIconButton(),
           const SizedBox(width: 8),
           _buildThemeToggleButton(),
+          const SizedBox(width: 8),
+          AppRefreshButton(
+            onRefresh: () async {
+              context.read<DashboardBloc>().add(
+                LoadDashboardEvent(
+                  dateRange: _dateRange,
+                  branchState: context.read<BranchCubit>().state,
+                ),
+              );
+              await Future.delayed(const Duration(milliseconds: 600));
+            },
+          ),
           const SizedBox(width: 8),
           Stack(
             clipBehavior: Clip.none,
@@ -1921,9 +1934,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         },
         onNavigate: (index) {
           Navigator.pop(ctx);
-          setState(() {
-            _selectedTab = index;
-          });
+          widget.onItemSelected(index);
         },
       ),
     );
@@ -2503,9 +2514,9 @@ class _NotificationsSheet extends StatelessWidget {
     final border = AppTheme.borderOf(context);
 
     final notifications = [
-      _NotifItem('New Lead Received', 'From Website Form', '2m ago', Icons.person_add_rounded, const Color(0xFF10B981), 'Leads', 3),
-      _NotifItem('Task Assigned', 'Review new designs', '1h ago', Icons.check_circle_outline_rounded, const Color(0xFF3B82F6), 'Tasks', 4),
-      _NotifItem('Project Updated', 'Website Redesign', '3h ago', Icons.folder_open_rounded, const Color(0xFF8B5CF6), 'Projects', 2),
+      _NotifItem('New Lead Received', 'From Website Form', '2m ago', Icons.person_add_rounded, const Color(0xFF10B981), 'Leads', 1),
+      _NotifItem('Task Assigned', 'Review new designs', '1h ago', Icons.check_circle_outline_rounded, const Color(0xFF3B82F6), 'Tasks', 5),
+      _NotifItem('Project Updated', 'Website Redesign', '3h ago', Icons.folder_open_rounded, const Color(0xFF8B5CF6), 'Projects', 4),
     ];
 
     return DraggableScrollableSheet(
