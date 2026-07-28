@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -53,7 +54,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           SnackBar(content: Text('Could not open audio URL: ${widget.audioUrl}')),
         );
       }

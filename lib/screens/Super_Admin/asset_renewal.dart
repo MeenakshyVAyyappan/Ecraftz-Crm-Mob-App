@@ -1,4 +1,5 @@
 // asset_renewals_page.dart
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -494,7 +495,7 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
   }
 
   void _snack(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       SnackBar(
           content: Text(msg),
           backgroundColor: color,
@@ -1045,7 +1046,7 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
 
   void _save() {
     if (_descCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
             content: Text('Service description required'),
             backgroundColor: Colors.red),

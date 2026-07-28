@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -66,7 +67,7 @@ class _SharedClientFeedbackFormScreenState extends State<SharedClientFeedbackFor
 
   void _submitForm() {
     if (_commentsCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(content: Text('Please enter your comments.')),
       );
       return;

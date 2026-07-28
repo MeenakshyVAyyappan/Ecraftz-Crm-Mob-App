@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -337,7 +338,7 @@ class _MeetingSchedulerScreenState extends State<MeetingSchedulerScreen>
                 listener: (context, state) {
                   if (state.errorMessage != null && state.errorMessage!.isNotEmpty) {
                     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    AppSnackBar.showCustom(context, SnackBar(
                       content: Text('Error: ${state.errorMessage}'),
                       backgroundColor: AppTheme.error,
                       behavior: SnackBarBehavior.floating,
@@ -345,7 +346,7 @@ class _MeetingSchedulerScreenState extends State<MeetingSchedulerScreen>
                     ));
                   } else if (state.successMessage != null && state.successMessage!.isNotEmpty) {
                     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    AppSnackBar.showCustom(context, SnackBar(
                       content: Text(state.successMessage!),
                       backgroundColor: const Color(0xFF10B981),
                       behavior: SnackBarBehavior.floating,

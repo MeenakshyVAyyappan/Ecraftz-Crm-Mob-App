@@ -1,4 +1,5 @@
 // client_onboarding_page.dart
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -540,7 +541,7 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
                   context.read<ClientBloc>().add(AddClientEvent(client));
 
                   Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  AppSnackBar.showCustom(context, 
                     SnackBar(
                       content: Text('Client "${s.clientName}" approved & onboarded successfully!'),
                       backgroundColor: const Color(0xFF10B981),
@@ -662,7 +663,7 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
       'version': t.version,
     }));
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       const SnackBar(content: Text('Template duplicated'), backgroundColor: Color(0xFF10B981)),
     );
   }
@@ -737,7 +738,7 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
       body: BlocConsumer<OnboardingBloc, OnboardingState>(
         listener: (context, state) {
           if (state.status == OnboardingStatus.error && state.errorMessage != null) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            AppSnackBar.showCustom(context, 
               SnackBar(
                 content: Text(state.errorMessage!),
                 backgroundColor: const Color(0xFFEF4444),
@@ -1806,7 +1807,7 @@ class _FormBuilderPageState extends State<_FormBuilderPage> {
 
   void _save() {
     if (_nameCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(content: Text('Template name is required'), backgroundColor: Colors.red),
       );
       return;
@@ -1822,7 +1823,7 @@ class _FormBuilderPageState extends State<_FormBuilderPage> {
     );
     widget.onSave(t);
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       const SnackBar(content: Text('Template saved!'), backgroundColor: Color(0xFF10B981)),
     );
   }
@@ -2631,7 +2632,7 @@ class _GenerateLinkDialogState extends State<_GenerateLinkDialog> {
 
       if (mounted) {
         context.read<OnboardingBloc>().add(LoadSubmissionsEvent());
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           const SnackBar(
             content: Text('Portal link generated and copied to clipboard!'),
             backgroundColor: Color(0xFF10B981),
@@ -2644,7 +2645,7 @@ class _GenerateLinkDialogState extends State<_GenerateLinkDialog> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           SnackBar(
             content: Text('Failed to generate intake link: $e'),
             backgroundColor: Colors.red,
@@ -2670,7 +2671,7 @@ class _GenerateLinkDialogState extends State<_GenerateLinkDialog> {
         await launchUrl(whatsappUri, mode: LaunchMode.externalApplication);
       } catch (_) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackBar.showCustom(context, 
             const SnackBar(
               content: Text('Could not launch WhatsApp. Please copy the link instead.'),
               backgroundColor: Colors.red,
@@ -2692,7 +2693,7 @@ class _GenerateLinkDialogState extends State<_GenerateLinkDialog> {
         await launchUrl(emailUri, mode: LaunchMode.externalApplication);
       } catch (_) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackBar.showCustom(context, 
             const SnackBar(
               content: Text('Could not launch Email client. Please copy the link instead.'),
               backgroundColor: Colors.red,
@@ -2709,7 +2710,7 @@ class _GenerateLinkDialogState extends State<_GenerateLinkDialog> {
       await launchUrl(previewUri, mode: LaunchMode.externalApplication);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           const SnackBar(
             content: Text('Could not preview portal link.'),
             backgroundColor: Colors.red,
@@ -2970,7 +2971,7 @@ class _GenerateLinkDialogState extends State<_GenerateLinkDialog> {
                           onTap: () async {
                             await Clipboard.setData(ClipboardData(text: _portalUrl));
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              AppSnackBar.showCustom(context, 
                                 const SnackBar(
                                   content: Text('Copied to clipboard!'),
                                   backgroundColor: Color(0xFF10B981),

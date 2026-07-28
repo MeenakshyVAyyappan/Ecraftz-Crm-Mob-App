@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -963,7 +964,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         SnackBar(content: Text('Failed to print: $e'), backgroundColor: RTheme.danger),
       );
     }
@@ -984,7 +985,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           final file = File(path);
           await file.writeAsBytes(pdfBytes);
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackBar.showCustom(context, 
             SnackBar(content: Text('Report saved to $path'), backgroundColor: RTheme.success),
           );
           return;
@@ -999,7 +1000,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         SnackBar(content: Text('Failed to export PDF: $e'), backgroundColor: RTheme.danger),
       );
     }
@@ -1027,7 +1028,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           final file = File(path);
           await file.writeAsBytes(bytes);
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackBar.showCustom(context, 
             SnackBar(content: Text('Report saved to $path'), backgroundColor: RTheme.success),
           );
           return;
@@ -1057,7 +1058,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         SnackBar(content: Text('Failed to export CSV: $e'), backgroundColor: RTheme.danger),
       );
     }
@@ -1201,7 +1202,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     final raw = rowData['raw_row'] as Map<String, dynamic>? ?? rowData;
     final recordId = rowData['id']?.toString() ?? raw['id']?.toString() ?? '';
     if (recordId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(content: Text('Cannot edit: Record ID not found'), backgroundColor: RTheme.danger),
       );
       return;
@@ -1344,13 +1345,13 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
 
                       if (!mounted) return;
                       Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      AppSnackBar.showCustom(context, 
                         const SnackBar(content: Text('Record updated successfully'), backgroundColor: RTheme.success),
                       );
                       _fetchReportData();
                     } catch (e) {
                       setDialogState(() => isSaving = false);
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      AppSnackBar.showCustom(context, 
                         SnackBar(content: Text('Error updating record: $e'), backgroundColor: RTheme.danger),
                       );
                     }
@@ -1371,7 +1372,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
     final raw = rowData['raw_row'] as Map<String, dynamic>? ?? rowData;
     final recordId = rowData['id']?.toString() ?? raw['id']?.toString() ?? '';
     if (recordId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(content: Text('Cannot delete: Record ID not found'), backgroundColor: RTheme.danger),
       );
       return;
@@ -1419,13 +1420,13 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
 
                       if (!mounted) return;
                       Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      AppSnackBar.showCustom(context, 
                         const SnackBar(content: Text('Record deleted successfully'), backgroundColor: RTheme.success),
                       );
                       _fetchReportData();
                     } catch (e) {
                       setDialogState(() => isDeleting = false);
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      AppSnackBar.showCustom(context, 
                         SnackBar(content: Text('Error deleting record: $e'), backgroundColor: RTheme.danger),
                       );
                     }
@@ -1501,7 +1502,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         SnackBar(content: Text('Failed to generate report: $e'), backgroundColor: RTheme.danger),
       );
     }

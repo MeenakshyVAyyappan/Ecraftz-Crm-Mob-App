@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -1510,7 +1511,7 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
 
   void _showStatementTemplateDialog() {
     if (_selectedClient == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
             content: Text('Please select a client to view statement template.'),
             backgroundColor: Colors.orange),
@@ -2376,7 +2377,7 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           SnackBar(content: Text('Print error: $e'), backgroundColor: Colors.red),
         );
       }
@@ -2392,7 +2393,7 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
       await Printing.sharePdf(bytes: bytes, filename: filename);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           SnackBar(content: Text('PDF download error: $e'), backgroundColor: Colors.red),
         );
       }
@@ -2605,7 +2606,7 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
 
   void _showRecordPaymentDialog() {
     if (_selectedClient == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
             content: Text('Please select a client before recording a payment.'),
             backgroundColor: Colors.orange),
@@ -2750,7 +2751,7 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
                             final parsedAmt =
                                 double.tryParse(amountCtrl.text.trim());
                             if (parsedAmt == null || parsedAmt <= 0) {
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              AppSnackBar.showCustom(context, 
                                 const SnackBar(
                                     content:
                                         Text('Please enter a valid amount.'),
@@ -2805,7 +2806,7 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
 
                               if (ctx.mounted) Navigator.pop(ctx);
                               if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
+                                AppSnackBar.showCustom(context, 
                                   const SnackBar(
                                       content:
                                           Text('Transaction recorded successfully!'),
@@ -2816,7 +2817,7 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
                             } catch (e) {
                               setModalState(() => isSubmitting = false);
                               if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
+                                AppSnackBar.showCustom(context, 
                                   SnackBar(
                                       content: Text('Failed to record transaction: $e'),
                                       backgroundColor: Colors.red),
@@ -2848,7 +2849,7 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
 
   void _exportCSV() {
     if (_selectedClient == null || _statements.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
             content: Text('No client statements to export.'),
             backgroundColor: Colors.orange),
@@ -2863,7 +2864,7 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
           '${DateFormat('yyyy-MM-dd').format(s.date)},"${s.reference ?? ''}","${s.description}",${CSTheme.typeLabel(s.type)},${s.amount},${s.runningBalance},"${s.status ?? ''}"');
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       SnackBar(
         content: Text(
             'CSV exported for ${_selectedClient!.name}! (${_statements.length} transactions)'),
@@ -2874,7 +2875,7 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
 
   void _emailStatement() {
     if (_selectedClient == null) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       SnackBar(
         content: Text(
             'Email statement sent to ${_selectedClient!.email.isNotEmpty ? _selectedClient!.email : _selectedClient!.name}!'),

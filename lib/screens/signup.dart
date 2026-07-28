@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'signin.dart';
@@ -39,7 +40,7 @@ class _RegisterPageState extends State<RegisterPage> {
     final confirmPassword = _confirmCtrl.text.trim();
 
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
           content: Text('Please enter your full name.'),
           backgroundColor: Colors.orange,
@@ -50,7 +51,7 @@ class _RegisterPageState extends State<RegisterPage> {
     }
 
     if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
           content: Text('Please enter your email address.'),
           backgroundColor: Colors.orange,
@@ -62,7 +63,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
     final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
     if (!emailRegex.hasMatch(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
           content: Text('Please enter a valid email address.'),
           backgroundColor: Colors.orange,
@@ -73,7 +74,7 @@ class _RegisterPageState extends State<RegisterPage> {
     }
 
     if (password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
           content: Text('Please enter your password.'),
           backgroundColor: Colors.orange,
@@ -84,7 +85,7 @@ class _RegisterPageState extends State<RegisterPage> {
     }
 
     if (password.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
           content: Text('Password must be at least 6 characters.'),
           backgroundColor: Colors.orange,
@@ -95,7 +96,7 @@ class _RegisterPageState extends State<RegisterPage> {
     }
 
     if (confirmPassword != password) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
           content: Text('Passwords do not match.'),
           backgroundColor: Colors.orange,
@@ -124,7 +125,7 @@ class _RegisterPageState extends State<RegisterPage> {
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is AuthRegistrationSuccess) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackBar.showCustom(context, 
             const SnackBar(
               content: Text('Registration successful. Please wait for admin approval.'),
               backgroundColor: AppTheme.success,
@@ -148,7 +149,7 @@ class _RegisterPageState extends State<RegisterPage> {
             _submitted = true;
           });
         } else if (state is AuthError) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackBar.showCustom(context, 
             SnackBar(
               content: Text(state.message),
               backgroundColor: Colors.red,

@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -1030,7 +1031,7 @@ class _CreateInvoicesPageState extends State<CreateInvoicesPage> {
         gstProfile: profile,
         onSave: (inv) {
           context.read<BillingBloc>().add(AddInvoiceEvent(inv, branchState: branchState));
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackBar.showCustom(context, 
             const SnackBar(
               content: Text('Invoice created successfully!'),
               backgroundColor: Color(0xFF10B981),
@@ -1055,7 +1056,7 @@ class _CreateInvoicesPageState extends State<CreateInvoicesPage> {
           context.read<BillingBloc>().add(
                 UpdateInvoiceStatusEvent(inv.id, updatedInv.status),
               );
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackBar.showCustom(context, 
             const SnackBar(
               content: Text('Invoice updated successfully!'),
               backgroundColor: Color(0xFF10B981),
@@ -1910,7 +1911,7 @@ class _CreateInvoicesPageState extends State<CreateInvoicesPage> {
                   .read<BillingBloc>()
                   .add(UpdateInvoiceStatusEvent(inv.id, selected));
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
+              AppSnackBar.showCustom(context, 
                 SnackBar(
                   content: Text('Payment status updated to ${selected.label}'),
                   backgroundColor: const Color(0xFF10B981),
@@ -1940,7 +1941,7 @@ class _CreateInvoicesPageState extends State<CreateInvoicesPage> {
             onPressed: () {
               context.read<BillingBloc>().add(DeleteInvoiceEvent(invoiceId));
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
+              AppSnackBar.showCustom(context, 
                 const SnackBar(
                   content: Text('Invoice deleted.'),
                   backgroundColor: Colors.red,
@@ -1960,7 +1961,7 @@ class _CreateInvoicesPageState extends State<CreateInvoicesPage> {
           'Invoice_${inv.invoiceNumber.replaceAll('/', '_')}.pdf';
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           SnackBar(
             content: Text('Generating PDF for Invoice #${inv.invoiceNumber}...'),
             duration: const Duration(seconds: 2),
@@ -1977,7 +1978,7 @@ class _CreateInvoicesPageState extends State<CreateInvoicesPage> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           SnackBar(
             content: Text('PDF Ready: $fileName'),
             duration: const Duration(seconds: 3),
@@ -1987,7 +1988,7 @@ class _CreateInvoicesPageState extends State<CreateInvoicesPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           SnackBar(
             content: Text('Error generating PDF: $e'),
             backgroundColor: Colors.red,
@@ -3190,7 +3191,7 @@ class _InvoiceFormModalState extends State<_InvoiceFormModal> {
                           );
                           widget.onSave(invoice);
                           Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          AppSnackBar.showCustom(context, 
                             SnackBar(
                               content: Text(
                                   'Invoice #${invoice.invoiceNumber} saved successfully!'),

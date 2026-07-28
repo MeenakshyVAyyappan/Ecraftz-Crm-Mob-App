@@ -22,6 +22,8 @@ import 'blocs/document_vault/document_vault_bloc.dart';
 import 'blocs/crm_reports/crm_reports_bloc.dart';
 import 'blocs/team_timesheet/team_timesheet_bloc.dart';
 
+import 'widgets/app_drawer.dart';
+import 'widgets/app_snackbar.dart';
 import 'blocs/branch/branch_cubit.dart';
 
 void main() async {
@@ -93,44 +95,17 @@ class _AuthWrapperState extends State<AuthWrapper> {
           setState(() {
             _loginSessionCount++;
           });
-          ScaffoldMessenger.of(context).clearSnackBars();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Login successful.'),
-              backgroundColor: AppTheme.success,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+          AppSnackBar.showSuccess(context, 'Login successful.');
           Future.delayed(const Duration(milliseconds: 1500), () {
             if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Profile loaded successfully.'),
-                  backgroundColor: AppTheme.success,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+              AppSnackBar.showSuccess(context, 'Profile loaded successfully.');
             }
           });
         } else if (state is Unauthenticated) {
           if (state.loggedOut) {
-            ScaffoldMessenger.of(context).clearSnackBars();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Logout successful.'),
-                backgroundColor: AppTheme.success,
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
+            AppSnackBar.showSuccess(context, 'Logout successful.');
           } else if (state.sessionExpired) {
-            ScaffoldMessenger.of(context).clearSnackBars();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Session expired. Please login again.'),
-                backgroundColor: AppTheme.warning,
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
+            AppSnackBar.showWarning(context, 'Session expired. Please login again.');
           }
         }
       },

@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -316,11 +317,11 @@ class _ClientFeedbackScreenState extends State<ClientFeedbackScreen> {
                 ),
                 onPressed: () {
                   if (selectedClientId == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a client.')));
+                    AppSnackBar.showCustom(context, const SnackBar(content: Text('Please select a client.')));
                     return;
                   }
                   if (commentsCtrl.text.trim().isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter feedback comments.')));
+                    AppSnackBar.showCustom(context, const SnackBar(content: Text('Please enter feedback comments.')));
                     return;
                   }
 
@@ -356,7 +357,7 @@ class _ClientFeedbackScreenState extends State<ClientFeedbackScreen> {
                         ));
                   }
                   Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  AppSnackBar.showCustom(context, SnackBar(
                     content: Text(isEdit ? 'Feedback updated!' : 'Feedback saved successfully!'),
                     backgroundColor: Colors.green,
                   ));
@@ -446,7 +447,7 @@ class _ClientFeedbackScreenState extends State<ClientFeedbackScreen> {
                         actionNotes: responseCtrl.text.trim(),
                       ));
                       Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Response updated!'), backgroundColor: Colors.green));
+                      AppSnackBar.showCustom(context, const SnackBar(content: Text('Response updated!'), backgroundColor: Colors.green));
                     },
                     child: const Text('Save Response', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
@@ -687,7 +688,7 @@ class _ClientFeedbackScreenState extends State<ClientFeedbackScreen> {
                         // Scroll after the bloc emits and the new widgets are laid out
                         scrollToBottom();
                       } else {
-                        ScaffoldMessenger.of(ctx).showSnackBar(
+                        AppSnackBar.showCustom(ctx, 
                           const SnackBar(content: Text('Please select a client.')),
                         );
                       }
@@ -914,7 +915,7 @@ class _ClientFeedbackScreenState extends State<ClientFeedbackScreen> {
             onPressed: () {
               context.read<ClientFeedbackBloc>().add(DeleteClientFeedbackEvent(fb.id));
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Feedback deleted'), backgroundColor: Colors.red));
+              AppSnackBar.showCustom(context, const SnackBar(content: Text('Feedback deleted'), backgroundColor: Colors.red));
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),

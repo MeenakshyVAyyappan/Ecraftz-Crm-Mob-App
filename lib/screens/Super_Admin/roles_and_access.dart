@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../theme/app_theme.dart';
@@ -384,7 +385,7 @@ class _RolesAccessScreenState extends State<RolesAccessScreen> {
             ));
           });
           Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackBar.showCustom(context, 
             SnackBar(
               content: Text('Role "$name" created successfully'),
               backgroundColor: const Color(0xFF10B981),
@@ -418,7 +419,7 @@ class _RolesAccessScreenState extends State<RolesAccessScreen> {
             : () {
                 Navigator.pop(context);
                 setState(() => _roles.removeWhere((r) => r.id == role.id));
-                ScaffoldMessenger.of(context).showSnackBar(
+                AppSnackBar.showCustom(context, 
                   SnackBar(
                     content: Text('Role "${role.name}" deleted'),
                     backgroundColor: const Color(0xFFEF4444),
@@ -1338,7 +1339,7 @@ class _ConfigureRoleScreenState extends State<_ConfigureRoleScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
+              AppSnackBar.showCustom(context, 
                 const SnackBar(
                   content: Text('Configuration saved successfully'),
                   backgroundColor: Color(0xFF10B981),

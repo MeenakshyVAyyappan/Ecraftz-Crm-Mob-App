@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -703,7 +704,7 @@ class AttendanceExportService {
     final bytes = excel.encode();
     if (bytes == null) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           const SnackBar(content: Text('Failed to generate Excel file.')),
         );
       }
@@ -717,7 +718,7 @@ class AttendanceExportService {
     await file.writeAsBytes(bytes);
 
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         SnackBar(
           content: Text('Excel saved: $fileName'),
           action: SnackBarAction(

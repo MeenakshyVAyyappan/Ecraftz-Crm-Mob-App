@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -1488,7 +1489,7 @@ class _EvaluateMenu extends StatelessWidget {
             iconColor: const Color(0xFFEF4444),
             onTap: () {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
+              AppSnackBar.showCustom(context, 
                 SnackBar(
                   content: Text('Shift flagged for ${entry.employeeName}'),
                   backgroundColor: const Color(0xFFEF4444),
@@ -2084,7 +2085,7 @@ class _AdjustTimeSheetState extends State<_AdjustTimeSheet> {
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    AppSnackBar.showCustom(context, 
                       const SnackBar(
                         content: Text('Time adjusted successfully'),
                         backgroundColor: Color(0xFF10B981),

@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_theme.dart';
@@ -131,14 +132,14 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
       _fetchActiveProjects();
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           const SnackBar(content: Text('Project status updated successfully')),
         );
       }
     } catch (e) {
       print(e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           const SnackBar(content: Text('Failed to update status')),
         );
       }

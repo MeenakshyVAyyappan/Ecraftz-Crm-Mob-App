@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -15,7 +16,7 @@ Future<void> _launchUrl(Uri uri, BuildContext context, {String failureMessage = 
     try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         SnackBar(content: Text(failureMessage), backgroundColor: Colors.red),
       );
     }
@@ -29,7 +30,7 @@ String _normalizePhone(String phone) {
 Future<void> _callPhone(String phone, BuildContext context) async {
   final normalized = _normalizePhone(phone);
   if (normalized.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       const SnackBar(content: Text('Phone number not available'), backgroundColor: Colors.red),
     );
     return;
@@ -41,7 +42,7 @@ Future<void> _callPhone(String phone, BuildContext context) async {
 Future<void> _sendSms(String phone, BuildContext context) async {
   final normalized = _normalizePhone(phone);
   if (normalized.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       const SnackBar(content: Text('Phone number not available'), backgroundColor: Colors.red),
     );
     return;
@@ -54,7 +55,7 @@ Future<void> _sendSms(String phone, BuildContext context) async {
 Future<void> _sendWhatsApp(String phone, BuildContext context) async {
   final normalized = _normalizePhone(phone).replaceAll('+', '');
   if (normalized.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       const SnackBar(content: Text('Phone number not available'), backgroundColor: Colors.red),
     );
     return;
@@ -66,7 +67,7 @@ Future<void> _sendWhatsApp(String phone, BuildContext context) async {
 
 Future<void> _sendEmail(String email, BuildContext context) async {
   if (email.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       const SnackBar(content: Text('Email address not available'), backgroundColor: Colors.red),
     );
     return;

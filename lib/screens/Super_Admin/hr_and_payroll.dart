@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -297,7 +298,7 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
       });
     } catch (e) {
       setState(() => _isLoadingEmployees = false);
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         SnackBar(content: Text('Failed to load employees: $e'), backgroundColor: HRTheme.danger),
       );
     }
@@ -342,7 +343,7 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
       });
     } catch (e) {
       setState(() => _isLoadingLeaves = false);
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         SnackBar(content: Text('Failed to load leaves: $e'), backgroundColor: HRTheme.danger),
       );
     }
@@ -527,7 +528,7 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
   // ── ACTIONS ─────────────────────────────────────────────────────────────────
 
   void _handleClockIn(AttendanceRecord record) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       SnackBar(content: Text('${record.employeeName} clocked out!'),
           backgroundColor: HRTheme.success),
     );
@@ -549,11 +550,11 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
       });
 
       _fetchLeaves();
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         SnackBar(content: Text('Leave request $newStatus!'), backgroundColor: HRTheme.success),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         SnackBar(content: Text('Failed to update leave status: $e'), backgroundColor: HRTheme.danger),
       );
     }
@@ -607,7 +608,7 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
               style: ElevatedButton.styleFrom(backgroundColor: HRTheme.danger),
               onPressed: () {
                 if (noteCtrl.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  AppSnackBar.showCustom(context, 
                     const SnackBar(content: Text('Please enter a rejection reason'), backgroundColor: HRTheme.danger),
                   );
                   return;
@@ -749,13 +750,13 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
                         ),
                         onPressed: () async {
                           if (selectedUserId == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            AppSnackBar.showCustom(context, 
                               const SnackBar(content: Text('Please select an employee'), backgroundColor: HRTheme.danger),
                             );
                             return;
                           }
                           if (selectedLeaveTypeId == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            AppSnackBar.showCustom(context, 
                               const SnackBar(content: Text('Please select a leave type'), backgroundColor: HRTheme.danger),
                             );
                             return;
@@ -772,11 +773,11 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
                             });
                             Navigator.pop(ctx);
                             _fetchLeaves();
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            AppSnackBar.showCustom(context, 
                               const SnackBar(content: Text('Leave applied successfully!'), backgroundColor: HRTheme.success),
                             );
                           } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            AppSnackBar.showCustom(context, 
                               SnackBar(content: Text('Failed to apply leave: $e'), backgroundColor: HRTheme.danger),
                             );
                           }
@@ -938,7 +939,7 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
                         ),
                         onPressed: () async {
                           if (nameCtrl.text.isEmpty || selectedDeptId == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            AppSnackBar.showCustom(context, 
                               const SnackBar(content: Text('Please enter name and select a department'), backgroundColor: HRTheme.danger),
                             );
                             return;
@@ -997,11 +998,11 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
       });
 
       _fetchEmployees();
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(content: Text('Employee added successfully!'), backgroundColor: HRTheme.success),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         SnackBar(content: Text('Failed to add employee: $e'), backgroundColor: HRTheme.danger),
       );
     }
@@ -1157,11 +1158,11 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
       }
 
       _fetchEmployees();
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(content: Text('Employee updated successfully!'), backgroundColor: HRTheme.success),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         SnackBar(content: Text('Failed to update employee: $e'), backgroundColor: HRTheme.danger),
       );
     }
@@ -1206,11 +1207,11 @@ class _HRPayrollScreenState extends State<HRPayrollScreen>
       }).eq('id', emp.profileId);
 
       _fetchEmployees();
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(content: Text('Employee deleted successfully!'), backgroundColor: HRTheme.success),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         SnackBar(content: Text('Failed to delete employee: $e'), backgroundColor: HRTheme.danger),
       );
     }

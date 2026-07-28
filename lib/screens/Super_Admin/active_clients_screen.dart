@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -112,7 +113,7 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
             }
             if (clients.isNotEmpty && mounted) {
               context.read<ClientBloc>().add(AddClientsBulkEvent(clients));
-              ScaffoldMessenger.of(context).showSnackBar(
+              AppSnackBar.showCustom(context, 
                 SnackBar(
                   content: Text('\${clients.length} client(s) imported successfully'),
                   backgroundColor: const Color(0xFF10B981),
@@ -121,7 +122,7 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
             }
           } catch (e) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
+              AppSnackBar.showCustom(context, 
                 SnackBar(content: Text('Import failed: \$e')),
               );
             }
@@ -161,7 +162,7 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
             onPressed: () {
               context.read<ClientBloc>().add(DeleteClientEvent(client.id));
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
+              AppSnackBar.showCustom(context, 
                 const SnackBar(content: Text('Client removed'), backgroundColor: Colors.red),
               );
             },

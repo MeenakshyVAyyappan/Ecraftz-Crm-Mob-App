@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -1092,7 +1093,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
       setState(() {
         _isClockPaused = true;
       });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      AppSnackBar.showCustom(context, const SnackBar(
         content: Text('Clock paused due to 15 minutes of inactivity'),
         behavior: SnackBarBehavior.floating,
       ));
@@ -1801,19 +1802,19 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                   ),
                   onPressed: () async {
                     if (_vgSelectedClient == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a client.')));
+                      AppSnackBar.showCustom(context, const SnackBar(content: Text('Please select a client.')));
                       return;
                     }
                     if (_vgShootNameCtrl.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a shoot name.')));
+                      AppSnackBar.showCustom(context, const SnackBar(content: Text('Please enter a shoot name.')));
                       return;
                     }
                     if (_vgShootLocationCtrl.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a shoot location.')));
+                      AppSnackBar.showCustom(context, const SnackBar(content: Text('Please enter a shoot location.')));
                       return;
                     }
                     if (_vgSelectedWorkType == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select work type.')));
+                      AppSnackBar.showCustom(context, const SnackBar(content: Text('Please select work type.')));
                       return;
                     }
 
@@ -1830,7 +1831,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                     _vgShootLocationCtrl.clear();
                     _vgRemarksCtrl.clear();
                     await _loadEmployeeData();
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    AppSnackBar.showCustom(context, const SnackBar(
                       content: Text('Videography work log recorded!'),
                       backgroundColor: Colors.green,
                     ));
@@ -1932,7 +1933,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                   icon: const Icon(Icons.check, color: Colors.white, size: 16),
                   label: const Text('COMPLETE VIDEOGRAPHY WORK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    AppSnackBar.showCustom(context, const SnackBar(
                       content: Text('Videography work completed successfully!'),
                       backgroundColor: Colors.green,
                       behavior: SnackBarBehavior.floating,
@@ -2077,7 +2078,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                   icon: const Icon(Icons.check, color: Colors.white, size: 16),
                   label: const Text('COMPLETE DAILY WORK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    AppSnackBar.showCustom(context, const SnackBar(
                       content: Text('Daily work completed successfully!'),
                       backgroundColor: Colors.green,
                       behavior: SnackBarBehavior.floating,
@@ -2528,7 +2529,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
         GestureDetector(
           onTap: () {
             setState(() => _isWorking = !_isWorking);
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            AppSnackBar.showCustom(context, SnackBar(
               content: Text(
                   _isWorking ? 'Work resumed' : 'Work stopped'),
               backgroundColor:
@@ -2650,7 +2651,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
   }
 
   void _startBreak(String type) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    AppSnackBar.showCustom(context, SnackBar(
       content: Text('$type break started'),
       backgroundColor: const Color(0xFFFF9800),
       behavior: SnackBarBehavior.floating,
@@ -3329,7 +3330,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                       );
                       context.read<TaskBloc>().add(AddTaskEvent(task));
                       _taskController.clear();
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      AppSnackBar.showCustom(context, const SnackBar(
                         content: Text('Task added for today'),
                         backgroundColor: Colors.green,
                         behavior: SnackBarBehavior.floating,
@@ -3839,7 +3840,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                   final otherLeads = int.tryParse(_bdeOtherPlatformsCtrl.text) ?? 0;
 
                   if (_bdeDbPlannedCtrl.text.trim().isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    AppSnackBar.showCustom(context, const SnackBar(
                       content: Text('Please outline your planned database.'),
                       backgroundColor: Colors.red,
                     ));
@@ -3858,7 +3859,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                   );
                   await BdeReportService.instance.addOrUpdateLogin(loginDetails);
                   await _loadEmployeeData();
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  AppSnackBar.showCustom(context, const SnackBar(
                     content: Text('Morning Plan submitted!'),
                     backgroundColor: Colors.green,
                   ));
@@ -3981,7 +3982,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                   );
                   await BdeReportService.instance.addOrUpdateLogout(staffName, today, logoutDetails);
                   await _loadEmployeeData();
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  AppSnackBar.showCustom(context, const SnackBar(
                     content: Text('EOD Logout report submitted successfully!'),
                     backgroundColor: Colors.green,
                   ));
@@ -4292,11 +4293,11 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                   ),
                   onPressed: () async {
                     if (_cwSelectedClient == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a client.')));
+                      AppSnackBar.showCustom(context, const SnackBar(content: Text('Please select a client.')));
                       return;
                     }
                     if (_cwSelectedWorkType == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select work type.')));
+                      AppSnackBar.showCustom(context, const SnackBar(content: Text('Please select work type.')));
                       return;
                     }
 
@@ -4309,7 +4310,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                     );
                     _cwRemarksCtrl.clear();
                     await _loadEmployeeData();
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    AppSnackBar.showCustom(context, const SnackBar(
                       content: Text('Work log recorded!'),
                       backgroundColor: Colors.green,
                     ));
@@ -4587,11 +4588,11 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                   ),
                   onPressed: () async {
                     if (_crmSelectedClient == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a client.')));
+                      AppSnackBar.showCustom(context, const SnackBar(content: Text('Please select a client.')));
                       return;
                     }
                     if (_crmSelectedWorkType == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select task type.')));
+                      AppSnackBar.showCustom(context, const SnackBar(content: Text('Please select task type.')));
                       return;
                     }
 
@@ -4604,7 +4605,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                     );
                     _crmRemarksCtrl.clear();
                     await _loadEmployeeData();
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    AppSnackBar.showCustom(context, const SnackBar(
                       content: Text('CRM log recorded!'),
                       backgroundColor: Colors.green,
                     ));
@@ -4895,11 +4896,11 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                   ),
                   onPressed: () async {
                     if (_gdSelectedClient == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a client.')));
+                      AppSnackBar.showCustom(context, const SnackBar(content: Text('Please select a client.')));
                       return;
                     }
                     if (_gdSelectedWorkType == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select work type.')));
+                      AppSnackBar.showCustom(context, const SnackBar(content: Text('Please select work type.')));
                       return;
                     }
 
@@ -4912,7 +4913,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                     );
                     _gdRemarksCtrl.clear();
                     await _loadEmployeeData();
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    AppSnackBar.showCustom(context, const SnackBar(
                       content: Text('Design work log recorded!'),
                       backgroundColor: Colors.green,
                     ));
@@ -5013,7 +5014,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                   icon: const Icon(Icons.check, color: Colors.white, size: 16),
                   label: const Text('COMPLETE DESIGN WORK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    AppSnackBar.showCustom(context, const SnackBar(
                       content: Text('Design work completed successfully!'),
                       backgroundColor: Colors.green,
                       behavior: SnackBarBehavior.floating,
@@ -5223,11 +5224,11 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                   ),
                   onPressed: () async {
                     if (_veSelectedClient == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a client.')));
+                      AppSnackBar.showCustom(context, const SnackBar(content: Text('Please select a client.')));
                       return;
                     }
                     if (_veSelectedWorkType == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select work type.')));
+                      AppSnackBar.showCustom(context, const SnackBar(content: Text('Please select work type.')));
                       return;
                     }
 
@@ -5240,7 +5241,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                     );
                     _veRemarksCtrl.clear();
                     await _loadEmployeeData();
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    AppSnackBar.showCustom(context, const SnackBar(
                       content: Text('Video work log recorded!'),
                       backgroundColor: Colors.green,
                     ));
@@ -5341,7 +5342,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                   icon: const Icon(Icons.check, color: Colors.white, size: 16),
                   label: const Text('COMPLETE VIDEO WORK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    AppSnackBar.showCustom(context, const SnackBar(
                       content: Text('Video work completed successfully!'),
                       backgroundColor: Colors.green,
                       behavior: SnackBarBehavior.floating,
@@ -5454,7 +5455,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                 onPressed: () async {
                   final title = _focusTacklingCtrl.text.trim();
                   if (title.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a task summary.')));
+                    AppSnackBar.showCustom(context, const SnackBar(content: Text('Please enter a task summary.')));
                     return;
                   }
                   final desc = _focusRemarksCtrl.text.trim();
@@ -5477,12 +5478,12 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                     _focusTacklingCtrl.clear();
                     _focusRemarksCtrl.clear();
                     await _loadEmployeeData();
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    AppSnackBar.showCustom(context, SnackBar(
                       content: Text('Task added for $_focusDaySchedule!'),
                       backgroundColor: Colors.green,
                     ));
                   } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    AppSnackBar.showCustom(context, SnackBar(
                       content: Text('Failed to add task: $e'),
                       backgroundColor: Colors.red,
                     ));
@@ -5548,7 +5549,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                                 .eq('id', task['id']);
                             await _loadEmployeeData();
                           } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            AppSnackBar.showCustom(context, SnackBar(
                               content: Text('Failed to update status: $e'),
                               backgroundColor: Colors.red,
                             ));
@@ -5611,7 +5612,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                                       .eq('id', task['id']);
                                   await _loadEmployeeData();
                                 } catch (e) {
-                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                  AppSnackBar.showCustom(context, SnackBar(
                                     content: Text('Failed to update status: $e'),
                                     backgroundColor: Colors.red,
                                   ));
@@ -5631,7 +5632,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                                 .eq('id', task['id']);
                             await _loadEmployeeData();
                           } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            AppSnackBar.showCustom(context, SnackBar(
                               content: Text('Failed to delete task: $e'),
                               backgroundColor: Colors.red,
                             ));
@@ -5653,7 +5654,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                AppSnackBar.showCustom(context, const SnackBar(
                   content: Text('Daily work focus submitted successfully!'),
                   backgroundColor: Colors.green,
                 ));
@@ -6335,11 +6336,11 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                   ),
                   onPressed: () async {
                     if (_dmSelectedClient == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a client.')));
+                      AppSnackBar.showCustom(context, const SnackBar(content: Text('Please select a client.')));
                       return;
                     }
                     if (_dmSelectedWorkType == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select work type.')));
+                      AppSnackBar.showCustom(context, const SnackBar(content: Text('Please select work type.')));
                       return;
                     }
 
@@ -6352,7 +6353,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
                     );
                     _dmRemarksCtrl.clear();
                     await _loadEmployeeData();
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    AppSnackBar.showCustom(context, const SnackBar(
                       content: Text('Digital Marketing log recorded!'),
                       backgroundColor: Colors.green,
                     ));

@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'dart:ui' as ui;
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
@@ -2026,7 +2027,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       headerIconColor: AppTheme.primary,
       trailing: OutlinedButton.icon(
         onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackBar.showCustom(context, 
             const SnackBar(content: Text('Exporting BDE Calls Analytics CSV...'), backgroundColor: AppTheme.primary),
           );
         },

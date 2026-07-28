@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -62,7 +63,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   Future<void> _sendOtp() async {
     final email = _emailCtrl.text.trim();
     if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
           content: Text('Please enter your registered email address.'),
           backgroundColor: Colors.orange,
@@ -73,7 +74,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     }
     final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
     if (!emailRegex.hasMatch(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
           content: Text('Please enter a valid email address.'),
           backgroundColor: Colors.orange,
@@ -101,7 +102,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       });
       _startResendTimer();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           const SnackBar(
             content: Text('OTP sent successfully to your email.'),
             backgroundColor: AppTheme.success,
@@ -114,7 +115,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         _errorMessage = 'Failed to send OTP. Please try again.';
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           const SnackBar(
             content: Text('Failed to send OTP. Please try again.'),
             backgroundColor: Colors.red,
@@ -145,7 +146,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       );
       _startResendTimer();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           const SnackBar(
             content: Text('OTP code has been resent to your email.'),
             backgroundColor: AppTheme.success,
@@ -167,7 +168,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   Future<void> _verifyOtp() async {
     final otp = _otpCtrl.text.trim();
     if (otp.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
           content: Text('Please enter the verification code.'),
           backgroundColor: Colors.orange,
@@ -177,7 +178,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       return;
     }
     if (otp.length < 6 || otp.length > 8) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
           content: Text('OTP must be between 6 and 8 digits.'),
           backgroundColor: Colors.orange,
@@ -210,7 +211,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         _currentStep = ForgotPasswordStep.resetPassword;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           const SnackBar(
             content: Text('OTP verified successfully.'),
             backgroundColor: AppTheme.success,
@@ -223,7 +224,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         _errorMessage = 'Invalid OTP.';
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           const SnackBar(
             content: Text('Invalid OTP.'),
             backgroundColor: Colors.red,
@@ -243,7 +244,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     final confirmPass = _confirmPassCtrl.text.trim();
 
     if (newPass.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
           content: Text('Please enter your password.'),
           backgroundColor: Colors.orange,
@@ -253,7 +254,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       return;
     }
     if (newPass.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
           content: Text('Password must be at least 6 characters.'),
           backgroundColor: Colors.orange,
@@ -263,7 +264,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       return;
     }
     if (confirmPass != newPass) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
           content: Text('Passwords do not match.'),
           backgroundColor: Colors.orange,
@@ -290,7 +291,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       await SupabaseService.client.auth.signOut();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           const SnackBar(
             content: Text('Password updated successfully.'),
             backgroundColor: AppTheme.success,
@@ -304,7 +305,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         _errorMessage = 'Password reset failed. Please try again.';
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           const SnackBar(
             content: Text('Password reset failed. Please try again.'),
             backgroundColor: Colors.red,

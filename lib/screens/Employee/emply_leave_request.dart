@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -566,7 +567,7 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
                               endDate,
                             );
                           } else {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            AppSnackBar.showCustom(context, const SnackBar(
                               content: Text('Please fill all fields'),
                               backgroundColor: Colors.red,
                               behavior: SnackBarBehavior.floating,
@@ -670,15 +671,15 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
 
       if (id != null) {
         await SupabaseService.client.from('leave_requests').update(payload).eq('id', id);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Leave request updated!'), backgroundColor: Color(0xFF4CAF50)));
+        AppSnackBar.showCustom(context, const SnackBar(content: Text('Leave request updated!'), backgroundColor: Color(0xFF4CAF50)));
       } else {
         await SupabaseService.client.from('leave_requests').insert(payload);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Leave request submitted!'), backgroundColor: Color(0xFF4CAF50)));
+        AppSnackBar.showCustom(context, const SnackBar(content: Text('Leave request submitted!'), backgroundColor: Color(0xFF4CAF50)));
       }
       _fetchData();
     } catch (e) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      AppSnackBar.showCustom(context, SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     }
   }
 
@@ -697,11 +698,11 @@ class _LeaveRequestsScreenState extends State<LeaveRequestsScreen> {
               setState(() => _isLoading = true);
               try {
                 await SupabaseService.client.from('leave_requests').delete().eq('id', id);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Deleted successfully'), backgroundColor: Color(0xFF4CAF50)));
+                AppSnackBar.showCustom(context, const SnackBar(content: Text('Deleted successfully'), backgroundColor: Color(0xFF4CAF50)));
                 _fetchData();
               } catch (e) {
                 setState(() => _isLoading = false);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+                AppSnackBar.showCustom(context, SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
               }
             },
             child: const Text('Delete', style: TextStyle(color: Colors.white)),

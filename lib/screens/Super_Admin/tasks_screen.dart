@@ -1,4 +1,5 @@
 // tasks_page.dart
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -562,7 +563,7 @@ class _TasksPageState extends State<TasksPage> {
 
       if (lines.length < 2) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackBar.showCustom(context, 
             const SnackBar(content: Text('CSV must have a header row and at least one data row.')),
           );
         }
@@ -584,7 +585,7 @@ class _TasksPageState extends State<TasksPage> {
 
       if (titleIdx == -1) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackBar.showCustom(context, 
             const SnackBar(content: Text('CSV must have a "title" or "summary" column.')),
           );
         }
@@ -617,7 +618,7 @@ class _TasksPageState extends State<TasksPage> {
       }
 
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           SnackBar(
             content: Text('Imported $imported task${imported == 1 ? '' : 's'} successfully!'),
             backgroundColor: const Color(0xFF10B981),
@@ -626,7 +627,7 @@ class _TasksPageState extends State<TasksPage> {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           SnackBar(content: Text('Import failed: $e')),
         );
       }
@@ -1842,7 +1843,7 @@ class _CreateTaskModalState extends State<_CreateTaskModal> {
 
   void _submit() {
     if (_summaryCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a task summary')));
+      AppSnackBar.showCustom(context, const SnackBar(content: Text('Please enter a task summary')));
       return;
     }
     final task = TaskItem(
@@ -1857,7 +1858,7 @@ class _CreateTaskModalState extends State<_CreateTaskModal> {
     );
     widget.onSubmit(task);
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       const SnackBar(content: Text('Task created!'), backgroundColor: Color(0xFF10B981)),
     );
   }

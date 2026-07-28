@@ -1,5 +1,6 @@
 // billing_page.dart
 
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -1446,13 +1447,13 @@ class _NewInvoiceSheetState extends State<_NewInvoiceSheet> {
 
   void _save() {
     if (_clientCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(content: Text('Client name is required'), backgroundColor: Colors.red),
       );
       return;
     }
     if (_items.every((i) => i.description.isEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(content: Text('Add at least one line item'), backgroundColor: Colors.red),
       );
       return;
@@ -1473,7 +1474,7 @@ class _NewInvoiceSheetState extends State<_NewInvoiceSheet> {
     );
     widget.onSave(inv);
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       const SnackBar(
         content: Text('Invoice created successfully!'),
         backgroundColor: Color(0xFF10B981),
@@ -2002,7 +2003,7 @@ class _GstSettingsDialogState extends State<_GstSettingsDialog> {
       website:   _websiteCtrl.text.trim(),
     ));
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       const SnackBar(
           content: Text('Company profile saved!'),
           backgroundColor: Color(0xFF10B981)),

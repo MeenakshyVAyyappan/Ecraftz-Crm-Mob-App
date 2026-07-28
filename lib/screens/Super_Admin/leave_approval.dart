@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -234,7 +235,7 @@ class _LeaveApprovalsScreenState extends State<LeaveApprovalsScreen>
         );
       }
     });
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       SnackBar(
         content: Text('Leave approved for ${req.employeeName}'),
         backgroundColor: const Color(0xFF10B981),
@@ -264,7 +265,7 @@ class _LeaveApprovalsScreenState extends State<LeaveApprovalsScreen>
         );
       }
     });
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       SnackBar(
         content: Text('Leave rejected for ${req.employeeName}'),
         backgroundColor: const Color(0xFFEF4444),
@@ -294,7 +295,7 @@ class _LeaveApprovalsScreenState extends State<LeaveApprovalsScreen>
         );
       }
     });
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       SnackBar(
         content: Text('More info requested from ${req.employeeName}'),
         backgroundColor: const Color(0xFF0EA5E9),
@@ -1976,7 +1977,7 @@ class _NewLeaveSheetState extends State<_NewLeaveSheet> {
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    AppSnackBar.showCustom(context, 
                       const SnackBar(
                         content: Text('Leave request submitted successfully'),
                         backgroundColor: Color(0xFF10B981),

@@ -1,4 +1,5 @@
 // projects_page.dart
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -439,7 +440,7 @@ class _ProjectsPageState extends State<ProjectsPage>
             }
             if (projects.isNotEmpty && context.mounted) {
               context.read<ProjectBloc>().add(AddProjectsBulkEvent(projects));
-              ScaffoldMessenger.of(context).showSnackBar(
+              AppSnackBar.showCustom(context, 
                 SnackBar(
                   content: Text('\${projects.length} project(s) imported successfully'),
                   backgroundColor: const Color(0xFF10B981),
@@ -448,7 +449,7 @@ class _ProjectsPageState extends State<ProjectsPage>
             }
           } catch (e) {
             if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
+              AppSnackBar.showCustom(context, 
                 SnackBar(content: Text('Import failed: \$e')),
               );
             }
@@ -687,7 +688,7 @@ class _ProjectCard extends StatelessWidget {
                   onSelected: (value) {
                     if (value == 'delete') {
                       context.read<ProjectBloc>().add(DeleteProjectEvent(project.id));
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      AppSnackBar.showCustom(context, 
                         const SnackBar(content: Text('Project deleted'), backgroundColor: Colors.red),
                       );
                     } else if (value == 'archive') {
@@ -704,7 +705,7 @@ class _ProjectCard extends StatelessWidget {
                         isArchived: !project.isArchived,
                       );
                       context.read<ProjectBloc>().add(UpdateProjectEvent(updated));
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      AppSnackBar.showCustom(context, 
                         SnackBar(
                           content: Text(project.isArchived ? 'Project unarchived' : 'Project archived'),
                           backgroundColor: const Color(0xFF10B981),
@@ -933,7 +934,7 @@ class _ProjectListTile extends StatelessWidget {
             onSelected: (value) {
               if (value == 'delete') {
                 context.read<ProjectBloc>().add(DeleteProjectEvent(project.id));
-                ScaffoldMessenger.of(context).showSnackBar(
+                AppSnackBar.showCustom(context, 
                   const SnackBar(content: Text('Project deleted'), backgroundColor: Colors.red),
                 );
               } else if (value == 'archive') {
@@ -950,7 +951,7 @@ class _ProjectListTile extends StatelessWidget {
                   isArchived: !project.isArchived,
                 );
                 context.read<ProjectBloc>().add(UpdateProjectEvent(updated));
-                ScaffoldMessenger.of(context).showSnackBar(
+                AppSnackBar.showCustom(context, 
                   SnackBar(
                     content: Text(project.isArchived ? 'Project unarchived' : 'Project archived'),
                     backgroundColor: const Color(0xFF10B981),
@@ -1437,7 +1438,7 @@ class _CreateProjectModalState extends State<_CreateProjectModal> {
 
   void _submit() {
     if (_nameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(content: Text('Please enter a project name')),
       );
       return;
@@ -1457,7 +1458,7 @@ class _CreateProjectModalState extends State<_CreateProjectModal> {
 
     widget.onSubmit(project);
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       const SnackBar(
         content: Text('Project created successfully!'),
         backgroundColor: Color(0xFF10B981),

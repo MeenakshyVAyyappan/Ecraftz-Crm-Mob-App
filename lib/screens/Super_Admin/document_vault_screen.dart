@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -115,7 +116,7 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
                 onPressed: () {
                   final title = titleCtrl.text.trim();
                   if (title.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a document title.')));
+                    AppSnackBar.showCustom(context, const SnackBar(content: Text('Please enter a document title.')));
                     return;
                   }
                   
@@ -133,7 +134,7 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
                   ));
 
                   Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  AppSnackBar.showCustom(context, const SnackBar(
                     content: Text('Document uploaded to Vault!'),
                     backgroundColor: Colors.green,
                   ));
@@ -159,7 +160,7 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
             onPressed: () {
               context.read<DocumentVaultBloc>().add(DeleteDocumentEvent(doc.id));
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              AppSnackBar.showCustom(context, const SnackBar(
                 content: Text('Document deleted'),
                 backgroundColor: Colors.red,
               ));
@@ -284,7 +285,7 @@ class _DocumentVaultScreenState extends State<DocumentVaultScreen> {
                                   IconButton(
                                     icon: const Icon(Icons.download_rounded, color: Colors.blue, size: 20),
                                     onPressed: () {
-                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                      AppSnackBar.showCustom(context, SnackBar(
                                         content: Text('Downloading "${doc.title}"...'),
                                         backgroundColor: Colors.blue,
                                       ));

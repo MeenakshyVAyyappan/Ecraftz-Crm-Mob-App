@@ -1,4 +1,5 @@
 // teams_page.dart
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -347,7 +348,7 @@ class _TeamsPageState extends State<TeamsPage> {
   }
 
   void _snack(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       SnackBar(
           content: Text(msg),
           backgroundColor: color,

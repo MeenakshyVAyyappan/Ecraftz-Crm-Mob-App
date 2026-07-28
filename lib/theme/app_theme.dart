@@ -86,6 +86,9 @@ class AppTheme {
         margin: EdgeInsets.zero,
       ),
       dividerColor: divider,
+      snackBarTheme: const SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -118,6 +121,9 @@ class AppTheme {
         margin: EdgeInsets.zero,
       ),
       dividerColor: dividerDark,
+      snackBarTheme: const SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 

@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/attendance_punch_model.dart';
@@ -170,7 +171,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen>
       await _fetchData();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           SnackBar(content: Text('Failed to update WFH: $e')),
         );
       }
@@ -193,7 +194,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen>
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           SnackBar(content: Text('PDF export failed: $e')),
         );
       }
@@ -216,7 +217,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen>
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppSnackBar.showCustom(context, 
           SnackBar(content: Text('Excel export failed: $e')),
         );
       }
@@ -260,7 +261,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen>
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: const Text(
-          'Attendance Dashboard',
+          'Attendance Reports',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: false,

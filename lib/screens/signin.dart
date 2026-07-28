@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'signup.dart';
@@ -31,7 +32,7 @@ class _LoginPageState extends State<LoginPage> {
     final password = _passCtrl.text.trim();
 
     if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
           content: Text('Please enter your email address.'),
           backgroundColor: Colors.orange,
@@ -43,7 +44,7 @@ class _LoginPageState extends State<LoginPage> {
 
     final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
     if (!emailRegex.hasMatch(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
           content: Text('Please enter a valid email address.'),
           backgroundColor: Colors.orange,
@@ -54,7 +55,7 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     if (password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
           content: Text('Please enter your password.'),
           backgroundColor: Colors.orange,
@@ -65,7 +66,7 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     if (password.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppSnackBar.showCustom(context, 
         const SnackBar(
           content: Text('Password must be at least 6 characters.'),
           backgroundColor: Colors.orange,
@@ -95,7 +96,7 @@ class _LoginPageState extends State<LoginPage> {
         // AuthWrapper in main.dart handles navigation for Authenticated state.
         // We only need to show error feedback here.
         if (state is AuthError) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppSnackBar.showCustom(context, 
             SnackBar(
               content: Text(state.message),
               backgroundColor: Colors.red,

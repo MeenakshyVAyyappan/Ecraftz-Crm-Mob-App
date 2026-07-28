@@ -1,3 +1,4 @@
+import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../theme/app_theme.dart';
@@ -1768,7 +1769,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
       );
       _isEditing = false;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       SnackBar(
         content: const Row(
           children: [
@@ -1977,7 +1978,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   }
 
   void _toggleBreak(Employee employee) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       SnackBar(
         content: Text('Break started for ${employee.name}'),
         backgroundColor: const Color(0xFFFF9800),
@@ -2011,7 +2012,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
+              AppSnackBar.showCustom(context, 
                 SnackBar(
                   content: Text('${employee.name} checked out'),
                   backgroundColor: Colors.red,
@@ -2070,7 +2071,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
+              AppSnackBar.showCustom(context, 
                 SnackBar(
                   content: Text(
                       'Task assigned to ${employee.name}'),
@@ -2220,7 +2221,7 @@ class _TimeMonitorScreenState extends State<TimeMonitorScreen>
   }
 
   void _exportData() {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppSnackBar.showCustom(context, 
       SnackBar(
         content: const Row(
           children: [
