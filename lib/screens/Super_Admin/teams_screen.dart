@@ -3,6 +3,7 @@ import 'package:ecraftz_crm/widgets/app_refresh_button.dart';
 import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
@@ -197,6 +198,7 @@ class _TeamsPageState extends State<TeamsPage> {
   final _searchCtrl = TextEditingController();
 
   bool _isLoading = true;
+  bool _isCurrentUserSuperAdmin = false;
   List<TeamMember> _members = [];
   List<Map<String, dynamic>> _dynamicDepartments = [];
   RealtimeChannel? _profileSubscription;
@@ -282,15 +284,472 @@ class _TeamsPageState extends State<TeamsPage> {
         );
       }).toList();
 
+      bool isSuperAdmin = false;
+      final currentUser = SupabaseService.currentUser;
+      if (currentUser != null) {
+        final currentEmail = currentUser.email?.toLowerCase() ?? '';
+        final currentId = currentUser.id;
+
+        final selfMember = loadedMembers.firstWhere(
+          (m) => m.id == currentId || (currentEmail.isNotEmpty && m.email.toLowerCase() == currentEmail),
+          orElse: () => TeamMember(
+            id: '',
+            name: '',
+            email: '',
+            role: '',
+            department: '',
+            status: MemberStatus.pending,
+            registeredAt: DateTime.now(),
+          ),
+        );
+
+        if (selfMember.id.isNotEmpty) {
+          isSuperAdmin = selfMember.isSuperAdmin;
+        } else {
+          isSuperAdmin = currentEmail == 'viswajithjithu3335@gmail.com' ||
+                         currentEmail == 'viswajithjithu333@gmail.com' ||
+                         currentId == 'f417dc7e-a4c3-4964-9e62-553ffffcef8c';
+        }
+      }
+      
+      if (!isSuperAdmin) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final cachedRole = prefs.getString('user_role')?.toLowerCase();
+          if (cachedRole == 'super_admin' || cachedRole == 'super admin') {
+            isSuperAdmin = true;
+          }
+        } catch (_) {}
+      }
+
       setState(() {
         _dynamicDepartments = fetchedDepts;
         _members = loadedMembers;
+        _isCurrentUserSuperAdmin = isSuperAdmin;
         _isLoading = false;
       });
     } catch (e) {
       setState(() => _isLoading = false);
       _snack('Failed to load data from Supabase: $e', Colors.red);
     }
+  }
+
+  Future<void> _createTeamMember({
+    required String fullName,
+    required String email,
+    required String password,
+    required String role,
+    required String department,
+    String? biometricId,
+  }) async {
+    if (!_isCurrentUserSuperAdmin) {
+      throw Exception('Permission denied: Only Super Admin can add team members.');
+    }
+
+    final tempClient = SupabaseClient(
+      'https://bnjvugxvcoqgfvvvwpzc.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJuanZ1Z3h2Y29xZ2Z2dnZ3cHpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMTA4NTMsImV4cCI6MjA5ODg4Njg1M30.Fe5COvy60ezaVwrrDOR_Ec-1wDRizd6FiPp9vtHy2O4',
+      authOptions: const AuthClientOptions(
+        authFlowType: AuthFlowType.pkce,
+        autoRefreshToken: false,
+      ),
+    );
+
+    final authRes = await tempClient.auth.signUp(
+      email: email.trim(),
+      password: password.trim(),
+      data: {
+        'full_name': fullName.trim(),
+        'name': fullName.trim(),
+      },
+    );
+
+    final newUserId = authRes.user?.id;
+    if (newUserId == null) {
+      throw Exception('User account creation failed or did not return a user ID.');
+    }
+
+    final dbRole = _mapRoleToDb(role);
+    final deptId = _findDeptIdByName(department);
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+
+    await SupabaseService.client.from('profiles').upsert({
+      'id': newUserId,
+      'full_name': fullName.trim(),
+      'email': email.trim(),
+      'role': dbRole,
+      'department_id': deptId,
+      'biometric_id': (biometricId != null && biometricId.trim().isNotEmpty) ? biometricId.trim() : null,
+      'status': 'active',
+      'organization_id': '00000000-0000-0000-0000-000000000000',
+      'created_at': nowIso,
+      'updated_at': nowIso,
+    });
+
+    if (deptId != null) {
+      try {
+        await SupabaseService.client.from('department_members').insert({
+          'profile_id': newUserId,
+          'department_id': deptId,
+        });
+      } catch (_) {}
+    }
+
+    setState(() {
+      _tab = MemberStatus.active;
+    });
+
+    await _fetchData(showLoading: false);
+
+    _snack('Team member "$fullName" created successfully.', const Color(0xFF10B981));
+  }
+
+  void _showAddTeamMemberDialog() {
+    if (!_isCurrentUserSuperAdmin) {
+      _snack('Only Super Admin can add new team members.', Colors.red);
+      return;
+    }
+
+    final formKey = GlobalKey<FormState>();
+    final nameCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final passwordCtrl = TextEditingController();
+    final biometricCtrl = TextEditingController();
+
+    String selectedRole = 'Employee';
+    String selectedDept = _departmentNames.isNotEmpty ? _departmentNames.first : 'No Department';
+
+    bool isObscure = true;
+    bool isSubmitting = false;
+    String? errorMessage;
+
+    showDialog(
+      context: context,
+      barrierDismissible: !isSubmitting,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final dialogBg = Theme.of(context).colorScheme.surface;
+            final borderClr = AppTheme.borderOf(context);
+            final textPrimary = AppTheme.textPrimaryOf(context);
+            final textSecondary = AppTheme.textSecondaryOf(context);
+            final textMuted = AppTheme.textMutedOf(context);
+
+            final screenWidth = MediaQuery.of(context).size.width;
+            final isFormWide = screenWidth > 580;
+            final dialogWidth = isFormWide ? 480.0 : (screenWidth * 0.88);
+
+            final roleWidget = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Role *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary)),
+                const SizedBox(height: 5),
+                DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  value: selectedRole,
+                  dropdownColor: dialogBg,
+                  style: TextStyle(color: textPrimary, fontSize: 13),
+                  items: _roles.map((r) => DropdownMenuItem(
+                    value: r,
+                    child: Text(r, overflow: TextOverflow.ellipsis),
+                  )).toList(),
+                  onChanged: (val) {
+                    if (val != null) setDialogState(() => selectedRole = val);
+                  },
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                    prefixIcon: Icon(Icons.admin_panel_settings_outlined, size: 18, color: textSecondary),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderClr)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderClr)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                  ),
+                ),
+              ],
+            );
+
+            final deptWidget = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Department *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary)),
+                const SizedBox(height: 5),
+                DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  value: _departmentNames.contains(selectedDept) ? selectedDept : _departmentNames.first,
+                  dropdownColor: dialogBg,
+                  style: TextStyle(color: textPrimary, fontSize: 13),
+                  items: _departmentNames.map((d) => DropdownMenuItem(
+                    value: d,
+                    child: Text(d, overflow: TextOverflow.ellipsis),
+                  )).toList(),
+                  onChanged: (val) {
+                    if (val != null) setDialogState(() => selectedDept = val);
+                  },
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                    prefixIcon: Icon(Icons.business_outlined, size: 18, color: textSecondary),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderClr)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderClr)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                  ),
+                ),
+              ],
+            );
+
+            return AlertDialog(
+              backgroundColor: dialogBg,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: borderClr),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00BCD4).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.person_add_alt_1_rounded,
+                      color: Color(0xFF00BCD4),
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Add New Team Member',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: textPrimary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          'Create an employee account and set role & department',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            color: textSecondary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Container(
+                  width: dialogWidth,
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (errorMessage != null) ...[
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.red.withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.error_outline, color: Colors.red, size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    errorMessage!,
+                                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        Text('Full Name *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary)),
+                        const SizedBox(height: 5),
+                        TextFormField(
+                          controller: nameCtrl,
+                          style: TextStyle(color: textPrimary, fontSize: 13),
+                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Full Name is required' : null,
+                          decoration: InputDecoration(
+                            hintText: 'Enter full name',
+                            hintStyle: TextStyle(color: textMuted, fontSize: 13),
+                            prefixIcon: Icon(Icons.person_outline_rounded, size: 18, color: textSecondary),
+                            filled: true,
+                            fillColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderClr)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderClr)),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        Text('Email Address *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary)),
+                        const SizedBox(height: 5),
+                        TextFormField(
+                          controller: emailCtrl,
+                          keyboardType: TextInputType.emailAddress,
+                          style: TextStyle(color: textPrimary, fontSize: 13),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return 'Email Address is required';
+                            final emailRegExp = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                            if (!emailRegExp.hasMatch(v.trim())) return 'Enter a valid email address';
+                            return null;
+                          },
+                          decoration: InputDecoration(
+                            hintText: 'employee@ecraftz.com',
+                            hintStyle: TextStyle(color: textMuted, fontSize: 13),
+                            prefixIcon: Icon(Icons.email_outlined, size: 18, color: textSecondary),
+                            filled: true,
+                            fillColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderClr)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderClr)),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        Text('Password *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary)),
+                        const SizedBox(height: 5),
+                        TextFormField(
+                          controller: passwordCtrl,
+                          obscureText: isObscure,
+                          style: TextStyle(color: textPrimary, fontSize: 13),
+                          validator: (v) => (v == null || v.length < 6) ? 'Password must be at least 6 characters' : null,
+                          decoration: InputDecoration(
+                            hintText: 'Minimum 6 characters',
+                            hintStyle: TextStyle(color: textMuted, fontSize: 13),
+                            prefixIcon: Icon(Icons.lock_outline_rounded, size: 18, color: textSecondary),
+                            suffixIcon: IconButton(
+                              icon: Icon(isObscure ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 18, color: textSecondary),
+                              onPressed: () => setDialogState(() => isObscure = !isObscure),
+                            ),
+                            filled: true,
+                            fillColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderClr)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderClr)),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        if (isFormWide)
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: roleWidget),
+                              const SizedBox(width: 12),
+                              Expanded(child: deptWidget),
+                            ],
+                          )
+                        else ...[
+                          roleWidget,
+                          const SizedBox(height: 12),
+                          deptWidget,
+                        ],
+                        const SizedBox(height: 12),
+
+                        Text('Biometric ID / eSSL PIN (Optional)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary)),
+                        const SizedBox(height: 5),
+                        TextFormField(
+                          controller: biometricCtrl,
+                          style: TextStyle(color: textPrimary, fontSize: 13),
+                          decoration: InputDecoration(
+                            hintText: 'e.g. 1004',
+                            hintStyle: TextStyle(color: textMuted, fontSize: 13),
+                            prefixIcon: Icon(Icons.fingerprint_rounded, size: 18, color: textSecondary),
+                            filled: true,
+                            fillColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderClr)),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: borderClr)),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSubmitting ? null : () => Navigator.pop(dialogContext),
+                  child: Text('Cancel', style: TextStyle(color: textSecondary)),
+                ),
+                ElevatedButton.icon(
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
+                          setDialogState(() {
+                            isSubmitting = true;
+                            errorMessage = null;
+                          });
+                          try {
+                            await _createTeamMember(
+                              fullName: nameCtrl.text.trim(),
+                              email: emailCtrl.text.trim(),
+                              password: passwordCtrl.text.trim(),
+                              role: selectedRole,
+                              department: selectedDept,
+                              biometricId: biometricCtrl.text.trim(),
+                            );
+                            if (dialogContext.mounted) {
+                              Navigator.pop(dialogContext);
+                            }
+                          } catch (e) {
+                            setDialogState(() {
+                              isSubmitting = false;
+                              final errStr = e.toString();
+                              if (errStr.contains('already registered') || errStr.contains('user_already_exists')) {
+                                errorMessage = 'This email address is already registered.';
+                              } else {
+                                errorMessage = 'Failed to create member: $e';
+                              }
+                            });
+                          }
+                        },
+                  icon: isSubmitting
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.check_rounded, size: 16),
+                  label: Text(isSubmitting ? 'Creating...' : 'Add Team Member'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00BCD4),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    elevation: 0,
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   List<TeamMember> get _filtered {
@@ -463,6 +922,23 @@ class _TeamsPageState extends State<TeamsPage> {
           ],
         ),
         actions: [
+          if (_isCurrentUserSuperAdmin)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: ElevatedButton.icon(
+                onPressed: _showAddTeamMemberDialog,
+                icon: const Icon(Icons.person_add_alt_1_rounded, size: 15),
+                label: Text(isWide ? 'Add Team Member' : 'Add Member'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00BCD4),
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: isWide ? 12 : 8, vertical: 8),
+                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
           AppRefreshButton(
             onRefresh: () async {
               await _fetchData();
@@ -497,42 +973,54 @@ class _TeamsPageState extends State<TeamsPage> {
           if (_pendingCount > 0) _buildPendingBanner(isDark),
           // Tabs
           _buildTabs(isDark, _cardBg, _border, _textSecondary),
-          // Search
+          // Search & Action Row
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: (v) => setState(() => _search = v),
-              style: TextStyle(color: _textPrimary, fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'Search members...',
-                hintStyle:
-                    TextStyle(color: _textMuted, fontSize: 13),
-                prefixIcon: Icon(Icons.search,
-                    color: _textSecondary, size: 18),
-                suffixIcon: _search.isNotEmpty
-                    ? IconButton(
-                        icon: Icon(Icons.close,
-                            size: 16, color: _textSecondary),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          setState(() => _search = '');
-                        })
-                    : null,
-                filled: true,
-                fillColor: _cardBg,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: _border)),
-                enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: _border)),
-                focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(
-                        color: Color(0xFF00BCD4), width: 1.5)),
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchCtrl,
+                    onChanged: (v) => setState(() => _search = v),
+                    style: TextStyle(color: _textPrimary, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Search members...',
+                      hintStyle: TextStyle(color: _textMuted, fontSize: 13),
+                      prefixIcon: Icon(Icons.search, color: _textSecondary, size: 18),
+                      suffixIcon: _search.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.close, size: 16, color: _textSecondary),
+                              onPressed: () {
+                                _searchCtrl.clear();
+                                setState(() => _search = '');
+                              })
+                          : null,
+                      filled: true,
+                      fillColor: _cardBg,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: _border)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: _border)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                  ),
+                ),
+                if (_isCurrentUserSuperAdmin && isWide) ...[
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    onPressed: _showAddTeamMemberDialog,
+                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
+                    label: const Text('Add Team Member'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00BCD4),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                      textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           // Table header
