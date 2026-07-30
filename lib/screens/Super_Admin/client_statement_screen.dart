@@ -223,11 +223,18 @@ class ClientStatementsScreen extends StatefulWidget {
   final int selectedIndex;
   final Function(int) onItemSelected;
   final bool showAppBar;
+  final String? initialClientId;
+  final String? initialClientName;
+  final bool autoShowTemplate;
+
   const ClientStatementsScreen({
     super.key,
     required this.selectedIndex,
     required this.onItemSelected,
     this.showAppBar = true,
+    this.initialClientId,
+    this.initialClientName,
+    this.autoShowTemplate = false,
   });
 
   @override
@@ -281,7 +288,34 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
         _clients = uniqueMap.values.toList();
         _clients.sort((a, b) => a.name.compareTo(b.name));
         _isLoadingClients = false;
+
+        // Auto-select client if initialClientId or initialClientName is passed
+        if (widget.initialClientId != null || widget.initialClientName != null) {
+          final targetName = widget.initialClientName?.trim().toLowerCase();
+          final targetId = widget.initialClientId;
+
+          Client targetClient = _clients.firstWhere(
+            (c) => (targetId != null && c.id == targetId) || (targetName != null && c.name.trim().toLowerCase() == targetName),
+            orElse: () => Client(
+              id: targetId ?? 'temp_${DateTime.now().millisecondsSinceEpoch}',
+              name: widget.initialClientName ?? 'Client',
+              email: '',
+            ),
+          );
+
+          if (!_clients.any((c) => c.name.trim().toLowerCase() == targetClient.name.trim().toLowerCase())) {
+            _clients.insert(0, targetClient);
+          }
+
+          _selectedClient = targetClient;
+        } else if (_clients.isNotEmpty && _selectedClient == null) {
+          _selectedClient = _clients.first;
+        }
       });
+
+      if (_selectedClient != null) {
+        _fetchStatements(_selectedClient!.id);
+      }
     } catch (_) {
       if (mounted) setState(() => _isLoadingClients = false);
     }
@@ -418,6 +452,14 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
         _isLoadingStatements = false;
         _errorMessage = null;
       });
+
+      if (widget.autoShowTemplate) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _showStatementTemplateDialog();
+          }
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -449,6 +491,7 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
     final w = MediaQuery.of(context).size.width;
     final isTablet = w >= 600;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final canPop = Navigator.canPop(context);
 
     return Scaffold(
       key: _scaffoldKey,
@@ -457,8 +500,15 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
           ? AppDrawer(
               selectedIndex: widget.selectedIndex,
               onItemSelected: (i) {
+                if (canPop) {
+                  Navigator.pop(context);
+                  if (Navigator.canPop(context)) {
+                    Navigator.pop(context);
+                  }
+                } else {
+                  Navigator.pop(context);
+                }
                 widget.onItemSelected(i);
-                Navigator.pop(context);
               },
             )
           : null,
@@ -466,13 +516,19 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
           ? AppBar(
               backgroundColor: Theme.of(context).colorScheme.surface,
               elevation: 0,
-              leading: isTablet
-                  ? null
-                  : IconButton(
-                      icon: Icon(Icons.menu_rounded,
+              leading: canPop
+                  ? IconButton(
+                      icon: Icon(Icons.arrow_back_rounded,
                           color: isDark ? Colors.white : const Color(0xFF374151)),
-                      onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-                    ),
+                      onPressed: () => Navigator.pop(context),
+                    )
+                  : (isTablet
+                      ? null
+                      : IconButton(
+                          icon: Icon(Icons.menu_rounded,
+                              color: isDark ? Colors.white : const Color(0xFF374151)),
+                          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+                        )),
               title: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1138,10 +1194,45 @@ class _ClientStatementsScreenState extends State<ClientStatementsScreen> {
                       style: const TextStyle(color: Colors.red))),
             ),
           if (_statements.isEmpty && _errorMessage == null)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child:
-                  Center(child: Text('No statements found for this client.')),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00BCD4).withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.receipt_long_rounded, size: 40, color: Color(0xFF00BCD4)),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'No Statements Found',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textPrimaryOf(context)),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'There are no financial statements or ledger records created for ${_selectedClient?.name ?? "this client"} yet.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondaryOf(context)),
+                  ),
+                  const SizedBox(height: 18),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00BCD4),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                      elevation: 0,
+                    ),
+                    onPressed: _showStatementTemplateDialog,
+                    icon: const Icon(Icons.add_circle_outline, size: 16),
+                    label: const Text('Create New Statement / Invoice', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
             ),
           ..._statements.asMap().entries.map((entry) => isTablet
               ? _tableRow(entry.value, entry.key)

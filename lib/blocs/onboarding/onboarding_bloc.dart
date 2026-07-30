@@ -182,7 +182,7 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
       if (secData is String) {
         try { rawSections = jsonDecode(secData) as List<dynamic>; } catch (_) {}
       } else if (secData is List) {
-        rawSections = secData as List<dynamic>;
+        rawSections = secData;
       }
       final sectionsJson = _convertSectionsToJson(rawSections);
       
@@ -261,7 +261,7 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
       if (secData is String) {
         try { rawSections = jsonDecode(secData) as List<dynamic>; } catch (_) {}
       } else if (secData is List) {
-        rawSections = secData as List<dynamic>;
+        rawSections = secData;
       }
       final sectionsJson = _convertSectionsToJson(rawSections);
 
@@ -369,11 +369,23 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchSubmissions() async {
-    final res = await _db
-        .from('form_submissions')
-        .select('*, onboarding_templates(name, sections), clients(name), leads(company), form_submission_answers(field_id, answer_value)')
-        .order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(res as List);
+    try {
+      final res = await _db
+          .from('form_submissions')
+          .select('*, onboarding_templates(name, sections), clients(name), form_submission_answers(field_id, answer_value)')
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(res as List);
+    } catch (e) {
+      try {
+        final res = await _db
+            .from('form_submissions')
+            .select('*')
+            .order('created_at', ascending: false);
+        return List<Map<String, dynamic>>.from(res as List);
+      } catch (_) {
+        return [];
+      }
+    }
   }
 
   /// Cleans Supabase/Postgres error messages to be user-readable.

@@ -273,12 +273,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen>
               await Future.delayed(const Duration(milliseconds: 600));
             },
           ),
-          const SizedBox(width: 4),
-          IconButton(
-            tooltip: 'Refresh',
-            icon: const Icon(Icons.refresh),
-            onPressed: _isLoading ? null : _fetchData,
-          ),
+          const SizedBox(width: 8),
         ],
         bottom: TabBar(
           controller: _tabController,

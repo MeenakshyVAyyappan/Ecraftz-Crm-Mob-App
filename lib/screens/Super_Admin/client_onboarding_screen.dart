@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'active_clients_screen.dart';
+import 'client_statement_screen.dart';
 import '../../blocs/client/client_bloc.dart';
 import '../../blocs/onboarding/onboarding_bloc.dart';
 import '../../models/client_model.dart';
@@ -211,6 +213,7 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
   int _tabIndex = 0; // 0=submissions, 1=templates
   String _searchQuery = '';
   String _templateFilter = 'All Templates';
+  String _statusFilter = 'All Statuses';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
@@ -332,7 +335,7 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
 
     final progressVal = row['completion_rate'];
     final double progress = (progressVal is num)
-        ? (progressVal as num).toDouble() / 100.0
+        ? progressVal.toDouble() / 100.0
         : (double.tryParse(progressVal?.toString() ?? '') ?? 0.0) / 100.0;
 
     return Submission(
@@ -475,7 +478,16 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
   }
 
   List<Submission> _filteredSubmissions(List<Map<String, dynamic>> rawSubmissions) {
-    final all = rawSubmissions.map(_parseSubmission).toList();
+    var all = rawSubmissions.map(_parseSubmission).toList();
+    if (_statusFilter != 'All Statuses') {
+      all = all.where((s) {
+        if (_statusFilter == 'Pending') return s.status == IntakeStatus.pending;
+        if (_statusFilter == 'Needs Review') return s.status == IntakeStatus.review;
+        if (_statusFilter == 'Approved') return s.status == IntakeStatus.approved;
+        if (_statusFilter == 'Rejected') return s.status == IntakeStatus.rejected;
+        return true;
+      }).toList();
+    }
     if (_searchQuery.isEmpty) return all;
     return all.where((s) =>
         s.clientName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
@@ -483,42 +495,118 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
   }
 
   void _viewSubmission(Submission s) {
+    final state = context.read<OnboardingBloc>().state;
+    final rawSub = state.submissions.firstWhere(
+      (m) => m['id']?.toString() == s.id,
+      orElse: () => {},
+    );
+
+    final answersList = rawSub['form_submission_answers'] as List? ?? [];
+    final Map<String, String> qLabelToAnswer = {};
+    if (answersList.isNotEmpty) {
+      for (var a in answersList) {
+        if (a is Map) {
+          final val = a['answer_value']?.toString() ?? '';
+          final qId = a['field_id']?.toString() ?? a['question_id']?.toString() ?? 'Field';
+          qLabelToAnswer[qId] = val;
+        }
+      }
+    }
+
     showDialog(
       context: context,
       builder: (ctx) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final textPrimary = AppTheme.textPrimaryOf(context);
+        final textSecondary = AppTheme.textSecondaryOf(context);
+
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
+          title: Row(
             children: [
-              Icon(Icons.description_outlined, color: Color(0xFF00BCD4)),
-              SizedBox(width: 8),
-              Text(
-                'Submission Details',
-                style: TextStyle(fontWeight: FontWeight.bold),
+              const Icon(Icons.description_outlined, color: Color(0xFF00BCD4)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Submission Details',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textPrimary),
+                ),
               ),
             ],
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Client Name: ${s.clientName}', style: const TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 6),
-              Text('Template: ${s.templateName}'),
-              const SizedBox(height: 6),
-              Text('Status: ${s.status.label.toUpperCase()}'),
-              const SizedBox(height: 6),
-              Text('Progress: ${(s.progress * 100).toInt()}%'),
-            ],
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppTheme.borderOf(context)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Client: ${s.clientName}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textPrimary)),
+                        const SizedBox(height: 4),
+                        Text('Template: ${s.templateName}', style: TextStyle(fontSize: 12, color: textSecondary)),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Text('Status: ', style: TextStyle(fontSize: 12, color: textSecondary)),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: s.status.color.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                s.status.label.toUpperCase(),
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: s.status.color),
+                              ),
+                            ),
+                            const Spacer(),
+                            Text('Progress: ${(s.progress * 100).toInt()}%', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Form Answers Submitted:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  if (qLabelToAnswer.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Text('No detailed form answers recorded for this submission.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    )
+                  else
+                    ...qLabelToAnswer.entries.map((e) => Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: isDark ? AppTheme.bgCardDark : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppTheme.borderOf(context)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(e.key.replaceAll('_', ' ').toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: textSecondary)),
+                          const SizedBox(height: 2),
+                          Text(e.value.isNotEmpty ? e.value : '—', style: TextStyle(fontSize: 13, color: textPrimary)),
+                        ],
+                      ),
+                    )).toList(),
+                ],
+              ),
+            ),
           ),
           actions: [
-          AppRefreshButton(
-            onRefresh: () async {
-              context.read<OnboardingBloc>().add(LoadOnboardingDataEvent());
-              await Future.delayed(const Duration(milliseconds: 600));
-            },
-          ),
-          const SizedBox(width: 4),
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Close'),
@@ -531,12 +619,10 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 onPressed: () {
-                  // 1. Approve the submission in Supabase
                   context.read<OnboardingBloc>().add(
                     UpdateSubmissionStatusEvent(s.id, 'approved', progress: 1.0),
                   );
 
-                  // 2. Add to active clients in Supabase
                   final client = ActiveClient(
                     id: _generateUniqueId(),
                     name: s.clientName,
@@ -723,6 +809,13 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
           ],
         ),
         actions: [
+          AppRefreshButton(
+            onRefresh: () async {
+              context.read<OnboardingBloc>().add(LoadOnboardingDataEvent());
+              await Future.delayed(const Duration(milliseconds: 600));
+            },
+          ),
+          const SizedBox(width: 4),
           BlocBuilder<ThemeBloc, ThemeState>(
             builder: (context, themeState) {
               final isDarkTheme = themeState.themeMode == ThemeMode.dark;
@@ -984,7 +1077,37 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
               contentPadding: const EdgeInsets.symmetric(vertical: 10),
             ),
           ),
-          if (_tabIndex == 1) ...[
+          if (_tabIndex == 0) ...[
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: ['All Statuses', 'Pending', 'Needs Review', 'Approved', 'Rejected'].map((f) {
+                  final selected = _statusFilter == f;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: () => setState(() => _statusFilter = f),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: selected ? const Color(0xFF0F172A) : Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: selected ? const Color(0xFF0F172A) : const Color(0xFFE5E7EB)),
+                        ),
+                        child: Text(f,
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: selected ? Colors.white : const Color(0xFF6B7280))),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ] else if (_tabIndex == 1) ...[
             const SizedBox(height: 10),
             Row(
               children: ['All Templates', 'Dynamic Only'].map((f) {
@@ -1070,9 +1193,37 @@ class _ClientOnboardingPageState extends State<ClientOnboardingPage> {
                 // Delete from Supabase via BLoC
                 context.read<OnboardingBloc>().add(DeleteSubmissionEvent(s.id));
               },
+              onViewStatement: () => _openClientStatement(s),
+              onCreateProposal: () => _openCreateProposal(s),
             )).toList(),
           const SizedBox(height: 24),
         ],
+      ),
+    );
+  }
+
+  void _openClientStatement(Submission s) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ClientStatementsScreen(
+          selectedIndex: widget.selectedIndex,
+          onItemSelected: widget.onItemSelected,
+          initialClientName: s.clientName,
+        ),
+      ),
+    );
+  }
+
+  void _openCreateProposal(Submission s) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => CreateProposalSheet(
+        clientName: s.clientName,
+        clientId: s.id,
+        defaultAmount: 25000,
       ),
     );
   }
@@ -1243,6 +1394,8 @@ class _SubmissionRow extends StatelessWidget {
   final bool isLast;
   final VoidCallback onView;
   final VoidCallback onDelete;
+  final VoidCallback onViewStatement;
+  final VoidCallback onCreateProposal;
 
   const _SubmissionRow({
     required this.submission,
@@ -1250,7 +1403,66 @@ class _SubmissionRow extends StatelessWidget {
     required this.isLast,
     required this.onView,
     required this.onDelete,
+    required this.onViewStatement,
+    required this.onCreateProposal,
   });
+
+  Widget _buildPopupMenu(BuildContext context, bool isDark) {
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.more_vert, size: 20, color: AppTheme.textMutedOf(context)),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(),
+      color: isDark ? AppTheme.bgCardDark : Colors.white,
+      itemBuilder: (ctx) => [
+        PopupMenuItem(
+          value: 'view',
+          child: Row(
+            children: [
+              Icon(Icons.visibility_outlined, size: 16, color: AppTheme.textSecondaryOf(context)),
+              const SizedBox(width: 10),
+              Text('View Submission', style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context))),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'statement',
+          child: Row(
+            children: [
+              const Icon(Icons.receipt_long_rounded, size: 16, color: Color(0xFF00BCD4)),
+              const SizedBox(width: 10),
+              Text('Client Statement', style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context))),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'proposal',
+          child: Row(
+            children: [
+              const Icon(Icons.article_outlined, size: 16, color: Color(0xFF10B981)),
+              const SizedBox(width: 10),
+              Text('Create Proposal', style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context))),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: [
+              const Icon(Icons.delete_outline, size: 16, color: Colors.red),
+              const SizedBox(width: 10),
+              const Text('Remove Record', style: TextStyle(fontSize: 13, color: Colors.red)),
+            ],
+          ),
+        ),
+      ],
+      onSelected: (v) {
+        if (v == 'view') onView();
+        if (v == 'statement') onViewStatement();
+        if (v == 'proposal') onCreateProposal();
+        if (v == 'delete') onDelete();
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1275,34 +1487,42 @@ class _SubmissionRow extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Row 1: Client Name + Status
+            // Row 1: Client Name + Status + Three Dots
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(submission.clientName,
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.textPrimaryOf(context))),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: submission.status.color.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.check_circle_outline,
-                          size: 12, color: submission.status.color),
-                      const SizedBox(width: 4),
-                      Text(submission.status.label,
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: submission.status.color)),
-                    ],
-                  ),
+                Expanded(
+                  child: Text(submission.clientName,
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textPrimaryOf(context))),
+                ),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: submission.status.color.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check_circle_outline,
+                              size: 12, color: submission.status.color),
+                          const SizedBox(width: 4),
+                          Text(submission.status.label,
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: submission.status.color)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    _buildPopupMenu(context, isDark),
+                  ],
                 ),
               ],
             ),
@@ -1359,11 +1579,8 @@ class _SubmissionRow extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 14),
-                    GestureDetector(
-                      onTap: onDelete,
-                      child: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
-                    ),
+                    const SizedBox(width: 8),
+                    _buildPopupMenu(context, isDark),
                   ],
                 ),
               ],
@@ -1480,10 +1697,7 @@ class _SubmissionRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: onDelete,
-                  child: Icon(Icons.delete_outline, size: 16, color: AppTheme.textMutedOf(context)),
-                ),
+                _buildPopupMenu(context, isDark),
               ],
             ),
           ),

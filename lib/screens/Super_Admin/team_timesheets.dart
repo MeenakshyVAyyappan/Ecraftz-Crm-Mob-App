@@ -545,11 +545,6 @@ class _TeamTimesheetsScreenState extends State<TeamTimesheetsScreen> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.refresh, size: 22),
-            color: _textSecondary,
-            onPressed: _loadSessions,
-          ),
-          IconButton(
             icon: const Icon(Icons.notifications_none_rounded, size: 24),
             color: _textSecondary,
             onPressed: () {},

@@ -402,7 +402,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
         return [
           row['name']?.toString() ?? '',
           row['role']?.toString() ?? '',
-          '\$${(row['rate'] as double).toStringAsFixed(2)}/hr',
+          '₹${(row['rate'] as double).toStringAsFixed(2)}/hr',
           row['status']?.toString() ?? '',
         ];
       case 'att_logs':
@@ -648,8 +648,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
               'inv': inv,
               'client': clientName,
               'date': date,
-              'face': '\$${face.toStringAsFixed(0)}',
-              'rec': '\$${rec.toStringAsFixed(0)}',
+              'face': '₹${face.toStringAsFixed(0)}',
+              'rec': '₹${rec.toStringAsFixed(0)}',
               'status': status,
               'raw_row': row,
             };
@@ -673,7 +673,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
               'date': date,
               'desc': desc,
               'project': projectName.toUpperCase(),
-              'amount': '-\$${amount.toStringAsFixed(0)}',
+              'amount': '-₹${amount.toStringAsFixed(0)}',
               'cat': cat,
               'status': 'PENDING',
               'raw_row': row,
@@ -1614,17 +1614,17 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
       case 'expense':
         double outflowSum = 0.0;
         for (final e in _data) {
-          final amtStr = e['amount']?.toString().replaceAll('-\$', '') ?? '0';
+          final amtStr = e['amount']?.toString().replaceAll('-₹', '').replaceAll('-\$', '') ?? '0';
           outflowSum += double.tryParse(amtStr) ?? 0.0;
         }
         final volume = _data.length;
         final pendingSum = _data
             .where((e) => e['status']?.toString().toUpperCase() == 'PENDING')
-            .fold<double>(0.0, (sum, e) => sum + (double.tryParse(e['amount']?.toString().replaceAll('-\$', '') ?? '0') ?? 0.0));
+            .fold<double>(0.0, (sum, e) => sum + (double.tryParse(e['amount']?.toString().replaceAll('-₹', '').replaceAll('-\$', '') ?? '0') ?? 0.0));
         return {
-          'outflow': '\$${outflowSum.toStringAsFixed(0)}',
+          'outflow': '₹${outflowSum.toStringAsFixed(0)}',
           'volume': volume,
-          'awaiting': '\$${pendingSum.toStringAsFixed(0)}',
+          'awaiting': '₹${pendingSum.toStringAsFixed(0)}',
           'deviation': 0.0,
         };
       case 'payments':
@@ -1767,7 +1767,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           _StatCard('TOTAL WORKFORCE', '${s['workforce']}', 'TOTAL ACTIVE PROFILES', Icons.people_alt_rounded),
           _StatCard('ACTIVE OPERATORS', '${s['operators']}', 'VERIFIED IDENTITIES', Icons.verified_user_rounded),
           _StatCard('ADMIN STRENGTH', '${s['admins']}', 'SYSTEM GOVERNANCE', Icons.admin_panel_settings_rounded),
-          _StatCard('AVERAGE RATE', '\$${s['avgRate']?.toStringAsFixed(2)}', 'RESOURCE VALUATION', Icons.access_time_rounded),
+          _StatCard('AVERAGE RATE', '₹${s['avgRate']?.toStringAsFixed(2)}', 'RESOURCE VALUATION', Icons.access_time_rounded),
         ];
       case 'att_logs':
         return [
@@ -2291,7 +2291,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             Wrap(spacing: 6, children: [
               _statusChip(row['role'] ?? ''),
               _statusChip(row['status'] ?? ''),
-              Text('\$${row['rate']?.toStringAsFixed(2)}/hr', style: TextStyle(fontSize: 11, color: _textSecondary)),
+              Text('₹${row['rate']?.toStringAsFixed(2)}/hr', style: TextStyle(fontSize: 11, color: _textSecondary)),
             ]),
           ])),
         ]);
@@ -2421,7 +2421,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
             Expanded(child: Text(row['name'] ?? '', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textPrimary), overflow: TextOverflow.ellipsis)),
           ])),
           _CellData.chip(row['role'] ?? ''),
-          _CellData.text('\$${row['rate']?.toStringAsFixed(2)}/hr', color: RTheme.success, bold: true),
+          _CellData.text('₹${row['rate']?.toStringAsFixed(2)}/hr', color: RTheme.success, bold: true),
           _CellData.chip(row['status'] ?? ''),
         ];
       case 'att_logs':

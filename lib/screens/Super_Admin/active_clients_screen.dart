@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/supabase_service.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/app_refresh_button.dart';
 import '../../widgets/branch_switcher.dart';
@@ -11,6 +13,15 @@ import '../../blocs/client/client_bloc.dart';
 import '../../blocs/branch/branch_cubit.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
+import 'client_statement_screen.dart';
+
+String _formatDate(DateTime dt) {
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+  return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+}
 
 // ─── SERVICE COLORS ───────────────────────────────────────────────────────────
 
@@ -171,6 +182,187 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _toggleAutoRenew(ActiveClient client) async {
+    final currentStatus = client.renewalStatus ?? 'active';
+    final newStatus = (currentStatus == 'auto-renew' || currentStatus == 'active') ? 'manual' : 'auto-renew';
+    try {
+      await SupabaseService.client
+          .from('clients')
+          .update({'renewal_status': newStatus})
+          .eq('id', client.id);
+      
+      if (mounted) {
+        context.read<ClientBloc>().add(LoadClientsEvent(
+          branchState: context.read<BranchCubit>().state,
+        ));
+        AppSnackBar.showCustom(
+          context,
+          SnackBar(
+            content: Text(newStatus == 'auto-renew'
+                ? 'Auto-Renewal enabled for ${client.name}'
+                : 'Auto-Renewal disabled for ${client.name}'),
+            backgroundColor: const Color(0xFFD97706),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.showCustom(context, SnackBar(content: Text('Failed to update renewal status: $e')));
+      }
+    }
+  }
+
+  void _showEditClient(ActiveClient client) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _EditClientSheet(
+        client: client,
+        onSaved: () {
+          context.read<ClientBloc>().add(LoadClientsEvent(
+            branchState: context.read<BranchCubit>().state,
+          ));
+        },
+      ),
+    );
+  }
+
+  void _showCreateProposal(ActiveClient client) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => CreateProposalSheet(
+        clientName: client.name,
+        clientId: client.id,
+        defaultAmount: client.contractValue,
+      ),
+    );
+  }
+
+  void _showClientHistory(ActiveClient client) {
+    final historyEvents = [
+      {'date': _formatDate(client.onboardedAt), 'title': 'Client Onboarded', 'desc': 'Onboarded using template "${client.templateUsed}"'},
+      {'date': _formatDate(client.onboardedAt), 'title': 'Contract Created', 'desc': 'Contract initialized at ₹${client.contractValue.toStringAsFixed(0)}'},
+      {'date': 'Active Status', 'title': 'Renewal Config', 'desc': 'Auto-renewal: ${client.renewalStatus ?? "active"}'},
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.history_rounded, color: Color(0xFF00BCD4)),
+              const SizedBox(width: 8),
+              Expanded(child: Text('History: ${client.name}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: historyEvents.length,
+              separatorBuilder: (_, __) => const Divider(height: 12),
+              itemBuilder: (_, i) {
+                final ev = historyEvents[i];
+                return ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const CircleAvatar(radius: 14, backgroundColor: Color(0xFFE0F7FA), child: Icon(Icons.check, size: 14, color: Color(0xFF00BCD4))),
+                  title: Text(ev['title']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  subtitle: Text('${ev['desc']}\n${ev['date']}', style: const TextStyle(fontSize: 11)),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showClientStatement(ActiveClient client) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ClientStatementsScreen(
+          selectedIndex: widget.selectedIndex,
+          onItemSelected: widget.onItemSelected,
+          initialClientName: client.name,
+          initialClientId: client.id,
+          autoShowTemplate: true,
+        ),
+      ),
+    );
+  }
+
+  void _showClientProposals(ActiveClient client) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.article_outlined, color: Color(0xFF00BCD4)),
+              const SizedBox(width: 8),
+              Expanded(child: Text('Proposals for ${client.name}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.article, color: Color(0xFF00BCD4)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Proposal #${client.id.length > 6 ? client.id.substring(0, 6).toUpperCase() : client.id}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          Text('Value: ₹${client.contractValue.toStringAsFixed(0)}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                      child: const Text('ACTIVE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF10B981))),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00BCD4), foregroundColor: Colors.white),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _showCreateProposal(client);
+              },
+              child: const Text('Create Proposal'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -339,7 +531,7 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
         runSpacing: 10,
         children: [
           _statChip('Total Clients', '$total', const Color(0xFF00BCD4)),
-          _statChip('Contract Value', '\$${_formatValue(totalValue)}', const Color(0xFF10B981)),
+          _statChip('Contract Value', '₹${_formatValue(totalValue)}', const Color(0xFF10B981)),
           _statChip('Services', '$services active', const Color(0xFF8B5CF6)),
         ],
       ),
@@ -408,6 +600,12 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
           isWide: isWide,
           onDetails: () => _showClientDetail(clients[i]),
           onInvoice: () => _showInvoice(clients[i]),
+          onAutoRenew: () => _toggleAutoRenew(clients[i]),
+          onEdit: () => _showEditClient(clients[i]),
+          onCreateProposal: () => _showCreateProposal(clients[i]),
+          onViewHistory: () => _showClientHistory(clients[i]),
+          onViewStatement: () => _showClientStatement(clients[i]),
+          onViewProposals: () => _showClientProposals(clients[i]),
           onDelete: () => _deleteClient(clients[i]),
         ),
       );
@@ -443,6 +641,12 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
               isWide: isWide,
               onDetails: () => _showClientDetail(clients[i]),
               onInvoice: () => _showInvoice(clients[i]),
+              onAutoRenew: () => _toggleAutoRenew(clients[i]),
+              onEdit: () => _showEditClient(clients[i]),
+              onCreateProposal: () => _showCreateProposal(clients[i]),
+              onViewHistory: () => _showClientHistory(clients[i]),
+              onViewStatement: () => _showClientStatement(clients[i]),
+              onViewProposals: () => _showClientProposals(clients[i]),
               onDelete: () => _deleteClient(clients[i]),
             ),
           ),
@@ -476,12 +680,156 @@ class _TableHeader extends StatelessWidget {
 
 // ─── CLIENT ROW ───────────────────────────────────────────────────────────────
 
+List<PopupMenuEntry<String>> _buildClientPopupMenuItems(ActiveClient client, BuildContext context) {
+  final isAutoRenew = client.renewalStatus == 'auto-renew' || client.renewalStatus == 'active';
+
+  return [
+    PopupMenuItem<String>(
+      value: 'auto_renew',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isAutoRenew ? Icons.autorenew_rounded : Icons.description_outlined,
+            size: 18,
+            color: const Color(0xFFD97706),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            isAutoRenew ? 'Disable Auto-Renewal' : 'Enable Auto-Renewal',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFFD97706),
+            ),
+          ),
+        ],
+      ),
+    ),
+    PopupMenuItem<String>(
+      value: 'edit',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.edit_outlined, size: 18, color: AppTheme.textPrimaryOf(context)),
+          const SizedBox(width: 10),
+          Text(
+            'Edit Details',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: AppTheme.textPrimaryOf(context),
+            ),
+          ),
+        ],
+      ),
+    ),
+    PopupMenuItem<String>(
+      value: 'create_proposal',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.article_outlined, size: 18, color: AppTheme.textPrimaryOf(context)),
+          const SizedBox(width: 10),
+          Text(
+            'Create Proposal',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: AppTheme.textPrimaryOf(context),
+            ),
+          ),
+        ],
+      ),
+    ),
+    PopupMenuItem<String>(
+      value: 'history',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.visibility_outlined, size: 18, color: AppTheme.textPrimaryOf(context)),
+          const SizedBox(width: 10),
+          Text(
+            'View History',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: AppTheme.textPrimaryOf(context),
+            ),
+          ),
+        ],
+      ),
+    ),
+    PopupMenuItem<String>(
+      value: 'statement',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.article_outlined, size: 18, color: Color(0xFF0284C7)),
+          const SizedBox(width: 10),
+          const Text(
+            'View Statement',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF0284C7),
+            ),
+          ),
+        ],
+      ),
+    ),
+    PopupMenuItem<String>(
+      value: 'view_proposals',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.visibility_outlined, size: 18, color: AppTheme.textPrimaryOf(context)),
+          const SizedBox(width: 10),
+          Text(
+            'View Proposals',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: AppTheme.textPrimaryOf(context),
+            ),
+          ),
+        ],
+      ),
+    ),
+    const PopupMenuDivider(height: 6),
+    const PopupMenuItem<String>(
+      value: 'delete',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.delete_outline, size: 18, color: Color(0xFFEF4444)),
+          SizedBox(width: 10),
+          Text(
+            'Remove Client',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFEF4444),
+            ),
+          ),
+        ],
+      ),
+    ),
+  ];
+}
+
 class _ClientRow extends StatelessWidget {
   final ActiveClient client;
   final bool isLast;
   final bool isWide;
   final VoidCallback onDetails;
   final VoidCallback onInvoice;
+  final VoidCallback onAutoRenew;
+  final VoidCallback onEdit;
+  final VoidCallback onCreateProposal;
+  final VoidCallback onViewHistory;
+  final VoidCallback onViewStatement;
+  final VoidCallback onViewProposals;
   final VoidCallback onDelete;
 
   const _ClientRow({
@@ -490,6 +838,12 @@ class _ClientRow extends StatelessWidget {
     required this.isWide,
     required this.onDetails,
     required this.onInvoice,
+    required this.onAutoRenew,
+    required this.onEdit,
+    required this.onCreateProposal,
+    required this.onViewHistory,
+    required this.onViewStatement,
+    required this.onViewProposals,
     required this.onDelete,
   });
 
@@ -556,13 +910,14 @@ class _ClientRow extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   color: isDark ? AppTheme.bgCardDark : Colors.white,
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Text('Remove Client', style: TextStyle(color: Colors.red, fontSize: 13)),
-                    ),
-                  ],
+                  itemBuilder: (ctx) => _buildClientPopupMenuItems(client, ctx),
                   onSelected: (v) {
+                    if (v == 'auto_renew') onAutoRenew();
+                    if (v == 'edit') onEdit();
+                    if (v == 'create_proposal') onCreateProposal();
+                    if (v == 'history') onViewHistory();
+                    if (v == 'statement') onViewStatement();
+                    if (v == 'view_proposals') onViewProposals();
                     if (v == 'delete') onDelete();
                   },
                 ),
@@ -592,8 +947,8 @@ class _ClientRow extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       client.contractValue > 0
-                          ? '\$${client.contractValue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}'
-                          : '\$0',
+                          ? '₹${client.contractValue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}'
+                          : '₹0',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
@@ -685,8 +1040,8 @@ class _ClientRow extends StatelessWidget {
             flex: 2,
             child: Text(
               client.contractValue > 0
-                  ? '\$${client.contractValue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}'
-                  : '\$0',
+                  ? '₹${client.contractValue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}'
+                  : '₹0',
               style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -719,13 +1074,14 @@ class _ClientRow extends StatelessWidget {
                       size: 18, color: textMuted),
                   padding: EdgeInsets.zero,
                   color: isDark ? AppTheme.bgCardDark : Colors.white,
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(
-                        value: 'delete',
-                        child: Text('Remove Client',
-                            style: TextStyle(color: Colors.red, fontSize: 13))),
-                  ],
+                  itemBuilder: (ctx) => _buildClientPopupMenuItems(client, ctx),
                   onSelected: (v) {
+                    if (v == 'auto_renew') onAutoRenew();
+                    if (v == 'edit') onEdit();
+                    if (v == 'create_proposal') onCreateProposal();
+                    if (v == 'history') onViewHistory();
+                    if (v == 'statement') onViewStatement();
+                    if (v == 'view_proposals') onViewProposals();
                     if (v == 'delete') onDelete();
                   },
                 ),
@@ -752,9 +1108,14 @@ class _ClientDetailSheet extends StatelessWidget {
     final textSecondary = AppTheme.textSecondaryOf(context);
     final border = AppTheme.borderOf(context);
 
+    String fmtCur(double? val) {
+      if (val == null || val == 0) return '₹0';
+      return '₹${val.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}';
+    }
+
     return DraggableScrollableSheet(
-      initialChildSize: 0.65,
-      maxChildSize: 0.92,
+      initialChildSize: 0.85,
+      maxChildSize: 0.95,
       minChildSize: 0.4,
       builder: (_, ctrl) => Container(
         decoration: BoxDecoration(
@@ -787,9 +1148,10 @@ class _ClientDetailSheet extends StatelessWidget {
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,
                                 color: textPrimary)),
-                        Text(client.email,
-                            style: TextStyle(
-                                fontSize: 12, color: textSecondary)),
+                        if (client.email.isNotEmpty)
+                          Text(client.email,
+                              style: TextStyle(
+                                  fontSize: 12, color: textSecondary)),
                       ],
                     ),
                   ),
@@ -799,13 +1161,13 @@ class _ClientDetailSheet extends StatelessWidget {
                       color: const Color(0xFF10B981).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.circle, size: 8, color: Color(0xFF10B981)),
-                        SizedBox(width: 5),
-                        Text('Active',
-                            style: TextStyle(
+                        const Icon(Icons.circle, size: 8, color: Color(0xFF10B981)),
+                        const SizedBox(width: 5),
+                        Text(client.renewalStatus?.toUpperCase() ?? 'ACTIVE',
+                            style: const TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                                 color: Color(0xFF10B981))),
@@ -821,45 +1183,101 @@ class _ClientDetailSheet extends StatelessWidget {
                 controller: ctrl,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 children: [
-                  _DetailSection(
-                    title: 'Services',
-                    icon: Icons.work_outline_rounded,
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: client.services
-                          .map((s) => _ServiceBadge(service: s, large: true))
-                          .toList(),
+                  // Services Section
+                  if (client.services.isNotEmpty) ...[
+                    _DetailSection(
+                      title: 'Services Provided',
+                      icon: Icons.work_outline_rounded,
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: client.services
+                            .map((s) => _ServiceBadge(service: s, large: true))
+                            .toList(),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
+                    const SizedBox(height: 14),
+                  ],
+
+                  // Contract & Pricing Overview
                   _DetailSection(
-                    title: 'Contract Details',
+                    title: 'Contract & Financial Details',
                     icon: Icons.attach_money_rounded,
                     child: Column(
                       children: [
-                        _DetailRow(
-                            'Contract Value',
-                            client.contractValue > 0
-                                ? '\$${client.contractValue.toStringAsFixed(0)}'
-                                : 'Not set'),
-                        _DetailRow('Onboarded',
-                            _formatDate(client.onboardedAt)),
+                        _DetailRow('Contract Value', fmtCur(client.contractValue)),
+                        _DetailRow('Amount (₹)', fmtCur(client.amount ?? client.contractValue)),
+                        _DetailRow('Client Category', client.clientCategory ?? client.templateUsed),
+                        _DetailRow('CPR (Cost Per Result ₹)', client.cpr != null ? '₹${client.cpr!.toStringAsFixed(2)}' : 'Not set'),
+                        _DetailRow('CPA (Cost Per Acquisition ₹)', client.cpa != null ? '₹${client.cpa!.toStringAsFixed(2)}' : 'Not set'),
+                        _DetailRow('Total Count', client.totalCount != null ? '${client.totalCount}' : '0'),
+                        _DetailRow('Shoot Count', client.shootCount != null ? '${client.shootCount}' : '0'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Renewal Details
+                  _DetailSection(
+                    title: 'Renewal Information',
+                    icon: Icons.autorenew_rounded,
+                    child: Column(
+                      children: [
+                        _DetailRow('Renewal Date', (client.renewalDate != null && client.renewalDate!.isNotEmpty) ? client.renewalDate! : 'Not set'),
+                        _DetailRow('Pending / Renewed Status', client.renewalStatus ?? 'ACTIVE'),
+                        _DetailRow('Onboarded Date', _formatDate(client.onboardedAt)),
                         _DetailRow('Template Used', client.templateUsed),
                       ],
                     ),
                   ),
                   const SizedBox(height: 14),
+
+                  // Team & Department Allocations
+                  _DetailSection(
+                    title: 'Assigned Team & Department',
+                    icon: Icons.groups_outlined,
+                    child: Column(
+                      children: [
+                        _DetailRow('Assigned Department', (client.department != null && client.department!.isNotEmpty) ? client.department! : 'Not set'),
+                        _DetailRow('Assigned Team Lead', (client.teamLead != null && client.teamLead!.isNotEmpty) ? client.teamLead! : 'Not set'),
+                        _DetailRow('DM Team', (client.dmTeam != null && client.dmTeam!.isNotEmpty) ? client.dmTeam! : 'Not set'),
+                        _DetailRow('Designers', (client.designers != null && client.designers!.isNotEmpty) ? client.designers! : 'Not set'),
+                        _DetailRow('Editors', (client.editors != null && client.editors!.isNotEmpty) ? client.editors! : 'Not set'),
+                        _DetailRow('Content Writers', (client.contentWriters != null && client.contentWriters!.isNotEmpty) ? client.contentWriters! : 'Not set'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Contact & Business Information
                   _DetailSection(
                     title: 'Contact Information',
                     icon: Icons.person_outline_rounded,
                     child: Column(
                       children: [
-                        _DetailRow('Email', client.email),
                         _DetailRow('Client Name', client.name),
+                        _DetailRow('Email', client.email.isNotEmpty ? client.email : 'Not set'),
+                        _DetailRow('Phone Number', (client.phone != null && client.phone!.isNotEmpty) ? client.phone! : 'Not set'),
+                        _DetailRow('Business Address', (client.address != null && client.address!.isNotEmpty) ? client.address! : 'Not set'),
+                        _DetailRow('GSTIN / Tax Registration', (client.gstin != null && client.gstin!.isNotEmpty) ? client.gstin! : 'Not set'),
+                        _DetailRow('Website', (client.website != null && client.website!.isNotEmpty) ? client.website! : 'Not set'),
                       ],
                     ),
                   ),
+
+                  // Remarks Section
+                  if (client.remarks != null && client.remarks!.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    _DetailSection(
+                      title: 'Remarks & Notes',
+                      icon: Icons.note_alt_outlined,
+                      child: Text(
+                        client.remarks!,
+                        style: TextStyle(fontSize: 13, color: textPrimary),
+                      ),
+                    ),
+                  ],
+
                   const SizedBox(height: 24),
                 ],
               ),
@@ -1049,7 +1467,7 @@ class _InvoiceSheet extends StatelessWidget {
                                     Expanded(
                                       flex: 2,
                                       child: Text(
-                                        '\$${perService.toStringAsFixed(0)}',
+                                        '₹${perService.toStringAsFixed(0)}',
                                         style: TextStyle(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w600,
@@ -1083,7 +1501,7 @@ class _InvoiceSheet extends StatelessWidget {
                               Expanded(
                                 flex: 2,
                                 child: Text(
-                                  '\$${client.contractValue.toStringAsFixed(0)}',
+                                  '₹${client.contractValue.toStringAsFixed(0)}',
                                   style: const TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w800,
@@ -1543,6 +1961,1909 @@ class _DetailRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── COUNTRY CODE MODEL & DATASET ─────────────────────────────────────────────
+
+class CountryCode {
+  final String name;
+  final String code;
+  final String dialCode;
+  final String flag;
+
+  const CountryCode({
+    required this.name,
+    required this.code,
+    required this.dialCode,
+    required this.flag,
+  });
+}
+
+const List<CountryCode> kAllCountries = [
+  CountryCode(name: 'India', code: 'IN', dialCode: '+91', flag: '🇮🇳'),
+  CountryCode(name: 'United Arab Emirates', code: 'AE', dialCode: '+971', flag: '🇦🇪'),
+  CountryCode(name: 'United States', code: 'US', dialCode: '+1', flag: '🇺🇸'),
+  CountryCode(name: 'United Kingdom', code: 'GB', dialCode: '+44', flag: '🇬🇧'),
+  CountryCode(name: 'Saudi Arabia', code: 'SA', dialCode: '+966', flag: '🇸🇦'),
+  CountryCode(name: 'Qatar', code: 'QA', dialCode: '+974', flag: '🇶🇦'),
+  CountryCode(name: 'Oman', code: 'OM', dialCode: '+968', flag: '🇴🇲'),
+  CountryCode(name: 'Kuwait', code: 'KW', dialCode: '+965', flag: '🇰🇼'),
+  CountryCode(name: 'Bahrain', code: 'BH', dialCode: '+973', flag: '🇧🇭'),
+  CountryCode(name: 'Singapore', code: 'SG', dialCode: '+65', flag: '🇸🇬'),
+  CountryCode(name: 'Malaysia', code: 'MY', dialCode: '+60', flag: '🇲🇾'),
+  CountryCode(name: 'Australia', code: 'AU', dialCode: '+61', flag: '🇦🇺'),
+  CountryCode(name: 'Canada', code: 'CA', dialCode: '+1', flag: '🇨🇦'),
+  CountryCode(name: 'Germany', code: 'DE', dialCode: '+49', flag: '🇩🇪'),
+  CountryCode(name: 'France', code: 'FR', dialCode: '+33', flag: '🇫🇷'),
+  CountryCode(name: 'Italy', code: 'IT', dialCode: '+39', flag: '🇮🇹'),
+  CountryCode(name: 'Spain', code: 'ES', dialCode: '+34', flag: '🇪🇸'),
+  CountryCode(name: 'Netherlands', code: 'NL', dialCode: '+31', flag: '🇳🇱'),
+  CountryCode(name: 'Switzerland', code: 'CH', dialCode: '+41', flag: '🇨🇭'),
+  CountryCode(name: 'Sweden', code: 'SE', dialCode: '+46', flag: '🇸🇪'),
+  CountryCode(name: 'Norway', code: 'NO', dialCode: '+47', flag: '🇳🇴'),
+  CountryCode(name: 'Denmark', code: 'DK', dialCode: '+45', flag: '🇩🇰'),
+  CountryCode(name: 'Finland', code: 'FI', dialCode: '+358', flag: '🇫🇮'),
+  CountryCode(name: 'Ireland', code: 'IE', dialCode: '+353', flag: '🇮🇪'),
+  CountryCode(name: 'New Zealand', code: 'NZ', dialCode: '+64', flag: '🇳🇿'),
+  CountryCode(name: 'Japan', code: 'JP', dialCode: '+81', flag: '🇯🇵'),
+  CountryCode(name: 'South Korea', code: 'KR', dialCode: '+82', flag: '🇰🇷'),
+  CountryCode(name: 'China', code: 'CN', dialCode: '+86', flag: '🇨🇳'),
+  CountryCode(name: 'Hong Kong', code: 'HK', dialCode: '+852', flag: '🇭🇰'),
+  CountryCode(name: 'Taiwan', code: 'TW', dialCode: '+886', flag: '🇹🇼'),
+  CountryCode(name: 'Thailand', code: 'TH', dialCode: '+66', flag: '🇹🇭'),
+  CountryCode(name: 'Indonesia', code: 'ID', dialCode: '+62', flag: '🇮🇩'),
+  CountryCode(name: 'Philippines', code: 'PH', dialCode: '+63', flag: '🇵🇭'),
+  CountryCode(name: 'Vietnam', code: 'VN', dialCode: '+84', flag: '🇻🇳'),
+  CountryCode(name: 'Pakistan', code: 'PK', dialCode: '+92', flag: '🇵🇰'),
+  CountryCode(name: 'Bangladesh', code: 'BD', dialCode: '+880', flag: '🇧🇩'),
+  CountryCode(name: 'Sri Lanka', code: 'LK', dialCode: '+94', flag: '🇱🇱'),
+  CountryCode(name: 'Nepal', code: 'NP', dialCode: '+977', flag: '🇳🇵'),
+  CountryCode(name: 'South Africa', code: 'ZA', dialCode: '+27', flag: '🇿🇦'),
+  CountryCode(name: 'Nigeria', code: 'NG', dialCode: '+234', flag: '🇳🇬'),
+  CountryCode(name: 'Egypt', code: 'EG', dialCode: '+20', flag: '🇪🇬'),
+  CountryCode(name: 'Kenya', code: 'KE', dialCode: '+254', flag: '🇰🇪'),
+  CountryCode(name: 'Brazil', code: 'BR', dialCode: '+55', flag: '🇧🇷'),
+  CountryCode(name: 'Mexico', code: 'MX', dialCode: '+52', flag: '🇲🇽'),
+  CountryCode(name: 'Argentina', code: 'AR', dialCode: '+54', flag: '🇦🇷'),
+  CountryCode(name: 'Chile', code: 'CL', dialCode: '+56', flag: '🇨🇱'),
+  CountryCode(name: 'Colombia', code: 'CO', dialCode: '+57', flag: '🇨🇴'),
+  CountryCode(name: 'Russia', code: 'RU', dialCode: '+7', flag: '🇷🇺'),
+  CountryCode(name: 'Turkey', code: 'TR', dialCode: '+90', flag: '🇹🇷'),
+];
+
+// ─── COMPREHENSIVE EDIT CLIENT SHEET (MATCHING WEB APP) ───────────────────────
+
+class _EditClientSheet extends StatefulWidget {
+  final ActiveClient client;
+  final VoidCallback onSaved;
+
+  const _EditClientSheet({
+    required this.client,
+    required this.onSaved,
+  });
+
+  @override
+  State<_EditClientSheet> createState() => _EditClientSheetState();
+}
+
+class _EditClientSheetState extends State<_EditClientSheet> {
+  late TextEditingController _nameCtrl;
+  late TextEditingController _emailCtrl;
+  late TextEditingController _phoneCtrl;
+  late TextEditingController _contractValueCtrl;
+  late TextEditingController _addressCtrl;
+  late TextEditingController _gstinCtrl;
+  late TextEditingController _deptCtrl;
+  late TextEditingController _teamLeadCtrl;
+  late TextEditingController _categoryCtrl;
+  late TextEditingController _totalCountCtrl;
+  late TextEditingController _shootCountCtrl;
+  late TextEditingController _amountCtrl;
+  late TextEditingController _cprCtrl;
+  late TextEditingController _cpaCtrl;
+  late TextEditingController _renewalDateCtrl;
+  late TextEditingController _renewalStatusCtrl;
+  late TextEditingController _dmTeamCtrl;
+  late TextEditingController _designersCtrl;
+  late TextEditingController _editorsCtrl;
+  late TextEditingController _contentWritersCtrl;
+  late TextEditingController _remarksCtrl;
+  late TextEditingController _customServiceCtrl;
+
+  late List<String> _services;
+  String? _selectedBranchId;
+  String _selectedStandardService = 'Add a standard service...';
+  bool _isSaving = false;
+  CountryCode _selectedCountry = kAllCountries.first; // Default India (+91)
+
+  final List<String> _ecraftzDepartments = [
+    'Select Department...',
+    'Digital Marketing',
+    'Graphic Designing',
+    'Video Editing',
+    'Videography',
+    'Content Writer',
+    'Web Development',
+    'BDE',
+    'CRM',
+    'SEO',
+    'Branding & Strategy',
+    'Sales & Account Management',
+  ];
+
+  final List<String> _standardServicesOptions = [
+    'Add a standard service...',
+    'Web Development',
+    'Digital Marketing',
+    'SEO Optimization',
+    'Branding & Identity',
+    'Graphic Design',
+    'Video Editing',
+    'Content Writing',
+    'Social Media Management',
+  ];
+
+  Future<void> _loadDepartments() async {
+    try {
+      final res = await SupabaseService.client.from('departments').select('name');
+      final list = res as List;
+      for (final item in list) {
+        final name = item['name']?.toString();
+        if (name != null && name.isNotEmpty && !_ecraftzDepartments.contains(name)) {
+          if (mounted) {
+            setState(() {
+              _ecraftzDepartments.add(name);
+            });
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  Widget _buildDepartmentDropdown() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final border = AppTheme.borderOf(context);
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textMuted = AppTheme.textMutedOf(context);
+
+    // If current text in _deptCtrl is not in options, append it so it's selectable
+    if (_deptCtrl.text.isNotEmpty && !_ecraftzDepartments.contains(_deptCtrl.text)) {
+      _ecraftzDepartments.add(_deptCtrl.text);
+    }
+
+    final selectedVal = _ecraftzDepartments.contains(_deptCtrl.text)
+        ? _deptCtrl.text
+        : 'Select Department...';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        border: Border.all(color: border),
+        borderRadius: BorderRadius.circular(10),
+        color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: selectedVal,
+          isExpanded: true,
+          dropdownColor: isDark ? AppTheme.bgCardDark : Colors.white,
+          style: TextStyle(fontSize: 13, color: textPrimary),
+          hint: Text('Select Department...', style: TextStyle(fontSize: 13, color: textMuted)),
+          items: _ecraftzDepartments.map((dept) {
+            final isPlaceholder = dept == 'Select Department...';
+            return DropdownMenuItem<String>(
+              value: dept,
+              child: Text(
+                dept,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isPlaceholder ? textMuted : textPrimary,
+                  fontWeight: isPlaceholder ? FontWeight.normal : FontWeight.w500,
+                ),
+              ),
+            );
+          }).toList(),
+          onChanged: (val) {
+            if (val != null) {
+              setState(() {
+                _deptCtrl.text = (val == 'Select Department...') ? '' : val;
+              });
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  final List<String> _teamLeadsList = [
+    'Select Team Lead...',
+    'Super Admin',
+    'Meenakshy',
+    'Operations Lead',
+    'Digital Marketing Lead',
+    'Design Lead',
+    'Development Lead',
+    'Video Lead',
+  ];
+
+  Future<void> _loadTeamLeads() async {
+    try {
+      final res = await SupabaseService.client.from('profiles').select('full_name, role');
+      final list = res as List;
+      for (final item in list) {
+        final name = item['full_name']?.toString();
+        if (name != null && name.isNotEmpty && !_teamLeadsList.contains(name)) {
+          if (mounted) {
+            setState(() {
+              _teamLeadsList.add(name);
+            });
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  Widget _buildTeamLeadDropdown() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final border = AppTheme.borderOf(context);
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textMuted = AppTheme.textMutedOf(context);
+
+    if (_teamLeadCtrl.text.isNotEmpty && !_teamLeadsList.contains(_teamLeadCtrl.text)) {
+      _teamLeadsList.add(_teamLeadCtrl.text);
+    }
+
+    final selectedVal = _teamLeadsList.contains(_teamLeadCtrl.text)
+        ? _teamLeadCtrl.text
+        : 'Select Team Lead...';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        border: Border.all(color: border),
+        borderRadius: BorderRadius.circular(10),
+        color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: selectedVal,
+          isExpanded: true,
+          dropdownColor: isDark ? AppTheme.bgCardDark : Colors.white,
+          style: TextStyle(fontSize: 13, color: textPrimary),
+          hint: Text('Select Team Lead...', style: TextStyle(fontSize: 13, color: textMuted)),
+          items: _teamLeadsList.map((lead) {
+            final isPlaceholder = lead == 'Select Team Lead...';
+            return DropdownMenuItem<String>(
+              value: lead,
+              child: Text(
+                lead,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isPlaceholder ? textMuted : textPrimary,
+                  fontWeight: isPlaceholder ? FontWeight.normal : FontWeight.w500,
+                ),
+              ),
+            );
+          }).toList(),
+          onChanged: (val) {
+            if (val != null) {
+              setState(() {
+                _teamLeadCtrl.text = (val == 'Select Team Lead...') ? '' : val;
+              });
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _selectRenewalDate() async {
+    DateTime initial = DateTime.now();
+    if (_renewalDateCtrl.text.isNotEmpty) {
+      try {
+        final parts = _renewalDateCtrl.text.split('-');
+        if (parts.length == 3) {
+          if (parts[0].length == 4) {
+            initial = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+          } else {
+            initial = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+          }
+        }
+      } catch (_) {}
+    }
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+      builder: (context, child) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: isDark
+                ? const ColorScheme.dark(primary: Color(0xFF00BCD4), onPrimary: Colors.white, surface: Color(0xFF1E293B))
+                : const ColorScheme.light(primary: Color(0xFF00BCD4), onPrimary: Colors.white),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      final day = picked.day.toString().padLeft(2, '0');
+      final month = picked.month.toString().padLeft(2, '0');
+      final year = picked.year.toString();
+      setState(() {
+        _renewalDateCtrl.text = '$day-$month-$year';
+      });
+    }
+  }
+
+  Widget _buildRenewalDatePicker() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return InkWell(
+      onTap: _selectRenewalDate,
+      borderRadius: BorderRadius.circular(10),
+      child: IgnorePointer(
+        child: TextField(
+          controller: _renewalDateCtrl,
+          style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+          decoration: InputDecoration(
+            hintText: 'Select date (dd-mm-yyyy)',
+            hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 12),
+            suffixIcon: const Icon(Icons.calendar_today_rounded, size: 18, color: Color(0xFF00BCD4)),
+            filled: true,
+            fillColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: AppTheme.borderOf(context)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: AppTheme.borderOf(context)),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final c = widget.client;
+    _nameCtrl = TextEditingController(text: c.name);
+    _emailCtrl = TextEditingController(text: c.email);
+
+    // Extract country dial code if present in phone number
+    String rawPhone = c.phone?.trim() ?? '';
+    CountryCode matchedCountry = kAllCountries.first;
+    for (final country in kAllCountries) {
+      if (rawPhone.startsWith(country.dialCode)) {
+        matchedCountry = country;
+        rawPhone = rawPhone.substring(country.dialCode.length).trim();
+        break;
+      }
+    }
+    _selectedCountry = matchedCountry;
+    _phoneCtrl = TextEditingController(text: rawPhone);
+
+    _contractValueCtrl = TextEditingController(text: c.contractValue > 0 ? c.contractValue.toStringAsFixed(0) : '0');
+    _addressCtrl = TextEditingController(text: c.address ?? '');
+    _gstinCtrl = TextEditingController(text: c.gstin ?? '');
+    _deptCtrl = TextEditingController(text: c.department ?? '');
+    _teamLeadCtrl = TextEditingController(text: c.teamLead ?? '');
+    _categoryCtrl = TextEditingController(text: c.clientCategory ?? c.templateUsed);
+    _totalCountCtrl = TextEditingController(text: c.totalCount?.toString() ?? '');
+    _shootCountCtrl = TextEditingController(text: c.shootCount?.toString() ?? '');
+    _amountCtrl = TextEditingController(text: c.amount != null ? c.amount!.toStringAsFixed(0) : (c.contractValue > 0 ? c.contractValue.toStringAsFixed(0) : '0'));
+    _cprCtrl = TextEditingController(text: c.cpr?.toString() ?? '');
+    _cpaCtrl = TextEditingController(text: c.cpa?.toString() ?? '');
+    _renewalDateCtrl = TextEditingController(text: c.renewalDate ?? '');
+    _renewalStatusCtrl = TextEditingController(text: c.renewalStatus ?? 'ACTIVE');
+    _dmTeamCtrl = TextEditingController(text: c.dmTeam ?? '');
+    _designersCtrl = TextEditingController(text: c.designers ?? '');
+    _editorsCtrl = TextEditingController(text: c.editors ?? '');
+    _contentWritersCtrl = TextEditingController(text: c.contentWriters ?? '');
+    _remarksCtrl = TextEditingController(text: c.remarks ?? '');
+    _customServiceCtrl = TextEditingController();
+
+    _services = List<String>.from(c.services);
+    _selectedBranchId = c.branchId;
+    _loadDepartments();
+    _loadTeamLeads();
+    _fetchLatestClientDetails();
+  }
+
+  Future<void> _fetchLatestClientDetails() async {
+    try {
+      final res = await SupabaseService.client
+          .from('clients')
+          .select('*')
+          .eq('id', widget.client.id)
+          .maybeSingle();
+
+      if (res != null && mounted) {
+        final updated = ActiveClient.fromJson(res);
+        setState(() {
+          if (_nameCtrl.text.isEmpty || _nameCtrl.text == widget.client.name) _nameCtrl.text = updated.name;
+          if (_emailCtrl.text.isEmpty || _emailCtrl.text == widget.client.email) _emailCtrl.text = updated.email;
+
+          String rawPhone = updated.phone?.trim() ?? '';
+          CountryCode matchedCountry = kAllCountries.first;
+          for (final country in kAllCountries) {
+            if (rawPhone.startsWith(country.dialCode)) {
+              matchedCountry = country;
+              rawPhone = rawPhone.substring(country.dialCode.length).trim();
+              break;
+            }
+          }
+          _selectedCountry = matchedCountry;
+          _phoneCtrl.text = rawPhone;
+
+          _contractValueCtrl.text = updated.contractValue > 0 ? updated.contractValue.toStringAsFixed(0) : '0';
+          _addressCtrl.text = updated.address ?? '';
+          _gstinCtrl.text = updated.gstin ?? '';
+          _deptCtrl.text = updated.department ?? '';
+          _teamLeadCtrl.text = updated.teamLead ?? '';
+          _categoryCtrl.text = updated.clientCategory ?? updated.templateUsed;
+          _totalCountCtrl.text = updated.totalCount?.toString() ?? '';
+          _shootCountCtrl.text = updated.shootCount?.toString() ?? '';
+          _amountCtrl.text = updated.amount != null ? updated.amount!.toStringAsFixed(0) : (updated.contractValue > 0 ? updated.contractValue.toStringAsFixed(0) : '0');
+          _cprCtrl.text = updated.cpr?.toString() ?? '';
+          _cpaCtrl.text = updated.cpa?.toString() ?? '';
+          _renewalDateCtrl.text = updated.renewalDate ?? '';
+          _renewalStatusCtrl.text = updated.renewalStatus ?? 'ACTIVE';
+          _dmTeamCtrl.text = updated.dmTeam ?? '';
+          _designersCtrl.text = updated.designers ?? '';
+          _editorsCtrl.text = updated.editors ?? '';
+          _contentWritersCtrl.text = updated.contentWriters ?? '';
+          _remarksCtrl.text = updated.remarks ?? '';
+          if (updated.services.isNotEmpty) {
+            _services = List<String>.from(updated.services);
+          }
+          if (updated.branchId != null) {
+            _selectedBranchId = updated.branchId;
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    _phoneCtrl.dispose();
+    _contractValueCtrl.dispose();
+    _addressCtrl.dispose();
+    _gstinCtrl.dispose();
+    _deptCtrl.dispose();
+    _teamLeadCtrl.dispose();
+    _categoryCtrl.dispose();
+    _totalCountCtrl.dispose();
+    _shootCountCtrl.dispose();
+    _amountCtrl.dispose();
+    _cprCtrl.dispose();
+    _cpaCtrl.dispose();
+    _renewalDateCtrl.dispose();
+    _renewalStatusCtrl.dispose();
+    _dmTeamCtrl.dispose();
+    _designersCtrl.dispose();
+    _editorsCtrl.dispose();
+    _contentWritersCtrl.dispose();
+    _remarksCtrl.dispose();
+    _customServiceCtrl.dispose();
+    super.dispose();
+  }
+
+  void _addService(String s) {
+    final trimmed = s.trim();
+    if (trimmed.isNotEmpty && !_services.contains(trimmed)) {
+      setState(() => _services.add(trimmed));
+    }
+  }
+
+  void _removeService(String s) {
+    setState(() => _services.remove(s));
+  }
+
+  Future<void> _saveClient() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) {
+      AppSnackBar.showCustom(context, const SnackBar(content: Text('Client Name is required'), backgroundColor: Colors.red));
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      final contractVal = double.tryParse(_contractValueCtrl.text.trim()) ?? widget.client.contractValue;
+      final amtVal = double.tryParse(_amountCtrl.text.trim()) ?? contractVal;
+      final rawPhone = _phoneCtrl.text.trim();
+      final fullPhone = rawPhone.isNotEmpty ? '${_selectedCountry.dialCode} $rawPhone' : '';
+
+      final updateMap = <String, dynamic>{
+        'name': name,
+        'email': _emailCtrl.text.trim(),
+        'phone': fullPhone,
+        'service': _services.join(','),
+        'contract_value': contractVal,
+        'amount': amtVal,
+        'address': _addressCtrl.text.trim(),
+        'billing_address': _addressCtrl.text.trim(),
+        'gstin': _gstinCtrl.text.trim(),
+        'client_category': _categoryCtrl.text.trim(),
+        'department': _deptCtrl.text.trim(),
+        'team_lead': _teamLeadCtrl.text.trim(),
+        'total_count': int.tryParse(_totalCountCtrl.text.trim()),
+        'shoot_count': int.tryParse(_shootCountCtrl.text.trim()),
+        'cpr': double.tryParse(_cprCtrl.text.trim()),
+        'cpa': double.tryParse(_cpaCtrl.text.trim()),
+        'renewal_date': _renewalDateCtrl.text.trim(),
+        'renewal_status': _renewalStatusCtrl.text.trim(),
+        'dm_team': _dmTeamCtrl.text.trim(),
+        'designers': _designersCtrl.text.trim(),
+        'editors': _editorsCtrl.text.trim(),
+        'content_writers': _contentWritersCtrl.text.trim(),
+        'remarks': _remarksCtrl.text.trim(),
+      };
+
+      if (_selectedBranchId != null && _selectedBranchId!.isNotEmpty) {
+        updateMap['branch_id'] = _selectedBranchId;
+      }
+
+      await SupabaseService.client.from('clients').update(updateMap).eq('id', widget.client.id);
+
+      if (mounted) {
+        widget.onSaved();
+        Navigator.pop(context);
+        AppSnackBar.showCustom(
+          context,
+          SnackBar(
+            content: Text('Client "$name" updated successfully!'),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+        AppSnackBar.showCustom(
+          context,
+          SnackBar(content: Text('Failed to update client: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgCard = isDark ? AppTheme.bgCardDark : Colors.white;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    final textMuted = AppTheme.textMutedOf(context);
+    final border = AppTheme.borderOf(context);
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.92,
+      maxChildSize: 0.95,
+      minChildSize: 0.5,
+      builder: (_, scrollCtrl) => Container(
+        decoration: BoxDecoration(
+          color: bgCard,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Header handle + Title bar
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(color: border, borderRadius: BorderRadius.circular(2)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 16, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Edit Client', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary)),
+                        const SizedBox(height: 2),
+                        Text('Update the information for this active client.', style: TextStyle(fontSize: 12, color: textSecondary)),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, color: textMuted),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: border),
+            // Form body
+            Expanded(
+              child: ListView(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                children: [
+                  // Client Name / Company
+                  _buildLabel('Client Name / Company', isRequired: true),
+                  const SizedBox(height: 6),
+                  _buildInput(_nameCtrl, hint: 'Company Name'),
+                  const SizedBox(height: 14),
+
+                  // Email & Phone
+                  LayoutBuilder(builder: (_, c) {
+                    final isWide = c.maxWidth > 500;
+                    return isWide
+                        ? Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildLabel('Email'),
+                                    const SizedBox(height: 6),
+                                    _buildInput(_emailCtrl, hint: 'billing@acme.com', keyboardType: TextInputType.emailAddress),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildLabel('Phone'),
+                                    const SizedBox(height: 6),
+                                    _buildPhoneInput(_phoneCtrl),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildLabel('Email'),
+                              const SizedBox(height: 6),
+                              _buildInput(_emailCtrl, hint: 'billing@acme.com', keyboardType: TextInputType.emailAddress),
+                              const SizedBox(height: 14),
+                              _buildLabel('Phone'),
+                              const SizedBox(height: 6),
+                              _buildPhoneInput(_phoneCtrl),
+                            ],
+                          );
+                  }),
+                  const SizedBox(height: 14),
+
+                  // SERVICES PROVIDED
+                  _buildLabel('SERVICES PROVIDED', uppercase: true),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: border),
+                            borderRadius: BorderRadius.circular(10),
+                            color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _selectedStandardService,
+                              isExpanded: true,
+                              dropdownColor: isDark ? AppTheme.bgCardDark : Colors.white,
+                              style: TextStyle(fontSize: 13, color: textPrimary),
+                              items: _standardServicesOptions.map((opt) {
+                                return DropdownMenuItem(value: opt, child: Text(opt));
+                              }).toList(),
+                              onChanged: (val) {
+                                if (val != null && val != 'Add a standard service...') {
+                                  _addService(val);
+                                  setState(() => _selectedStandardService = 'Add a standard service...');
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildInput(_customServiceCtrl, hint: 'Or type custom service...'),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00BCD4),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                        onPressed: () {
+                          if (_customServiceCtrl.text.trim().isNotEmpty) {
+                            _addService(_customServiceCtrl.text);
+                            _customServiceCtrl.clear();
+                          }
+                        },
+                        child: const Text('+ Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text('Select from dropdown or type custom service and press Add.', style: TextStyle(fontSize: 10, color: textMuted)),
+                  if (_services.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: _services.map((s) => Chip(
+                        label: Text(s, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        backgroundColor: const Color(0xFF00BCD4).withOpacity(0.15),
+                        labelStyle: const TextStyle(color: Color(0xFF00BCD4)),
+                        deleteIcon: const Icon(Icons.close, size: 14, color: Color(0xFF00BCD4)),
+                        onDeleted: () => _removeService(s),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                      )).toList(),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+
+                  // Contract Value (₹)
+                  _buildLabel('Contract Value (₹)'),
+                  const SizedBox(height: 6),
+                  _buildInput(_contractValueCtrl, hint: '0', keyboardType: TextInputType.number),
+                  const SizedBox(height: 14),
+
+                  // Business Address & GSTIN
+                  LayoutBuilder(builder: (_, c) {
+                    final isWide = c.maxWidth > 500;
+                    return isWide
+                        ? Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildLabel('Business Address'),
+                                    const SizedBox(height: 6),
+                                    _buildInput(_addressCtrl, hint: '123 Business Way, Kozhikode'),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                flex: 2,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        _buildLabel('GSTIN / Tax Registration'),
+                                        Text('15-digit GSTIN', style: TextStyle(fontSize: 9, color: textMuted)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    _buildInput(_gstinCtrl, hint: 'E.G. 32AAAAA0000A1Z5'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildLabel('Business Address'),
+                              const SizedBox(height: 6),
+                              _buildInput(_addressCtrl, hint: '123 Business Way, Kozhikode'),
+                              const SizedBox(height: 14),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  _buildLabel('GSTIN / Tax Registration'),
+                                  Text('15-digit GSTIN', style: TextStyle(fontSize: 9, color: textMuted)),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              _buildInput(_gstinCtrl, hint: 'E.G. 32AAAAA0000A1Z5'),
+                            ],
+                          );
+                  }),
+                  const SizedBox(height: 14),
+
+                  // Assigned Branch
+                  _buildLabel('Assigned Branch'),
+                  const SizedBox(height: 6),
+                  BlocBuilder<BranchCubit, BranchState>(
+                    builder: (context, branchState) {
+                      final branchOptions = [
+                        if (branchState.calicutBranchId != null) {'id': branchState.calicutBranchId!, 'name': 'Head Office (Calicut)'},
+                        if (branchState.dubaiBranchId != null) {'id': branchState.dubaiBranchId!, 'name': 'Dubai Branch'},
+                      ];
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: border),
+                          borderRadius: BorderRadius.circular(10),
+                          color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String?>(
+                            value: branchOptions.any((b) => b['id'] == _selectedBranchId) ? _selectedBranchId : null,
+                            isExpanded: true,
+                            hint: Text('Select Branch...', style: TextStyle(fontSize: 13, color: textMuted)),
+                            dropdownColor: isDark ? AppTheme.bgCardDark : Colors.white,
+                            style: TextStyle(fontSize: 13, color: textPrimary),
+                            items: [
+                              DropdownMenuItem<String?>(value: null, child: Text('Default Branch', style: TextStyle(color: textMuted))),
+                              ...branchOptions.map((b) => DropdownMenuItem<String?>(value: b['id'], child: Text(b['name']!))),
+                            ],
+                            onChanged: (val) => setState(() => _selectedBranchId = val),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 14),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLabel('Assigned Department'),
+                            const SizedBox(height: 6),
+                            _buildDepartmentDropdown(),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLabel('Assigned Team Lead'),
+                            const SizedBox(height: 6),
+                            _buildTeamLeadDropdown(),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Category, Total Count, Shoot Count, Amount
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLabel('Client Category'),
+                            const SizedBox(height: 6),
+                            _buildInput(_categoryCtrl, hint: 'VIP / General'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLabel('Total Count'),
+                            const SizedBox(height: 6),
+                            _buildInput(_totalCountCtrl, hint: '0', keyboardType: TextInputType.number),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLabel('Shoot Count'),
+                            const SizedBox(height: 6),
+                            _buildInput(_shootCountCtrl, hint: '0', keyboardType: TextInputType.number),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLabel('Amount (₹)'),
+                            const SizedBox(height: 6),
+                            _buildInput(_amountCtrl, hint: '0', keyboardType: TextInputType.number),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // CPR, CPA, Renewal Date, Renewal Status
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLabel('CPR (Cost Per Result ₹)'),
+                            const SizedBox(height: 6),
+                            _buildInput(_cprCtrl, hint: 'e.g. 45.00', keyboardType: TextInputType.number),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLabel('CPA (Cost Per Acquisition ₹)'),
+                            const SizedBox(height: 6),
+                            _buildInput(_cpaCtrl, hint: 'e.g. 180.00', keyboardType: TextInputType.number),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLabel('Renewal Date'),
+                            const SizedBox(height: 6),
+                            _buildRenewalDatePicker(),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLabel('Renewal Status'),
+                            const SizedBox(height: 6),
+                            _buildInput(_renewalStatusCtrl, hint: 'PENDING / ACTIVE'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // DM Team, Designers, Editors, Content Writers
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLabel('DM Team'),
+                            const SizedBox(height: 6),
+                            _buildInput(_dmTeamCtrl, hint: 'Team name'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLabel('Designers'),
+                            const SizedBox(height: 6),
+                            _buildInput(_designersCtrl, hint: 'Designer name'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLabel('Editors'),
+                            const SizedBox(height: 6),
+                            _buildInput(_editorsCtrl, hint: 'Editor name'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLabel('Content Writers'),
+                            const SizedBox(height: 6),
+                            _buildInput(_contentWritersCtrl, hint: 'Writer name'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Remarks
+                  _buildLabel('Remarks'),
+                  const SizedBox(height: 6),
+                  _buildInput(_remarksCtrl, hint: 'Additional client notes or comments...', maxLines: 3),
+                  const SizedBox(height: 24),
+
+                  // Save Button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00BCD4),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        elevation: 0,
+                      ),
+                      onPressed: _isSaving ? null : _saveClient,
+                      child: _isSaving
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Text('Update Client', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLabel(String text, {bool isRequired = false, bool uppercase = false}) {
+    return Text(
+      uppercase ? text.toUpperCase() : text,
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.bold,
+        color: AppTheme.textPrimaryOf(context),
+      ),
+    );
+  }
+
+  Widget _buildInput(TextEditingController ctrl, {String? hint, TextInputType keyboardType = TextInputType.text, int maxLines = 1}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return TextField(
+      controller: ctrl,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 12),
+        filled: true,
+        fillColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: AppTheme.borderOf(context)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: AppTheme.borderOf(context)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showCountryPicker() async {
+    final result = await showDialog<CountryCode>(
+      context: context,
+      builder: (_) => _CountryCodePickerDialog(selectedCountry: _selectedCountry),
+    );
+    if (result != null) {
+      setState(() => _selectedCountry = result);
+    }
+  }
+
+  Widget _buildPhoneInput(TextEditingController ctrl) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: AppTheme.borderOf(context)),
+        borderRadius: BorderRadius.circular(10),
+        color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
+      ),
+      child: Row(
+        children: [
+          InkWell(
+            onTap: _showCountryPicker,
+            borderRadius: const BorderRadius.horizontal(left: Radius.circular(10)),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              decoration: BoxDecoration(
+                border: Border(right: BorderSide(color: AppTheme.borderOf(context))),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(_selectedCountry.flag, style: const TextStyle(fontSize: 14)),
+                  const SizedBox(width: 4),
+                  Text(_selectedCountry.dialCode, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 2),
+                  Icon(Icons.arrow_drop_down, size: 16, color: AppTheme.textMutedOf(context)),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
+            child: TextField(
+              controller: ctrl,
+              keyboardType: TextInputType.phone,
+              style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+              decoration: const InputDecoration(
+                hintText: 'Phone number',
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(horizontal: 10),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── SEARCHABLE COUNTRY CODE PICKER DIALOG ────────────────────────────────────
+
+class _CountryCodePickerDialog extends StatefulWidget {
+  final CountryCode selectedCountry;
+
+  const _CountryCodePickerDialog({required this.selectedCountry});
+
+  @override
+  State<_CountryCodePickerDialog> createState() => _CountryCodePickerDialogState();
+}
+
+class _CountryCodePickerDialogState extends State<_CountryCodePickerDialog> {
+  late TextEditingController _searchCtrl;
+  late List<CountryCode> _filteredCountries;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl = TextEditingController();
+    _filteredCountries = List.from(kAllCountries);
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _filter(String query) {
+    final q = query.toLowerCase().trim();
+    setState(() {
+      if (q.isEmpty) {
+        _filteredCountries = List.from(kAllCountries);
+      } else {
+        _filteredCountries = kAllCountries.where((c) {
+          return c.name.toLowerCase().contains(q) ||
+                 c.dialCode.contains(q) ||
+                 c.code.toLowerCase().contains(q);
+        }).toList();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgCard = isDark ? AppTheme.bgCardDark : Colors.white;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textMuted = AppTheme.textMutedOf(context);
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: bgCard,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        constraints: const BoxConstraints(maxHeight: 520, maxWidth: 400),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.public_rounded, color: Color(0xFF00BCD4)),
+                const SizedBox(width: 8),
+                Text(
+                  'Select Country Code',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textPrimary),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 20),
+                  onPressed: () => Navigator.pop(context),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _searchCtrl,
+              onChanged: _filter,
+              style: TextStyle(fontSize: 13, color: textPrimary),
+              decoration: InputDecoration(
+                hintText: 'Search country or code (+91, UAE...)',
+                hintStyle: TextStyle(color: textMuted, fontSize: 12),
+                prefixIcon: Icon(Icons.search, size: 18, color: textMuted),
+                filled: true,
+                fillColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: AppTheme.borderOf(context)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: AppTheme.borderOf(context)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFF00BCD4)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: _filteredCountries.isEmpty
+                  ? Center(
+                      child: Text('No countries found', style: TextStyle(color: textMuted, fontSize: 13)),
+                    )
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: _filteredCountries.length,
+                      separatorBuilder: (_, __) => Divider(height: 1, color: AppTheme.borderOf(context)),
+                      itemBuilder: (ctx, i) {
+                        final country = _filteredCountries[i];
+                        final isSelected = country.code == widget.selectedCountry.code;
+
+                        return ListTile(
+                          dense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          leading: Text(country.flag, style: const TextStyle(fontSize: 22)),
+                          title: Text(
+                            country.name,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                              color: isSelected ? const Color(0xFF00BCD4) : textPrimary,
+                            ),
+                          ),
+                          trailing: Text(
+                            country.dialCode,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: isSelected ? const Color(0xFF00BCD4) : textMuted,
+                            ),
+                          ),
+                          onTap: () => Navigator.pop(context, country),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── COMPREHENSIVE CREATE PROJECT PROPOSAL SHEET ──────────────────────────────
+
+class PricingItem {
+  TextEditingController nameCtrl;
+  TextEditingController descCtrl;
+  TextEditingController amountCtrl;
+
+  PricingItem({
+    String name = '',
+    String desc = '',
+    String amount = '0',
+  })  : nameCtrl = TextEditingController(text: name),
+        descCtrl = TextEditingController(text: desc),
+        amountCtrl = TextEditingController(text: amount);
+
+  void dispose() {
+    nameCtrl.dispose();
+    descCtrl.dispose();
+    amountCtrl.dispose();
+  }
+}
+
+class TermItem {
+  TextEditingController termCtrl;
+
+  TermItem({String term = ''}) : termCtrl = TextEditingController(text: term);
+
+  void dispose() {
+    termCtrl.dispose();
+  }
+}
+
+class CreateProposalSheet extends StatefulWidget {
+  final String clientName;
+  final String clientId;
+  final double defaultAmount;
+
+  const CreateProposalSheet({
+    super.key,
+    required this.clientName,
+    required this.clientId,
+    this.defaultAmount = 0.0,
+  });
+
+  @override
+  State<CreateProposalSheet> createState() => _CreateProposalSheetState();
+}
+
+class _CreateProposalSheetState extends State<CreateProposalSheet> {
+  late TextEditingController _proposalTitleCtrl;
+  late TextEditingController _serviceNameCtrl;
+  late TextEditingController _projectDescCtrl;
+  late TextEditingController _gstPercentCtrl;
+  late TextEditingController _validUntilCtrl;
+
+  String _selectedServiceType = 'Web Development';
+  final List<String> _serviceTypeOptions = [
+    'Web Development',
+    'Digital Marketing',
+    'SEO Optimization',
+    'Branding & Identity',
+    'Graphic Design',
+    'Video Editing',
+    'Content Writing',
+    'Social Media Management',
+  ];
+
+  late List<PricingItem> _pricingItems;
+  late List<TermItem> _termItems;
+  bool _isGenerating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _proposalTitleCtrl = TextEditingController(text: 'Proposal for ${widget.clientName}');
+    _serviceNameCtrl = TextEditingController(text: 'Web Development & Digital Strategy');
+    _projectDescCtrl = TextEditingController(text: 'Describe the scope of work, deliverables, and objectives...');
+    _gstPercentCtrl = TextEditingController(text: '18');
+
+    final futureDate = DateTime.now().add(const Duration(days: 15));
+    final day = futureDate.day.toString().padLeft(2, '0');
+    final month = futureDate.month.toString().padLeft(2, '0');
+    final year = futureDate.year.toString();
+    _validUntilCtrl = TextEditingController(text: '$day-$month-$year');
+
+    _pricingItems = [
+      PricingItem(
+        name: 'Core Services',
+        desc: 'Initial setup & project execution',
+        amount: widget.defaultAmount > 0 ? widget.defaultAmount.toStringAsFixed(0) : '25000',
+      ),
+    ];
+
+    _termItems = [
+      TermItem(term: 'Payment should be made within 7 days of invoice generation.'),
+      TermItem(term: '50% advance payment required to start the project.'),
+    ];
+  }
+
+  @override
+  void dispose() {
+    _proposalTitleCtrl.dispose();
+    _serviceNameCtrl.dispose();
+    _projectDescCtrl.dispose();
+    _gstPercentCtrl.dispose();
+    _validUntilCtrl.dispose();
+    for (var item in _pricingItems) {
+      item.dispose();
+    }
+    for (var term in _termItems) {
+      term.dispose();
+    }
+    super.dispose();
+  }
+
+  void _addPricingItem() {
+    setState(() {
+      _pricingItems.add(PricingItem(name: '', desc: '', amount: '0'));
+    });
+  }
+
+  void _removePricingItem(int index) {
+    if (_pricingItems.length > 1) {
+      setState(() {
+        _pricingItems[index].dispose();
+        _pricingItems.removeAt(index);
+      });
+    }
+  }
+
+  void _addTermItem() {
+    setState(() {
+      _termItems.add(TermItem(term: ''));
+    });
+  }
+
+  void _removeTermItem(int index) {
+    if (_termItems.length > 1) {
+      setState(() {
+        _termItems[index].dispose();
+        _termItems.removeAt(index);
+      });
+    }
+  }
+
+  Future<void> _selectValidDate() async {
+    DateTime initial = DateTime.now().add(const Duration(days: 15));
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2035),
+      builder: (context, child) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: isDark
+                ? const ColorScheme.dark(primary: Color(0xFF00BCD4), onPrimary: Colors.white, surface: Color(0xFF1E293B))
+                : const ColorScheme.light(primary: Color(0xFF00BCD4), onPrimary: Colors.white),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      final day = picked.day.toString().padLeft(2, '0');
+      final month = picked.month.toString().padLeft(2, '0');
+      final year = picked.year.toString();
+      setState(() {
+        _validUntilCtrl.text = '$day-$month-$year';
+      });
+    }
+  }
+
+  Future<void> _generateProposal() async {
+    if (_proposalTitleCtrl.text.trim().isEmpty) {
+      AppSnackBar.showCustom(context, const SnackBar(content: Text('Proposal Title is required'), backgroundColor: Colors.red));
+      return;
+    }
+
+    setState(() => _isGenerating = true);
+
+    try {
+      double subtotal = 0;
+      for (var item in _pricingItems) {
+        subtotal += double.tryParse(item.amountCtrl.text.trim()) ?? 0;
+      }
+      final gst = double.tryParse(_gstPercentCtrl.text.trim()) ?? 18;
+      final grandTotal = subtotal + (subtotal * gst / 100);
+
+      try {
+        await SupabaseService.client.from('proposals').insert({
+          'client_id': widget.clientId,
+          'title': _proposalTitleCtrl.text.trim(),
+          'service_name': _serviceNameCtrl.text.trim(),
+          'service_type': _selectedServiceType,
+          'description': _projectDescCtrl.text.trim(),
+          'subtotal': subtotal,
+          'gst_percent': gst,
+          'total_amount': grandTotal,
+          'valid_until': _validUntilCtrl.text.trim(),
+          'terms': _termItems.map((t) => t.termCtrl.text.trim()).toList(),
+          'status': 'SENT',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      } catch (_) {}
+
+      if (mounted) {
+        Navigator.pop(context);
+        AppSnackBar.showCustom(
+          context,
+          SnackBar(
+            content: Text('Proposal "${_proposalTitleCtrl.text}" generated successfully! Total: ₹${grandTotal.toStringAsFixed(0)}'),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isGenerating = false);
+        AppSnackBar.showCustom(context, SnackBar(content: Text('Error generating proposal: $e'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgCard = isDark ? AppTheme.bgCardDark : Colors.white;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    final textMuted = AppTheme.textMutedOf(context);
+    final border = AppTheme.borderOf(context);
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.92,
+      maxChildSize: 0.95,
+      minChildSize: 0.5,
+      builder: (_, scrollCtrl) => Container(
+        decoration: BoxDecoration(
+          color: bgCard,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Handle bar + Title
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(color: border, borderRadius: BorderRadius.circular(2)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 16, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Create Project Proposal', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary)),
+                        const SizedBox(height: 2),
+                        Text('Draft a professional proposal for ${widget.clientName}. The template will be generated automatically.', style: TextStyle(fontSize: 11, color: textSecondary)),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, color: textMuted),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: border),
+            // Form body
+            Expanded(
+              child: ListView(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                children: [
+                  // SECTION 1: PROPOSAL DETAILS
+                  _buildSectionHeader('PROPOSAL DETAILS'),
+                  const SizedBox(height: 8),
+                  _buildInputLabel('Proposal Title', isRequired: true),
+                  const SizedBox(height: 6),
+                  _buildInput(_proposalTitleCtrl, hint: 'Proposal for ${widget.clientName}'),
+                  const SizedBox(height: 16),
+
+                  // SECTION 2: SERVICE INFORMATION
+                  _buildSectionHeader('SERVICE INFORMATION'),
+                  const SizedBox(height: 8),
+                  LayoutBuilder(builder: (_, c) {
+                    final isWide = c.maxWidth > 500;
+                    return isWide
+                        ? Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildInputLabel('Service Name', isRequired: true),
+                                    const SizedBox(height: 6),
+                                    _buildInput(_serviceNameCtrl, hint: 'e.g. E-Commerce Website, Mobile App'),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                flex: 2,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildInputLabel('Service Type', isRequired: true),
+                                    const SizedBox(height: 6),
+                                    _buildServiceTypeDropdown(isDark, border, textPrimary),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildInputLabel('Service Name', isRequired: true),
+                              const SizedBox(height: 6),
+                              _buildInput(_serviceNameCtrl, hint: 'e.g. E-Commerce Website, Mobile App'),
+                              const SizedBox(height: 12),
+                              _buildInputLabel('Service Type', isRequired: true),
+                              const SizedBox(height: 6),
+                              _buildServiceTypeDropdown(isDark, border, textPrimary),
+                            ],
+                          );
+                  }),
+                  const SizedBox(height: 12),
+                  _buildInputLabel('Project Description'),
+                  const SizedBox(height: 6),
+                  _buildInput(_projectDescCtrl, hint: 'Describe the scope of work, deliverables, and objectives...', maxLines: 3),
+                  const SizedBox(height: 16),
+
+                  // SECTION 3: PRICING ITEMS
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildSectionHeader('PRICING ITEMS'),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF00BCD4),
+                          side: const BorderSide(color: Color(0xFF00BCD4)),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: _addPricingItem,
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Add Item', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ..._pricingItems.asMap().entries.map((entry) {
+                    final idx = entry.key;
+                    final item = entry.value;
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: border),
+                        borderRadius: BorderRadius.circular(10),
+                        color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildInput(item.nameCtrl, hint: 'Item Name'),
+                              ),
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                width: 90,
+                                child: _buildInput(item.amountCtrl, hint: '₹ 0', keyboardType: TextInputType.number),
+                              ),
+                              if (_pricingItems.length > 1)
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                  onPressed: () => _removePricingItem(idx),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          _buildInput(item.descCtrl, hint: 'Description (optional)'),
+                        ],
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 16),
+
+                  // SECTION 4: GST & VALIDITY
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildInputLabel('GST Percentage (%)'),
+                            const SizedBox(height: 6),
+                            _buildInput(_gstPercentCtrl, hint: '18', keyboardType: TextInputType.number),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildInputLabel('Proposal Valid Until'),
+                            const SizedBox(height: 6),
+                            InkWell(
+                              onTap: _selectValidDate,
+                              borderRadius: BorderRadius.circular(10),
+                              child: IgnorePointer(
+                                child: _buildInput(_validUntilCtrl, hint: 'dd-mm-yyyy'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // SECTION 5: TERMS & CONDITIONS
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildSectionHeader('TERMS & CONDITIONS'),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF00BCD4),
+                          side: const BorderSide(color: Color(0xFF00BCD4)),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: _addTermItem,
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Add Term', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ..._termItems.asMap().entries.map((entry) {
+                    final idx = entry.key;
+                    final term = entry.value;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _buildInput(term.termCtrl, hint: 'Enter term or condition...'),
+                          ),
+                          if (_termItems.length > 1)
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                              onPressed: () => _removeTermItem(idx),
+                            ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 24),
+
+                  // GENERATE PROPOSAL BUTTON
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00BCD4),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        elevation: 0,
+                      ),
+                      onPressed: _isGenerating ? null : _generateProposal,
+                      child: _isGenerating
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Text('GENERATE PROPOSAL PDF', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w800,
+        color: Color(0xFF00BCD4),
+        letterSpacing: 0.8,
+      ),
+    );
+  }
+
+  Widget _buildInputLabel(String text, {bool isRequired = false}) {
+    return Row(
+      children: [
+        Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textPrimaryOf(context))),
+        if (isRequired) const Text(' *', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
+  Widget _buildInput(TextEditingController ctrl, {String? hint, TextInputType keyboardType = TextInputType.text, int maxLines = 1}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return TextField(
+      controller: ctrl,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 12),
+        filled: true,
+        fillColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: AppTheme.borderOf(context)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: AppTheme.borderOf(context)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildServiceTypeDropdown(bool isDark, Color border, Color textPrimary) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        border: Border.all(color: border),
+        borderRadius: BorderRadius.circular(10),
+        color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedServiceType,
+          isExpanded: true,
+          dropdownColor: isDark ? AppTheme.bgCardDark : Colors.white,
+          style: TextStyle(fontSize: 13, color: textPrimary),
+          items: _serviceTypeOptions.map((opt) {
+            return DropdownMenuItem(value: opt, child: Text(opt));
+          }).toList(),
+          onChanged: (val) {
+            if (val != null) {
+              setState(() => _selectedServiceType = val);
+            }
+          },
+        ),
       ),
     );
   }
