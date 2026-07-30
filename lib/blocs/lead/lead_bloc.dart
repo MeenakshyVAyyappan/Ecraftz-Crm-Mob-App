@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../models/lead_model.dart';
@@ -37,6 +38,14 @@ class DeleteLeadEvent extends LeadEvent {
   const DeleteLeadEvent(this.id);
   @override
   List<Object?> get props => [id];
+}
+
+class BulkDeleteLeadsEvent extends LeadEvent {
+  final List<String> ids;
+  final BranchState? branchState;
+  const BulkDeleteLeadsEvent(this.ids, {this.branchState});
+  @override
+  List<Object?> get props => [ids, branchState];
 }
 
 class ChangeLeadStatusEvent extends LeadEvent {
@@ -173,6 +182,19 @@ class LeadBloc extends Bloc<LeadEvent, LeadState> {
         add(LoadLeadsEvent());
       } catch (e) {
         // handle error
+      }
+    });
+
+    on<BulkDeleteLeadsEvent>((event, emit) async {
+      try {
+        if (event.ids.isNotEmpty) {
+          await _client.from('leads').update({
+            'deleted_at': DateTime.now().toUtc().toIso8601String(),
+          }).inFilter('id', event.ids);
+        }
+        add(LoadLeadsEvent(branchState: event.branchState));
+      } catch (e) {
+        debugPrint('Error bulk deleting leads: $e');
       }
     });
 

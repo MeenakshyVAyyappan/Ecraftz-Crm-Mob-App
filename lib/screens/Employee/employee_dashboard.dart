@@ -11,6 +11,8 @@ import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/task/task_bloc.dart';
 import '../../models/task_model.dart';
 import '../../services/supabase_service.dart';
+import 'package:provider/provider.dart';
+import '../../providers/rbac_provider.dart';
 import '../../theme/app_theme.dart';
 import 'emply_project_screen.dart';
 import 'emply_tasks_screen.dart';
@@ -74,7 +76,11 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
   bool get _isCrmDepartment {
     final deptLower = _departmentName.toLowerCase();
     final roleLower = _userRole.toLowerCase();
-    return deptLower.contains('crm') || roleLower.contains('admin') || roleLower.contains('super');
+    final rbac = Provider.of<RbacProvider>(context, listen: false);
+    return deptLower.contains('crm') ||
+        roleLower.contains('admin') ||
+        roleLower.contains('super') ||
+        rbac.hasModuleAccess('module.crm');
   }
 
   void _onSelectPage(int index) {
@@ -121,6 +127,9 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
       setState(() => _isLoadingProfile = true);
     }
     try {
+      final rbac = Provider.of<RbacProvider>(context, listen: false);
+      rbac.setUserRole(_userRole);
+      rbac.loadUserPermissions(user.id);
       dynamic profileRows;
       try {
         profileRows = await SupabaseService.client

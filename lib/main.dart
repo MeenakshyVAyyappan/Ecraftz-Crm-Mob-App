@@ -22,9 +22,10 @@ import 'blocs/document_vault/document_vault_bloc.dart';
 import 'blocs/crm_reports/crm_reports_bloc.dart';
 import 'blocs/team_timesheet/team_timesheet_bloc.dart';
 
-import 'widgets/app_drawer.dart';
 import 'widgets/app_snackbar.dart';
 import 'blocs/branch/branch_cubit.dart';
+
+import 'blocs/rbac/rbac_cubit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,6 +42,7 @@ void main() async {
   runApp(
     MultiBlocProvider(
       providers: [
+        BlocProvider<RbacCubit>(create: (_) => RbacCubit()),
         BlocProvider(create: (_) => ThemeBloc()),
         BlocProvider(create: (_) => AuthBloc()..add(AuthCheckEvent())),
         BlocProvider<LeadBloc>(create: (_) => LeadBloc()),
@@ -90,17 +92,21 @@ class _AuthWrapperState extends State<AuthWrapper> {
         return current is Authenticated || current is Unauthenticated;
       },
       listener: (context, state) {
-        if (state is Authenticated && state.isLoginEvent) {
-          // Increment counter to force widget recreation with a new key
-          setState(() {
-            _loginSessionCount++;
-          });
-          AppSnackBar.showSuccess(context, 'Login successful.');
-          Future.delayed(const Duration(milliseconds: 1500), () {
-            if (context.mounted) {
-              AppSnackBar.showSuccess(context, 'Profile loaded successfully.');
-            }
-          });
+        if (state is Authenticated) {
+          final rbac = context.read<RbacCubit>();
+          rbac.setUserRole(state.role);
+          rbac.loadUserPermissions(state.user.id);
+          if (state.isLoginEvent) {
+            setState(() {
+              _loginSessionCount++;
+            });
+            AppSnackBar.showSuccess(context, 'Login successful.');
+            Future.delayed(const Duration(milliseconds: 1500), () {
+              if (context.mounted) {
+                AppSnackBar.showSuccess(context, 'Profile loaded successfully.');
+              }
+            });
+          }
         } else if (state is Unauthenticated) {
           if (state.loggedOut) {
             AppSnackBar.showSuccess(context, 'Logout successful.');
@@ -116,8 +122,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
           );
         } else if (state is Authenticated) {
           if (state.role == 'employee') {
-            // Key includes loginSessionCount so the widget is fully recreated
-            // on every login, even if the same user logs in again after logout.
             return EmployeeDashboardScreen(
               key: ValueKey('emp_${state.user.id}_$_loginSessionCount'),
             );

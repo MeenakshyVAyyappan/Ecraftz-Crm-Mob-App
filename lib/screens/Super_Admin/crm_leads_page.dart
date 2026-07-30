@@ -1,5 +1,7 @@
 import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -11,6 +13,7 @@ import '../../blocs/lead/lead_bloc.dart';
 import '../../blocs/branch/branch_cubit.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
+import '../../services/lead_import_service.dart';
 
 Future<void> _launchUrl(Uri uri, BuildContext context, {String failureMessage = 'Could not open link'}) async {
   try {
@@ -235,6 +238,287 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
     context.read<LeadBloc>().add(ChangeLeadStatusEvent(lead.id, newStatus));
   }
 
+  bool _isSelectionMode = false;
+  final Set<String> _selectedLeadIds = {};
+
+  void _toggleSelection(String leadId) {
+    setState(() {
+      if (_selectedLeadIds.contains(leadId)) {
+        _selectedLeadIds.remove(leadId);
+        if (_selectedLeadIds.isEmpty) {
+          _isSelectionMode = false;
+        }
+      } else {
+        _selectedLeadIds.add(leadId);
+        _isSelectionMode = true;
+      }
+    });
+  }
+
+  void _selectAll(List<Lead> filteredLeads) {
+    setState(() {
+      _isSelectionMode = true;
+      _selectedLeadIds.clear();
+      for (var l in filteredLeads) {
+        _selectedLeadIds.add(l.id);
+      }
+    });
+  }
+
+  void _clearSelection() {
+    setState(() {
+      _isSelectionMode = false;
+      _selectedLeadIds.clear();
+    });
+  }
+
+  void _confirmBulkDelete() {
+    if (_selectedLeadIds.isEmpty) return;
+    final count = _selectedLeadIds.length;
+
+    showDialog(
+      context: context,
+      builder: (dlgCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Delete Selected Leads'),
+        content: Text(
+          'Are you sure you want to delete the $count selected lead(s)? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dlgCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(dlgCtx);
+              context.read<LeadBloc>().add(
+                    BulkDeleteLeadsEvent(
+                      _selectedLeadIds.toList(),
+                      branchState: context.read<BranchCubit>().state,
+                    ),
+                  );
+              setState(() {
+                _selectedLeadIds.clear();
+                _isSelectionMode = false;
+              });
+              AppSnackBar.showSuccess(
+                context,
+                '$count lead(s) deleted successfully.',
+              );
+            },
+            child: Text('Delete ($count)'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleExcelImport() async {
+    final service = LeadImportService();
+    final fileResult = await service.pickExcelFile();
+    if (fileResult == null || fileResult.files.isEmpty) return;
+
+    final file = fileResult.files.first;
+    Uint8List? bytes = file.bytes;
+    if (bytes == null && file.path != null) {
+      bytes = await File(file.path!).readAsBytes();
+    }
+    if (bytes == null) {
+      if (mounted) AppSnackBar.showError(context, 'Unable to read selected file.');
+      return;
+    }
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(color: Color(0xFF00BCD4)),
+            SizedBox(width: 16),
+            Expanded(child: Text('Importing leads from Excel...')),
+          ],
+        ),
+      ),
+    );
+
+    final activeBranchId = context.read<BranchCubit>().state.activeBranchId;
+    final result = await service.importLeadsFromExcel(
+      bytes: bytes,
+      branchId: activeBranchId,
+    );
+
+    if (mounted) {
+      Navigator.pop(context); // Close progress dialog
+      _showImportResultDialog(context, result);
+      context.read<LeadBloc>().add(
+            LoadLeadsEvent(branchState: context.read<BranchCubit>().state),
+          );
+    }
+  }
+
+  void _showImportResultDialog(BuildContext context, ImportResult result) {
+    showDialog(
+      context: context,
+      builder: (dlgCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.file_upload_outlined, color: Color(0xFF10B981)),
+            SizedBox(width: 8),
+            Text('Import Results',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _resultBadge('Imported', '${result.successCount}', const Color(0xFF10B981)),
+                  _resultBadge('Duplicates', '${result.duplicateCount}', const Color(0xFFF59E0B)),
+                  _resultBadge('Failed', '${result.failedCount}', Colors.redAccent),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (result.errorDetails.isNotEmpty) ...[
+                const Text('Validation & Warning Logs:',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 180),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                  ),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: result.errorDetails.length,
+                    itemBuilder: (_, i) => Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      child: Text(
+                        '• ${result.errorDetails[i]}',
+                        style: const TextStyle(fontSize: 11, color: Colors.redAccent),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00BCD4),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dlgCtx),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _resultBadge(String label, String count, Color color) {
+    return Column(
+      children: [
+        Text(count, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+        Text(label, style: TextStyle(fontSize: 11, color: color)),
+      ],
+    );
+  }
+
+  Widget _buildSelectionBottomBar(List<Lead> filteredLeads) {
+    final count = _selectedLeadIds.length;
+    final allSelected = count > 0 && count == filteredLeads.length;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(top: BorderSide(color: _border)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: _clearSelection,
+              tooltip: 'Cancel Selection',
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '$count Selected',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: _textPrimary,
+              ),
+            ),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: () {
+                if (allSelected) {
+                  _clearSelection();
+                } else {
+                  _selectAll(filteredLeads);
+                }
+              },
+              icon: Icon(
+                allSelected ? Icons.deselect_rounded : Icons.select_all_rounded,
+                size: 16,
+                color: const Color(0xFF00BCD4),
+              ),
+              label: Text(
+                allSelected ? 'Deselect All' : 'Select All',
+                style: const TextStyle(
+                  color: Color(0xFF00BCD4),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              onPressed: count > 0 ? _confirmBulkDelete : null,
+              icon: const Icon(Icons.delete_forever_rounded, size: 16),
+              label: Text('Delete ($count)', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.of(context).size.width > 600;
@@ -243,6 +527,12 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: _bg,
+      bottomNavigationBar: _isSelectionMode
+          ? BlocBuilder<LeadBloc, LeadState>(
+              builder: (context, state) =>
+                  _buildSelectionBottomBar(_filteredLeads(state.leads)),
+            )
+          : null,
       drawer: widget.showAppBar ? AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: (i) {
@@ -253,86 +543,146 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
       appBar: widget.showAppBar ? AppBar(
         backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
-        leading: isWide
-            ? null
-            : IconButton(
-                icon: Icon(Icons.menu_rounded, color: isDark ? Colors.white : const Color(0xFF374151)),
-                onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-              ),
+        leading: _isSelectionMode
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: _clearSelection,
+              )
+            : (isWide
+                ? null
+                : IconButton(
+                    icon: Icon(Icons.menu_rounded, color: isDark ? Colors.white : const Color(0xFF374151)),
+                    onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+                  )),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Lead Management',
+            Text(
+                _isSelectionMode
+                    ? '${_selectedLeadIds.length} Selected'
+                    : 'Lead Management',
                 style: TextStyle(
                     color: _textPrimary,
                     fontSize: 18,
                     fontWeight: FontWeight.w700)),
-            if (!isWide)
+            if (!isWide && !_isSelectionMode)
               Text('Manage your pipeline',
                   style: TextStyle(color: _textSecondary, fontSize: 11)),
           ],
         ),
-        actions: [
-          // Branch switcher
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: BranchSwitcher(compact: true),
-          ),
-          AppRefreshButton(
-            onRefresh: () async {
-              context.read<LeadBloc>().add(
-                    LoadLeadsEvent(branchState: context.read<BranchCubit>().state),
-                  );
-              await Future.delayed(const Duration(milliseconds: 600));
-            },
-          ),
-          const SizedBox(width: 4),
-          IconButton(
-            icon: Icon(
-              _isKanban ? Icons.view_list_rounded : Icons.view_kanban_rounded,
-              color: const Color(0xFF00BCD4),
-            ),
-            onPressed: () => setState(() => _isKanban = !_isKanban),
-            tooltip: _isKanban ? 'List View' : 'Kanban View',
-          ),
-          BlocBuilder<ThemeBloc, ThemeState>(
-            builder: (context, themeState) {
-              final isDarkTheme = themeState.themeMode == ThemeMode.dark;
-              return IconButton(
-                icon: Icon(
-                  isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-                  color: isDarkTheme ? Colors.white : const Color(0xFF374151),
+        actions: _isSelectionMode
+            ? [
+                BlocBuilder<LeadBloc, LeadState>(
+                  builder: (context, state) {
+                    final filtered = _filteredLeads(state.leads);
+                    final allSelected = _selectedLeadIds.isNotEmpty &&
+                        _selectedLeadIds.length == filtered.length;
+                    return TextButton.icon(
+                      onPressed: () {
+                        if (allSelected) {
+                          _clearSelection();
+                        } else {
+                          _selectAll(filtered);
+                        }
+                      },
+                      icon: Icon(
+                        allSelected
+                            ? Icons.deselect_rounded
+                            : Icons.select_all_rounded,
+                        size: 16,
+                        color: const Color(0xFF00BCD4),
+                      ),
+                      label: Text(
+                        allSelected ? 'Deselect All' : 'Select All',
+                        style: const TextStyle(
+                            color: Color(0xFF00BCD4),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12),
+                      ),
+                    );
+                  },
                 ),
-                onPressed: () {
-                  context.read<ThemeBloc>().add(ToggleThemeEvent());
-                },
-              );
-            },
-          ),
-          if (isWide)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ElevatedButton.icon(
-                onPressed: () => _showAddLeadDialog(),
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Add Lead'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00BCD4),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                IconButton(
+                  icon: const Icon(Icons.delete_forever_rounded,
+                      color: Colors.redAccent),
+                  onPressed: _confirmBulkDelete,
+                  tooltip: 'Delete Selected',
                 ),
-              ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: IconButton(
-                icon: const Icon(Icons.add_circle, color: Color(0xFF00BCD4), size: 28),
-                onPressed: () => _showAddLeadDialog(),
-              ),
-            ),
-        ],
+              ]
+            : [
+                // Branch switcher
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: BranchSwitcher(compact: true),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.file_upload_outlined,
+                      color: Color(0xFF10B981)),
+                  onPressed: _handleExcelImport,
+                  tooltip: 'Import Leads from Excel',
+                ),
+                AppRefreshButton(
+                  onRefresh: () async {
+                    context.read<LeadBloc>().add(
+                          LoadLeadsEvent(
+                              branchState: context.read<BranchCubit>().state),
+                        );
+                    await Future.delayed(const Duration(milliseconds: 600));
+                  },
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: Icon(
+                    _isKanban ? Icons.view_list_rounded : Icons.view_kanban_rounded,
+                    color: const Color(0xFF00BCD4),
+                  ),
+                  onPressed: () => setState(() => _isKanban = !_isKanban),
+                  tooltip: _isKanban ? 'List View' : 'Kanban View',
+                ),
+                BlocBuilder<ThemeBloc, ThemeState>(
+                  builder: (context, themeState) {
+                    final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+                    return IconButton(
+                      icon: Icon(
+                        isDarkTheme
+                            ? Icons.light_mode_rounded
+                            : Icons.dark_mode_rounded,
+                        color:
+                            isDarkTheme ? Colors.white : const Color(0xFF374151),
+                      ),
+                      onPressed: () {
+                        context.read<ThemeBloc>().add(ToggleThemeEvent());
+                      },
+                    );
+                  },
+                ),
+                if (isWide)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ElevatedButton.icon(
+                      onPressed: () => _showAddLeadDialog(),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Add Lead'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00BCD4),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                      ),
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: IconButton(
+                      icon: const Icon(Icons.add_circle,
+                          color: Color(0xFF00BCD4), size: 28),
+                      onPressed: () => _showAddLeadDialog(),
+                    ),
+                  ),
+              ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(height: 1, color: _border),
@@ -532,9 +882,19 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
           );
         }
         final lead = leads[i];
+        final isSelected = _selectedLeadIds.contains(lead.id);
         return _LeadListTile(
           lead: lead,
-          onTap: () => _showLeadDetail(lead),
+          isSelectionMode: _isSelectionMode,
+          isSelected: isSelected,
+          onTap: () {
+            if (_isSelectionMode) {
+              _toggleSelection(lead.id);
+            } else {
+              _showLeadDetail(lead);
+            }
+          },
+          onLongPress: () => _toggleSelection(lead.id),
           onDelete: () => _deleteLead(lead),
           onEdit: () => _showAddLeadDialog(existing: lead),
           onStatusChange: (s) => _changeStatus(lead, s),
@@ -869,14 +1229,20 @@ class _KanbanCard extends StatelessWidget {
 
 class _LeadListTile extends StatelessWidget {
   final Lead lead;
+  final bool isSelectionMode;
+  final bool isSelected;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
   final VoidCallback onDelete;
   final VoidCallback onEdit;
   final Function(LeadStatus) onStatusChange;
 
   const _LeadListTile({
     required this.lead,
+    this.isSelectionMode = false,
+    this.isSelected = false,
     required this.onTap,
+    required this.onLongPress,
     required this.onDelete,
     required this.onEdit,
     required this.onStatusChange,
@@ -885,14 +1251,22 @@ class _LeadListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isSelected
+        ? const Color(0xFF00BCD4).withOpacity(0.12)
+        : (isDark ? AppTheme.bgCardDark : Colors.white);
+    final borderColor = isSelected
+        ? const Color(0xFF00BCD4).withOpacity(0.5)
+        : AppTheme.borderOf(context);
+
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: isDark ? AppTheme.bgCardDark : Colors.white,
+          color: cardBg,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppTheme.borderOf(context)),
+          border: Border.all(color: borderColor, width: isSelected ? 1.5 : 1.0),
           boxShadow: isDark ? [] : [
             BoxShadow(
               color: Colors.black.withOpacity(0.03),
@@ -903,6 +1277,24 @@ class _LeadListTile extends StatelessWidget {
         ),
         child: Row(
           children: [
+            // Circular selection checkbox
+            GestureDetector(
+              onTap: onLongPress,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: Icon(
+                  isSelected
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  color: isSelected
+                      ? const Color(0xFF00BCD4)
+                      : (isSelectionMode
+                          ? AppTheme.textSecondaryOf(context)
+                          : AppTheme.textMutedOf(context)),
+                  size: 22,
+                ),
+              ),
+            ),
             _Avatar(name: lead.initials, color: lead.status.color, size: 36),
             const SizedBox(width: 12),
             Expanded(
@@ -937,19 +1329,21 @@ class _LeadListTile extends StatelessWidget {
                 ],
               ],
             ),
-            const SizedBox(width: 4),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert,
-                  size: 18, color: Color(0xFF9CA3AF)),
-              itemBuilder: (_) => [
-                const PopupMenuItem(value: 'edit', child: Text('Edit', style: TextStyle(fontSize: 13))),
-                const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red, fontSize: 13))),
-              ],
-              onSelected: (v) {
-                if (v == 'edit') onEdit();
-                if (v == 'delete') onDelete();
-              },
-            ),
+            if (!isSelectionMode) ...[
+              const SizedBox(width: 4),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert,
+                    size: 18, color: Color(0xFF9CA3AF)),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'edit', child: Text('Edit', style: TextStyle(fontSize: 13))),
+                  const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red, fontSize: 13))),
+                ],
+                onSelected: (v) {
+                  if (v == 'edit') onEdit();
+                  if (v == 'delete') onDelete();
+                },
+              ),
+            ],
           ],
         ),
       ),

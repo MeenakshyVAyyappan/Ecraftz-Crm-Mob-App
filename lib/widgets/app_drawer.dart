@@ -4,6 +4,9 @@ import '../theme/app_theme.dart';
 import '../blocs/auth/auth_bloc.dart';
 import '../blocs/branch/branch_cubit.dart';
 
+import '../blocs/rbac/rbac_cubit.dart';
+import '../blocs/rbac/rbac_state.dart';
+
 class AppDrawer extends StatelessWidget {
   final int selectedIndex;
   final Function(int) onItemSelected;
@@ -16,51 +19,81 @@ class AppDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Drawer(
-      width: 270,
-      backgroundColor: Theme.of(context).brightness == Brightness.dark
-          ? AppTheme.bgSidebarDark
-          : AppTheme.bgSidebar,
-      child: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                children: [
-                  _buildNavItem(0, Icons.dashboard_rounded, 'Dashboard'),
-                  _buildNavItem(1, Icons.people_alt_outlined, 'CRM Leads'),
-                  _buildNavItem(2, Icons.person_outline_rounded, 'Active Clients'),
-                  _buildNavItem(3, Icons.how_to_reg_outlined, 'Client Onboarding'),
-                  _buildNavItem(4, Icons.folder_outlined, 'Projects'),
-                  _buildNavItem(5, Icons.check_circle_outline_rounded, 'Tasks'),
-                  _buildNavItem(6, Icons.groups_outlined, 'Teams'),
-                  _buildNavItem(7, Icons.receipt_long_outlined, 'Billing'),
-                  _buildNavItem(21, Icons.post_add_outlined, 'Create Invoices'),
-                  _buildNavItem(8, Icons.autorenew_rounded, 'Asset Renewals'),
-                  _buildNavItem(9, Icons.description_outlined, 'Client Statements'),
-                  _buildNavItem(10, Icons.calendar_month_outlined, 'Scheduler'),
-                  _buildNavItem(19, Icons.event_available_outlined, 'Meeting Scheduler'),
-                  _buildNavItem(18, Icons.rate_review_outlined, 'Client Feedback'),
-                  _buildNavItem(11, Icons.analytics_outlined, 'Reports'),
-                  _buildNavItem(12, Icons.access_time_rounded, 'Team Timesheets'),
-                  _buildNavItem(13, Icons.event_busy_outlined, 'Leave Approvals'),
-                  _buildNavItem(14, Icons.manage_accounts_outlined, 'Roles & Access'),
-                  const SizedBox(height: 8),
-                  _buildSectionDivider('ADMINISTRATION'),
-                  _buildNavItem(15, Icons.admin_panel_settings_outlined, 'Super Admin'),
-                  _buildNavItem(16, Icons.group_work_outlined, 'HR & Payroll'),
-                  _buildNavItem(17, Icons.monitor_heart_outlined, 'Time Monitoring'),
-                  _buildNavItem(20, Icons.developer_board_outlined, 'Attendance Device'),
-                ],
-              ),
+    return BlocBuilder<RbacCubit, RbacState>(
+      builder: (context, rbacState) {
+        return Drawer(
+          width: 270,
+          backgroundColor: Theme.of(context).brightness == Brightness.dark
+              ? AppTheme.bgSidebarDark
+              : AppTheme.bgSidebar,
+          child: SafeArea(
+            child: Column(
+              children: [
+                _buildHeader(),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    children: [
+                      if (rbacState.hasModuleAccess('module.dashboard'))
+                        _buildNavItem(0, Icons.dashboard_rounded, 'Dashboard'),
+                      if (rbacState.hasModuleAccess('module.crm'))
+                        _buildNavItem(1, Icons.people_alt_outlined, 'CRM Leads'),
+                      if (rbacState.hasModuleAccess('module.crm'))
+                        _buildNavItem(2, Icons.person_outline_rounded, 'Active Clients'),
+                      if (rbacState.hasModuleAccess('module.forms'))
+                        _buildNavItem(3, Icons.how_to_reg_outlined, 'Client Onboarding'),
+                      if (rbacState.hasModuleAccess('module.projects'))
+                        _buildNavItem(4, Icons.folder_outlined, 'Projects'),
+                      if (rbacState.hasModuleAccess('module.tasks'))
+                        _buildNavItem(5, Icons.check_circle_outline_rounded, 'Tasks'),
+                      if (rbacState.hasModuleAccess('module.admin'))
+                        _buildNavItem(6, Icons.groups_outlined, 'Teams'),
+                      if (rbacState.hasModuleAccess('module.billing'))
+                        _buildNavItem(7, Icons.receipt_long_outlined, 'Billing'),
+                      if (rbacState.hasModuleAccess('module.billing'))
+                        _buildNavItem(21, Icons.post_add_outlined, 'Create Invoices'),
+                      if (rbacState.hasModuleAccess('module.billing'))
+                        _buildNavItem(8, Icons.autorenew_rounded, 'Asset Renewals'),
+                      if (rbacState.hasModuleAccess('module.billing'))
+                        _buildNavItem(9, Icons.description_outlined, 'Client Statements'),
+                      if (rbacState.hasModuleAccess('module.calendar'))
+                        _buildNavItem(10, Icons.calendar_month_outlined, 'Scheduler'),
+                      if (rbacState.hasModuleAccess('module.calendar'))
+                        _buildNavItem(19, Icons.event_available_outlined, 'Meeting Scheduler'),
+                      if (rbacState.hasModuleAccess('module.crm'))
+                        _buildNavItem(18, Icons.rate_review_outlined, 'Client Feedback'),
+                      if (rbacState.hasModuleAccess('module.reports'))
+                        _buildNavItem(11, Icons.analytics_outlined, 'Reports'),
+                      if (rbacState.hasModuleAccess('module.team_timesheets'))
+                        _buildNavItem(12, Icons.access_time_rounded, 'Team Timesheets'),
+                      if (rbacState.hasModuleAccess('module.hr'))
+                        _buildNavItem(13, Icons.event_busy_outlined, 'Leave Approvals'),
+                      if (rbacState.hasModuleAccess('roles.manage'))
+                        _buildNavItem(14, Icons.manage_accounts_outlined, 'Roles & Access'),
+                      const SizedBox(height: 8),
+                      if (rbacState.hasModuleAccess('super_admin.only') ||
+                          rbacState.hasModuleAccess('module.hr') ||
+                          rbacState.hasModuleAccess('module.time_monitor') ||
+                          rbacState.hasModuleAccess('module.attendance'))
+                        _buildSectionDivider('ADMINISTRATION'),
+                      if (rbacState.hasModuleAccess('super_admin.only'))
+                        _buildNavItem(15, Icons.admin_panel_settings_outlined, 'Super Admin'),
+                      if (rbacState.hasModuleAccess('module.hr'))
+                        _buildNavItem(16, Icons.group_work_outlined, 'HR & Payroll'),
+                      if (rbacState.hasModuleAccess('module.time_monitor'))
+                        _buildNavItem(17, Icons.monitor_heart_outlined, 'Time Monitoring'),
+                      if (rbacState.hasModuleAccess('module.attendance'))
+                        _buildNavItem(20, Icons.developer_board_outlined, 'Attendance Device'),
+                    ],
+                  ),
+                ),
+                _buildFooter(context),
+              ],
             ),
-            _buildFooter(context),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 

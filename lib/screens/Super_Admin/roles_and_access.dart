@@ -1,324 +1,14 @@
-import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
 import '../../widgets/app_drawer.dart';
-
-
-// ─── Data Models ─────────────────────────────────────────────────────────────
-
-class RoleModel {
-  final String id;
-  final String name;
-  final String description;
-  final int permissionsEnabled;
-  final int totalPermissions;
-  final List<ActiveUser> activeUsers;
-  final bool isSystem;
-  final Color shieldColor;
-  final Map<String, List<Permission>> permissionGroups;
-  final List<ModuleAccess> moduleAccesses;
-
-  RoleModel({
-    required this.id,
-    required this.name,
-    required this.description,
-    required this.permissionsEnabled,
-    required this.totalPermissions,
-    required this.activeUsers,
-    required this.isSystem,
-    required this.shieldColor,
-    required this.permissionGroups,
-    required this.moduleAccesses,
-  });
-}
-
-class ActiveUser {
-  final String initial;
-  final Color color;
-  const ActiveUser(this.initial, this.color);
-}
-
-class Permission {
-  final String id;
-  final String name;
-  final String description;
-  bool enabled;
-  Permission({
-    required this.id,
-    required this.name,
-    required this.description,
-    required this.enabled,
-  });
-}
-
-class ModuleAccess {
-  final String name;
-  final String description;
-  bool enabled;
-  ModuleAccess({
-    required this.name,
-    required this.description,
-    required this.enabled,
-  });
-}
-
-// ─── All Modules List ─────────────────────────────────────────────────────────
-
-List<ModuleAccess> _buildAdminModules() => [
-  ModuleAccess(name: 'Teams', description: 'Access to organization teams management.', enabled: false),
-  ModuleAccess(name: 'Admin Dashboard Module', description: 'Access to admin-level team, settings, and workspace controls.', enabled: true),
-  ModuleAccess(name: 'Client Statements', description: 'Access to client statements and ledger views.', enabled: false),
-  ModuleAccess(name: 'Billing Module', description: 'Access to corporate invoicing, manual billing, and renewals.', enabled: true),
-  ModuleAccess(name: 'Client Feedback Module', description: 'Access to client satisfaction surveys, feedback reviews, and ratings management.', enabled: true),
-  ModuleAccess(name: 'Meeting Scheduler Module', description: 'Access to the interactive meeting calendar, scheduling, and booking management.', enabled: true),
-  ModuleAccess(name: 'Scheduler Module', description: 'Access to the interactive corporate calendar and task schedules.', enabled: true),
-  ModuleAccess(name: 'Client Onboarding Module', description: 'Access to client onboarding and dynamic forms.', enabled: true),
-  ModuleAccess(name: 'CRM Module', description: 'Access to customer relations, leads, and client lists.', enabled: true),
-  ModuleAccess(name: 'Document Vault Module', description: 'Access to secure file repository and documentation storage.', enabled: false),
-  ModuleAccess(name: 'Dashboard Module', description: 'Access to the main overview dashboard and team workload metrics.', enabled: true),
-  ModuleAccess(name: 'HR & Leave Module', description: 'Access to corporate HR, employee listings, and attendance.', enabled: true),
-  ModuleAccess(name: 'View Leave Approvals Manager', description: 'Access the high-level manager leave request queue.', enabled: true),
-  ModuleAccess(name: 'Leave Approvals', description: 'Access to leave approvals dashboard.', enabled: false),
-  ModuleAccess(name: 'Leave Requests', description: 'Access to personal leave requests.', enabled: false),
-  ModuleAccess(name: 'Projects Module', description: 'Access to company projects, project boards, and milestones.', enabled: true),
-  ModuleAccess(name: 'Renewals Module', description: 'Access to track hosting, domain, and mail renewals.', enabled: true),
-  ModuleAccess(name: 'Reports Module', description: 'Access to executive financial, operational, and audit reports.', enabled: true),
-  ModuleAccess(name: 'Audit Trail', description: 'Access to system-wide audit logs and histories.', enabled: false),
-  ModuleAccess(name: 'Roles & Access', description: 'Access to roles and permissions management.', enabled: false),
-  ModuleAccess(name: 'Super Admin Module', description: 'Full system access and platform-wide configurations.', enabled: false),
-  ModuleAccess(name: 'Roles & Access Module', description: 'Manage dynamic workspace roles and access control configurations.', enabled: false),
-  ModuleAccess(name: 'Support Desk Module', description: 'Access to internal support requests and system feedback.', enabled: false),
-  ModuleAccess(name: 'Tasks Module', description: 'Access to standard task lists and collaborative work boards.', enabled: true),
-  ModuleAccess(name: 'My Timesheet Module', description: 'Access to personal timesheet logs and work session records.', enabled: false),
-  ModuleAccess(name: 'Team Timesheets Module', description: 'Access to review and verify team timesheet entries.', enabled: true),
-  ModuleAccess(name: 'Time Monitor Module', description: 'Access to real-time user time monitoring and desktop activity.', enabled: true),
-];
-
-Map<String, List<Permission>> _buildAdminPermissions() => {
-  'Admin Actions': [
-    Permission(id: 'a1', name: 'Manage Organization Roster', description: 'Invite users, assign roles, and handle team structures.', enabled: true),
-    Permission(id: 'a2', name: 'Manage Company Settings', description: 'Update profile settings, brand logos, and systems configs.', enabled: true),
-    Permission(id: 'a3', name: 'Manage Time Desk Settings', description: 'Configure work session limits, break cycles, and screenshot frequency.', enabled: true),
-  ],
-  'Billing Actions': [
-    Permission(id: 'b1', name: 'Manage Payments', description: 'Record and verify payments.', enabled: true),
-    Permission(id: 'b2', name: 'Manage Asset Renewals', description: 'Track and update dynamic asset or subscription renewals.', enabled: true),
-    Permission(id: 'b3', name: 'Record Payments', description: 'Log client payments and reconcile ledger files.', enabled: true),
-    Permission(id: 'b4', name: 'Delete Invoices', description: 'Delete, void, or cancel generated invoices.', enabled: true),
-    Permission(id: 'b5', name: 'View Financials', description: 'Ability to view invoices, financials, and transaction histories.', enabled: true),
-    Permission(id: 'b6', name: 'Create Invoices', description: 'Generate client invoices and configure rates.', enabled: true),
-    Permission(id: 'b7', name: 'Create Invoice', description: 'Generate client invoices.', enabled: true),
-    Permission(id: 'b8', name: 'Edit Invoices', description: 'Modify draft and issued invoices before finalization.', enabled: true),
-    Permission(id: 'b9', name: 'Send Invoices', description: 'Dispatch invoices to clients via email or direct link.', enabled: true),
-    Permission(id: 'b10', name: 'Export Invoices', description: 'Download invoice PDFs and export billing data.', enabled: true),
-  ],
-  'Client Feedback Actions': [
-    Permission(id: 'cf1', name: 'View Client Feedback', description: 'Access the client feedback list and individual feedback entries.', enabled: true),
-    Permission(id: 'cf2', name: 'Manage Feedback Status', description: 'Update feedback status (e.g., New → In Review → Resolved).', enabled: true),
-    Permission(id: 'cf3', name: 'Delete Feedback', description: 'Permanently remove client feedback entries from the system.', enabled: true),
-    Permission(id: 'cf4', name: 'Export Feedback Reports', description: 'Export filtered feedback data as CSV or PDF reports.', enabled: true),
-    Permission(id: 'cf5', name: 'Share Feedback Form', description: 'Generate and distribute client feedback form links.', enabled: true),
-    Permission(id: 'cf6', name: 'Reply to Feedback', description: 'Send internal notes or client-facing replies on feedback entries.', enabled: true),
-    Permission(id: 'cf7', name: 'Filter & Search Feedback', description: 'Apply filters by client, rating, type, and status.', enabled: true),
-    Permission(id: 'cf8', name: 'Manage Feedback Permissions', description: 'Control which roles can view or manage client feedback.', enabled: true),
-  ],
-  'Meeting Scheduler Actions': [
-    Permission(id: 'ms1', name: 'View Meetings', description: 'Access the meeting calendar and upcoming scheduled events.', enabled: true),
-    Permission(id: 'ms2', name: 'Create Meeting', description: 'Schedule new client or internal meetings.', enabled: true),
-    Permission(id: 'ms3', name: 'Edit Meeting', description: 'Modify existing meeting details, time, and participants.', enabled: true),
-    Permission(id: 'ms4', name: 'Delete Meeting', description: 'Cancel and permanently remove scheduled meetings.', enabled: true),
-    Permission(id: 'ms5', name: 'Manage Attendees', description: 'Add or remove participants from scheduled meetings.', enabled: true),
-    Permission(id: 'ms6', name: 'Send Meeting Invites', description: 'Dispatch calendar invitations to internal and external participants.', enabled: true),
-    Permission(id: 'ms7', name: 'View All Meetings', description: 'Access meetings scheduled by any team member across the organization.', enabled: true),
-    Permission(id: 'ms8', name: 'Manage Scheduler Permissions', description: 'Control which roles can create or manage meetings and calendar events.', enabled: true),
-  ],
-  'Client Onboarding Actions': [
-    Permission(id: 'co1', name: 'View Submissions', description: 'Ability to review form submissions.', enabled: true),
-    Permission(id: 'co2', name: 'Manage Forms', description: 'Create and edit dynamic intake forms.', enabled: true),
-    Permission(id: 'co3', name: 'View Forms', description: 'Access form templates and submissions.', enabled: true),
-    Permission(id: 'co4', name: 'Assign Form Submissions', description: 'Delegate incoming onboarding files to operational departments.', enabled: true),
-    Permission(id: 'co5', name: 'Manage Submissions', description: 'Review and process form submissions.', enabled: true),
-    Permission(id: 'co6', name: 'Edit Form Fields & Logic', description: 'Ability to design sections, modify fields, and add conditional logic.', enabled: true),
-    Permission(id: 'co7', name: 'Create Forms', description: 'Ability to build new dynamic forms.', enabled: true),
-    Permission(id: 'co8', name: 'Submit Onboarding Requests', description: 'Ability to fill out client-facing request forms.', enabled: true),
-  ],
-  'CRM Actions': [
-    Permission(id: 'c1', name: 'Edit Lead', description: 'Ability to modify existing lead information.', enabled: true),
-    Permission(id: 'c2', name: 'View Leads & Proposals', description: 'Ability to view the lead lists, pipeline, and proposals.', enabled: true),
-    Permission(id: 'c3', name: 'Create Lead', description: 'Ability to add new leads into the sales funnel.', enabled: true),
-    Permission(id: 'c4', name: 'Delete Lead', description: 'Permanently remove leads from the system.', enabled: true),
-    Permission(id: 'c5', name: 'Manage Clients', description: 'Convert leads to clients and update active customer directories.', enabled: true),
-    Permission(id: 'c6', name: 'Manage Proposals', description: 'Create, send, and edit business proposals.', enabled: true),
-    Permission(id: 'c7', name: 'View Client Statements', description: 'Access client billing statements.', enabled: true),
-  ],
-  'Documents Actions': [
-    Permission(id: 'd1', name: 'View Documents', description: 'Access to the document vault and files.', enabled: false),
-    Permission(id: 'd2', name: 'Delete Documents', description: 'Remove files from the vault.', enabled: false),
-    Permission(id: 'd3', name: 'Upload Documents', description: 'Upload new files to the vault.', enabled: false),
-  ],
-  'HR Actions': [
-    Permission(id: 'h1', name: 'Approve/Reject Leave', description: 'Approve or deny employee paid time off (PTO) requests.', enabled: true),
-    Permission(id: 'h2', name: 'View Own Leaves', description: 'Allows employee to see their leave history.', enabled: true),
-    Permission(id: 'h3', name: 'Manage Approvals', description: 'Allows HR/Admin to approve or reject leaves.', enabled: true),
-    Permission(id: 'h4', name: 'Manage Policies', description: 'Allows HR/Admin to configure leave types and rules.', enabled: true),
-    Permission(id: 'h5', name: 'View HR Directory', description: 'Access the employee rosters, profiles, and hierarchy charts.', enabled: true),
-    Permission(id: 'h6', name: 'Manage Attendance', description: 'View and modify team work hours and attendance cards.', enabled: true),
-    Permission(id: 'h7', name: 'Create Leave Request', description: 'Request leaves of absence and vacation cycles.', enabled: true),
-  ],
-  'Marketing Actions': [
-    Permission(id: 'm1', name: 'View Campaigns', description: 'Access to marketing campaigns and analytics.', enabled: false),
-    Permission(id: 'm2', name: 'Manage Campaigns', description: 'Create and edit email/SMS marketing flows.', enabled: false),
-  ],
-  'Projects Actions': [
-    Permission(id: 'p1', name: 'Manage Project Modules', description: 'Classify projects into modules and sub-modules.', enabled: true),
-    Permission(id: 'p2', name: 'Manage Milestones', description: 'Create, edit, and delete project milestones.', enabled: true),
-    Permission(id: 'p3', name: 'Manage Project Settings', description: 'Delete, archive, and manage high-level project parameters.', enabled: true),
-    Permission(id: 'p4', name: 'Edit Project', description: 'Ability to edit project metadata and fields.', enabled: true),
-    Permission(id: 'p5', name: 'View Projects', description: 'Ability to view active organization projects.', enabled: true),
-    Permission(id: 'p6', name: 'Create Project', description: 'Ability to initialize new corporate projects.', enabled: true),
-  ],
-  'Renewals Actions': [
-    Permission(id: 'r1', name: 'Send Reminders', description: 'Ability to trigger manual email reminders to clients.', enabled: true),
-  ],
-  'Reports Actions': [
-    Permission(id: 'rp1', name: 'View Reports Directory', description: 'Access the analytics reports listing dashboard.', enabled: true),
-    Permission(id: 'rp2', name: 'Run Audit & Security Reports', description: 'Inspect workspace audit logs, action histories, and records.', enabled: true),
-    Permission(id: 'rp3', name: 'Run Financial Reports', description: 'Generate revenue, invoice, payment, and profitability statistics.', enabled: true),
-    Permission(id: 'rp4', name: 'Run Performance Reports', description: 'Generate employee workloads, task delivery, and timesheet reports.', enabled: true),
-  ],
-  'Tasks Actions': [
-    Permission(id: 't1', name: 'View Tasks', description: 'Ability to view and filter workspace tasks.', enabled: true),
-    Permission(id: 't2', name: 'Manage All Tasks', description: 'Edit or delete tasks assigned to other team members.', enabled: true),
-    Permission(id: 't3', name: 'Assign Tasks', description: 'Ability to assign tasks to active employees.', enabled: true),
-    Permission(id: 't4', name: 'Create Task', description: 'Ability to add new tasks to project lists.', enabled: true),
-  ],
-};
-
-// ─── Sample Roles ─────────────────────────────────────────────────────────────
-
-List<RoleModel> buildSampleRoles() => [
-  RoleModel(
-    id: '1',
-    name: 'Administrator',
-    description: 'Full organization access and team management',
-    permissionsEnabled: 80,
-    totalPermissions: 96,
-    activeUsers: [ActiveUser('S', Colors.indigo)],
-    isSystem: true,
-    shieldColor: const Color(0xFF0EA5E9),
-    permissionGroups: _buildAdminPermissions(),
-    moduleAccesses: _buildAdminModules(),
-  ),
-  RoleModel(
-    id: '2',
-    name: 'Employee',
-    description: 'Standard workspace access for operations',
-    permissionsEnabled: 8,
-    totalPermissions: 96,
-    activeUsers: [
-      ActiveUser('R', Colors.red),
-      ActiveUser('F', Colors.purple),
-      ActiveUser('H', Colors.teal),
-    ],
-    isSystem: true,
-    shieldColor: const Color(0xFF0EA5E9),
-    permissionGroups: {
-      'HR Actions': [
-        Permission(id: 'eh1', name: 'View Own Leaves', description: 'Allows employee to see their leave history.', enabled: true),
-        Permission(id: 'eh2', name: 'Create Leave Request', description: 'Request leaves of absence and vacation cycles.', enabled: true),
-      ],
-      'Tasks Actions': [
-        Permission(id: 'et1', name: 'View Tasks', description: 'Ability to view and filter workspace tasks.', enabled: true),
-        Permission(id: 'et2', name: 'Create Task', description: 'Ability to add new tasks to project lists.', enabled: true),
-      ],
-    },
-    moduleAccesses: [
-      ModuleAccess(name: 'Dashboard Module', description: 'Access to main overview dashboard.', enabled: true),
-      ModuleAccess(name: 'Tasks Module', description: 'Access to task lists.', enabled: true),
-      ModuleAccess(name: 'Leave Requests', description: 'Access to personal leave requests.', enabled: true),
-    ],
-  ),
-  RoleModel(
-    id: '3',
-    name: 'HR',
-    description: 'Manage employee directory, attendance and leave',
-    permissionsEnabled: 36,
-    totalPermissions: 96,
-    activeUsers: [
-      ActiveUser('A', Colors.orange),
-      ActiveUser('H', Colors.teal),
-    ],
-    isSystem: true,
-    shieldColor: const Color(0xFF0EA5E9),
-    permissionGroups: {
-      'HR Actions': [
-        Permission(id: 'hh1', name: 'Approve/Reject Leave', description: 'Approve or deny employee PTO requests.', enabled: true),
-        Permission(id: 'hh2', name: 'Manage Approvals', description: 'Allows HR/Admin to approve or reject leaves.', enabled: true),
-        Permission(id: 'hh3', name: 'View HR Directory', description: 'Access the employee rosters.', enabled: true),
-        Permission(id: 'hh4', name: 'Manage Attendance', description: 'View and modify team work hours.', enabled: true),
-      ],
-    },
-    moduleAccesses: [
-      ModuleAccess(name: 'HR & Leave Module', description: 'Access to corporate HR.', enabled: true),
-      ModuleAccess(name: 'Leave Approvals', description: 'Access to leave approvals dashboard.', enabled: true),
-    ],
-  ),
-  RoleModel(
-    id: '4',
-    name: 'Sales',
-    description: 'Manage Sales',
-    permissionsEnabled: 29,
-    totalPermissions: 96,
-    activeUsers: [
-      ActiveUser('T', Colors.blue),
-      ActiveUser('R', Colors.red),
-    ],
-    isSystem: false,
-    shieldColor: const Color(0xFF0EA5E9),
-    permissionGroups: {
-      'CRM Actions': [
-        Permission(id: 'sc1', name: 'Edit Lead', description: 'Ability to modify existing lead information.', enabled: true),
-        Permission(id: 'sc2', name: 'Create Lead', description: 'Ability to add new leads into the sales funnel.', enabled: true),
-        Permission(id: 'sc3', name: 'View Leads & Proposals', description: 'Ability to view the lead lists.', enabled: true),
-      ],
-    },
-    moduleAccesses: [
-      ModuleAccess(name: 'CRM Module', description: 'Access to customer relations.', enabled: true),
-      ModuleAccess(name: 'Dashboard Module', description: 'Access to main dashboard.', enabled: true),
-    ],
-  ),
-  RoleModel(
-    id: '5',
-    name: 'Team Lead',
-    description: 'No description provided.',
-    permissionsEnabled: 40,
-    totalPermissions: 96,
-    activeUsers: [ActiveUser('C', Colors.green)],
-    isSystem: false,
-    shieldColor: const Color(0xFF0EA5E9),
-    permissionGroups: {
-      'Projects Actions': [
-        Permission(id: 'tlp1', name: 'View Projects', description: 'Ability to view active organization projects.', enabled: true),
-        Permission(id: 'tlp2', name: 'Edit Project', description: 'Ability to edit project metadata.', enabled: true),
-        Permission(id: 'tlp3', name: 'Manage Milestones', description: 'Create, edit, and delete project milestones.', enabled: true),
-      ],
-      'Tasks Actions': [
-        Permission(id: 'tlt1', name: 'View Tasks', description: 'Ability to view and filter workspace tasks.', enabled: true),
-        Permission(id: 'tlt2', name: 'Assign Tasks', description: 'Ability to assign tasks to active employees.', enabled: true),
-        Permission(id: 'tlt3', name: 'Manage All Tasks', description: 'Edit or delete tasks.', enabled: true),
-      ],
-    },
-    moduleAccesses: [
-      ModuleAccess(name: 'Projects Module', description: 'Access to company projects.', enabled: true),
-      ModuleAccess(name: 'Tasks Module', description: 'Access to task lists.', enabled: true),
-      ModuleAccess(name: 'Team Timesheets Module', description: 'Access to review team timesheet entries.', enabled: true),
-    ],
-  ),
-];
-
-// ─── Main Screen ─────────────────────────────────────────────────────────────
+import '../../widgets/app_snackbar.dart';
+import '../../models/rbac_models.dart';
+import '../../blocs/rbac/rbac_cubit.dart';
+import '../../blocs/rbac/rbac_state.dart';
+import '../../services/supabase_service.dart';
+import 'role_permission_editor_screen.dart';
 
 class RolesAccessScreen extends StatefulWidget {
   final int selectedIndex;
@@ -338,12 +28,33 @@ class _RolesAccessScreenState extends State<RolesAccessScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
-  late List<RoleModel> _roles;
+  String _orgId = '00000000-0000-0000-0000-000000000000';
 
   @override
   void initState() {
     super.initState();
-    _roles = buildSampleRoles();
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    final user = SupabaseService.currentUser;
+    if (user != null) {
+      try {
+        final profile = await SupabaseService.client
+            .from('profiles')
+            .select('organization_id')
+            .eq('id', user.id)
+            .maybeSingle();
+        if (profile != null && profile['organization_id'] != null) {
+          _orgId = profile['organization_id'].toString();
+        }
+      } catch (e) {
+        debugPrint('Org load error: $e');
+      }
+    }
+    if (mounted) {
+      context.read<RbacCubit>().loadRolesAndPermissions(_orgId);
+    }
   }
 
   @override
@@ -352,103 +63,542 @@ class _RolesAccessScreenState extends State<RolesAccessScreen> {
     super.dispose();
   }
 
-  List<RoleModel> get _filtered => _roles
-      .where((r) =>
-          _searchQuery.isEmpty ||
-          r.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          r.description.toLowerCase().contains(_searchQuery.toLowerCase()))
-      .toList();
+  void _showCreateRoleDialog(BuildContext context) {
+    final nameCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
 
-  void _showCreateRoleDialog() {
     showDialog(
       context: context,
-      builder: (_) => _CreateRoleDialog(
-        onCreated: (name, desc) {
-          setState(() {
-            _roles.add(RoleModel(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
-              name: name,
-              description: desc.isEmpty ? 'No description provided.' : desc,
-              permissionsEnabled: 0,
-              totalPermissions: 77,
-              activeUsers: [],
-              isSystem: false,
-              shieldColor: const Color(0xFF0EA5E9),
-              permissionGroups: {},
-              moduleAccesses: _buildAdminModules()
-                  .map((m) => ModuleAccess(
-                        name: m.name,
-                        description: m.description,
-                        enabled: false,
-                      ))
-                  .toList(),
-            ));
-          });
-          Navigator.pop(context);
-          AppSnackBar.showCustom(context, 
-            SnackBar(
-              content: Text('Role "$name" created successfully'),
-              backgroundColor: const Color(0xFF10B981),
-              behavior: SnackBarBehavior.floating,
+      builder: (dlgCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.shield_outlined, color: Color(0xFF0EA5E9)),
+            SizedBox(width: 8),
+            Text('Create Custom Role',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameCtrl,
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Role name is required' : null,
+                decoration: InputDecoration(
+                  labelText: 'Role Name',
+                  hintText: 'e.g. Content Lead, Sales Rep',
+                  filled: true,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: descCtrl,
+                maxLines: 2,
+                decoration: InputDecoration(
+                  labelText: 'Description (Optional)',
+                  hintText: 'Briefly explain responsibilities of this role...',
+                  filled: true,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dlgCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0EA5E9),
+              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.circular(8)),
             ),
-          );
-        },
+            onPressed: () async {
+              if (formKey.currentState?.validate() ?? false) {
+                final name = nameCtrl.text.trim();
+                final desc = descCtrl.text.trim();
+                Navigator.pop(dlgCtx);
+                try {
+                  await context
+                      .read<RbacCubit>()
+                      .createRole(name, desc, _orgId);
+                  if (context.mounted) {
+                    AppSnackBar.showSuccess(
+                        context, 'Role "$name" created successfully.');
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    AppSnackBar.showError(
+                        context, 'Failed to create role: ${e.toString()}');
+                  }
+                }
+              }
+            },
+            child: const Text('Create Role'),
+          ),
+        ],
       ),
     );
   }
 
-  void _showRoleOptions(RoleModel role) {
+  void _showEditRoleDialog(BuildContext context, RoleModel role) {
+    final nameCtrl = TextEditingController(text: role.name);
+    final descCtrl = TextEditingController(text: role.description ?? '');
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (dlgCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.edit_outlined, color: Color(0xFF0EA5E9)),
+            SizedBox(width: 8),
+            Text('Edit Role Details',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameCtrl,
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Role name is required' : null,
+                decoration: InputDecoration(
+                  labelText: 'Role Name',
+                  filled: true,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: descCtrl,
+                maxLines: 2,
+                decoration: InputDecoration(
+                  labelText: 'Description',
+                  filled: true,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dlgCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0EA5E9),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              if (formKey.currentState?.validate() ?? false) {
+                final name = nameCtrl.text.trim();
+                final desc = descCtrl.text.trim();
+                Navigator.pop(dlgCtx);
+                try {
+                  await context
+                      .read<RbacCubit>()
+                      .updateRoleDetails(role.id, name, desc, _orgId);
+                  if (context.mounted) {
+                    AppSnackBar.showSuccess(
+                        context, 'Role details updated successfully.');
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    AppSnackBar.showError(
+                        context, 'Failed to update role: ${e.toString()}');
+                  }
+                }
+              }
+            },
+            child: const Text('Save Changes'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showUserAssignmentModal(BuildContext context, RoleModel role) async {
+    final rbac = context.read<RbacCubit>();
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: Color(0xFF0EA5E9)),
+      ),
+    );
+
+    try {
+      final profiles = await rbac.fetchProfiles(_orgId);
+      final assignedUserIds = await rbac.fetchAssignedUserIds(role.id);
+      if (context.mounted) {
+        Navigator.pop(context); // Close loading indicator
+      }
+
+      final Set<String> currentAssigned = Set.from(assignedUserIds);
+
+      if (context.mounted) {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (sheetCtx) => StatefulBuilder(
+            builder: (ctx, setSheetState) {
+              final cardBg = Theme.of(ctx).colorScheme.surface;
+              final border = AppTheme.borderOf(ctx);
+              final textPrimary = AppTheme.textPrimaryOf(ctx);
+              final textSecondary = AppTheme.textSecondaryOf(ctx);
+
+              return Container(
+                height: MediaQuery.of(ctx).size.height * 0.75,
+                decoration: BoxDecoration(
+                  color: cardBg,
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(20)),
+                  border: Border(top: BorderSide(color: border)),
+                ),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 12),
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: border,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.people_outline,
+                              color: Color(0xFF0EA5E9)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Manage Assigned Users',
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: textPrimary)),
+                                Text('Assign or remove team members from "${role.name}"',
+                                    style: TextStyle(
+                                        fontSize: 12, color: textSecondary)),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.close, color: textSecondary),
+                            onPressed: () => Navigator.pop(sheetCtx),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 24),
+                    Expanded(
+                      child: profiles.isEmpty
+                          ? Center(
+                              child: Text('No user profiles found',
+                                  style: TextStyle(color: textSecondary)))
+                          : ListView.separated(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              itemCount: profiles.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (itemCtx, i) {
+                                final p = profiles[i];
+                                final uId = p['id'].toString();
+                                final isAssigned = currentAssigned.contains(uId);
+                                final userName = p['full_name']?.toString() ??
+                                    p['email']?.toString() ??
+                                    'User';
+                                final userEmail = p['email']?.toString() ?? '';
+
+                                return Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: isAssigned
+                                        ? const Color(0xFF0EA5E9)
+                                            .withOpacity(0.08)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: isAssigned
+                                          ? const Color(0xFF0EA5E9)
+                                              .withOpacity(0.3)
+                                          : border,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      CircleAvatar(
+                                        backgroundColor: const Color(0xFF0EA5E9)
+                                            .withOpacity(0.2),
+                                        radius: 18,
+                                        child: Text(
+                                          userName.isNotEmpty
+                                              ? userName[0].toUpperCase()
+                                              : 'U',
+                                          style: const TextStyle(
+                                              color: Color(0xFF0EA5E9),
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(userName,
+                                                style: TextStyle(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: textPrimary)),
+                                            Text(userEmail,
+                                                style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: textSecondary)),
+                                          ],
+                                        ),
+                                      ),
+                                      Switch(
+                                        value: isAssigned,
+                                        activeColor: const Color(0xFF0EA5E9),
+                                        onChanged: (val) async {
+                                          setSheetState(() {
+                                            if (val) {
+                                              currentAssigned.add(uId);
+                                            } else {
+                                              currentAssigned.remove(uId);
+                                            }
+                                          });
+
+                                          try {
+                                            if (val) {
+                                              await rbac.assignUserToRole(
+                                                  uId, role.id, _orgId);
+                                            } else {
+                                              await rbac.removeUserFromRole(
+                                                  uId, role.id, _orgId);
+                                            }
+                                          } catch (e) {
+                                            debugPrint(
+                                                'Role assignment error: $e');
+                                          }
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // Close loading indicator on error
+        AppSnackBar.showError(context, 'Failed to fetch profiles: $e');
+      }
+    }
+  }
+
+  void _confirmDeleteRole(BuildContext context, RoleModel role) {
+    showDialog(
+      context: context,
+      builder: (dlgCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Delete Role'),
+        content: Text(
+            'Are you sure you want to delete the "${role.name}" role? This action cannot be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dlgCtx),
+              child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              Navigator.pop(dlgCtx);
+              try {
+                await context
+                    .read<RbacCubit>()
+                    .deleteRole(role.id, _orgId);
+                if (context.mounted) {
+                  AppSnackBar.showSuccess(
+                      context, 'Role "${role.name}" deleted successfully.');
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  AppSnackBar.showError(
+                      context, e.toString().replaceAll('Exception: ', ''));
+                }
+              }
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRoleOptionsMenu(BuildContext context, RoleModel role) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => _RoleOptionsSheet(
-        role: role,
-        onConfigure: () {
-          Navigator.pop(context);
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => _ConfigureRoleScreen(role: role),
-            ),
-          );
-        },
-        onDelete: role.isSystem
-            ? null
-            : () {
-                Navigator.pop(context);
-                setState(() => _roles.removeWhere((r) => r.id == role.id));
-                AppSnackBar.showCustom(context, 
-                  SnackBar(
-                    content: Text('Role "${role.name}" deleted'),
-                    backgroundColor: const Color(0xFFEF4444),
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                );
-              },
+      builder: (sheetCtx) {
+        final cardBg = Theme.of(sheetCtx).colorScheme.surface;
+        final border = AppTheme.borderOf(sheetCtx);
+        final textPrimary = AppTheme.textPrimaryOf(sheetCtx);
+
+        return Container(
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(20)),
+            border: Border(top: BorderSide(color: border)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                role.name,
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: textPrimary),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading:
+                    const Icon(Icons.tune_rounded, color: Color(0xFF0EA5E9)),
+                title: const Text('Configure Permissions'),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _navigateToEditor(role);
+                },
+              ),
+              ListTile(
+                leading:
+                    const Icon(Icons.people_outline, color: Color(0xFF10B981)),
+                title: const Text('Manage Assigned Users'),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _showUserAssignmentModal(context, role);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.edit_outlined,
+                    color: Color(0xFFF59E0B)),
+                title: const Text('Edit Role Details'),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _showEditRoleDialog(context, role);
+                },
+              ),
+              if (!role.isSystem)
+                ListTile(
+                  leading: const Icon(Icons.delete_outline,
+                      color: Colors.redAccent),
+                  title: const Text('Delete Role',
+                      style: TextStyle(color: Colors.redAccent)),
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    _confirmDeleteRole(context, role);
+                  },
+                ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _navigateToEditor(RoleModel role) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RolePermissionEditorScreen(
+          role: role,
+          organizationId: _orgId,
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filtered;
+    return BlocBuilder<RbacCubit, RbacState>(
+      builder: (context, rbacState) {
+        final totalPermCount =
+            rbacState.permissions.isNotEmpty ? rbacState.permissions.length : 61;
+
+        final filtered = rbacState.roles.where((r) {
+          final q = _searchQuery.toLowerCase().trim();
+          if (q.isEmpty) return true;
+          return r.name.toLowerCase().contains(q) ||
+              (r.description?.toLowerCase().contains(q) ?? false);
+        }).toList();
+
     final w = MediaQuery.of(context).size.width;
-    final isTablet = w >= 600;
+    final isTablet = w >= 650;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final _bg = Theme.of(context).scaffoldBackgroundColor;
-    final _cardBg = Theme.of(context).colorScheme.surface;
-    final _border = AppTheme.borderOf(context);
-    final _textPrimary = AppTheme.textPrimaryOf(context);
-    final _textSecondary = AppTheme.textSecondaryOf(context);
-    final _textMuted = AppTheme.textMutedOf(context);
+    final bg = Theme.of(context).scaffoldBackgroundColor;
+    final cardBg = Theme.of(context).colorScheme.surface;
+    final border = AppTheme.borderOf(context);
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    final textMuted = AppTheme.textMutedOf(context);
 
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: _bg,
+      backgroundColor: bg,
       drawer: AppDrawer(
         selectedIndex: widget.selectedIndex,
         onItemSelected: (i) {
@@ -457,20 +607,20 @@ class _RolesAccessScreenState extends State<RolesAccessScreen> {
         },
       ),
       appBar: AppBar(
-        backgroundColor: _cardBg,
+        backgroundColor: cardBg,
         elevation: 0,
         leading: isTablet
             ? null
             : IconButton(
-                icon: Icon(Icons.menu_rounded, color: _textPrimary),
+                icon: Icon(Icons.menu_rounded, color: textPrimary),
                 onPressed: () => _scaffoldKey.currentState?.openDrawer(),
               ),
         title: Text(
-          'Roles & Access',
+          'Roles & Access Control',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,
-            color: _textPrimary,
+            color: textPrimary,
           ),
         ),
         actions: [
@@ -479,7 +629,9 @@ class _RolesAccessScreenState extends State<RolesAccessScreen> {
               final isDarkTheme = themeState.themeMode == ThemeMode.dark;
               return IconButton(
                 icon: Icon(
-                  isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  isDarkTheme
+                      ? Icons.light_mode_rounded
+                      : Icons.dark_mode_rounded,
                   color: isDarkTheme ? Colors.white : const Color(0xFF374151),
                 ),
                 onPressed: () {
@@ -488,29 +640,44 @@ class _RolesAccessScreenState extends State<RolesAccessScreen> {
               );
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline_rounded, size: 24, color: Color(0xFF0EA5E9)),
-            onPressed: _showCreateRoleDialog,
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0EA5E9),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+              ),
+              onPressed: () => _showCreateRoleDialog(context),
+              icon: const Icon(Icons.add_rounded, size: 16),
+              label: const Text(
+                '+ Create Custom Role',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ),
           ),
           const SizedBox(width: 8),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(color: _border, height: 1),
+          child: Container(color: border, height: 1),
         ),
       ),
       body: Column(
         children: [
-          // Header
+          // Header description & search bar
           Container(
-            color: _cardBg,
+            color: cardBg,
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Define enterprise roles, assign permissions, and control dynamic module visibility.',
-                  style: TextStyle(fontSize: 13, color: _textSecondary),
+                  style: TextStyle(fontSize: 13, color: textSecondary),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -518,14 +685,14 @@ class _RolesAccessScreenState extends State<RolesAccessScreen> {
                   onChanged: (v) => setState(() => _searchQuery = v),
                   decoration: InputDecoration(
                     hintText: 'Search roles by name or description...',
-                    hintStyle: TextStyle(
-                        fontSize: 13, color: _textSecondary),
-                    prefixIcon: Icon(Icons.search,
-                        size: 18, color: _textSecondary),
+                    hintStyle:
+                        TextStyle(fontSize: 13, color: textSecondary),
+                    prefixIcon:
+                        Icon(Icons.search, size: 18, color: textSecondary),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
                             icon: Icon(Icons.close,
-                                size: 16, color: _textSecondary),
+                                size: 16, color: textSecondary),
                             onPressed: () {
                               _searchCtrl.clear();
                               setState(() => _searchQuery = '');
@@ -533,7 +700,9 @@ class _RolesAccessScreenState extends State<RolesAccessScreen> {
                           )
                         : null,
                     filled: true,
-                    fillColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF1F5F9),
+                    fillColor: isDark
+                        ? AppTheme.bgBaseDark
+                        : const Color(0xFFF1F5F9),
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 10),
                     border: OutlineInputBorder(
@@ -545,78 +714,92 @@ class _RolesAccessScreenState extends State<RolesAccessScreen> {
               ],
             ),
           ),
-          // Stats bar
-          _StatsBar(roles: _roles),
-          // Roles grid
+          // Stats summary bar
+          _StatsBar(roles: rbacState.roles),
+          // Roles list / grid
           Expanded(
-            child: filtered.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.shield_outlined,
-                            size: 48, color: _textMuted),
-                        const SizedBox(height: 8),
-                        Text('No roles found',
-                            style: TextStyle(
-                                color: _textSecondary, fontSize: 14)),
-                      ],
-                    ),
+            child: rbacState.isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF0EA5E9)),
                   )
-                : isTablet
-                    ? GridView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 14,
-                          crossAxisSpacing: 14,
-                          childAspectRatio: ((w - 32 - 14) / 2) / 180.0,
-                        ),
-                        itemCount: filtered.length,
-                        itemBuilder: (ctx, i) => _RoleCard(
-                          role: filtered[i],
-                          onMore: () => _showRoleOptions(filtered[i]),
-                          onConfigure: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  _ConfigureRoleScreen(role: filtered[i]),
-                            ),
-                          ),
+                : filtered.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.shield_outlined,
+                                size: 48, color: textMuted),
+                            const SizedBox(height: 8),
+                            Text('No matching roles found',
+                                style: TextStyle(
+                                    color: textSecondary, fontSize: 14)),
+                          ],
                         ),
                       )
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                        itemCount: filtered.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 14),
-                        itemBuilder: (ctx, i) => _RoleCard(
-                          role: filtered[i],
-                          onMore: () => _showRoleOptions(filtered[i]),
-                          onConfigure: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  _ConfigureRoleScreen(role: filtered[i]),
+                    : isTablet
+                        ? GridView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              mainAxisSpacing: 14,
+                              crossAxisSpacing: 14,
+                              childAspectRatio:
+                                  ((w - 32 - 14) / 2) / 190.0,
+                            ),
+                            itemCount: filtered.length,
+                            itemBuilder: (ctx, i) => _RoleCard(
+                              role: filtered[i],
+                              totalPermissions: totalPermCount,
+                              onConfigure: () => _navigateToEditor(filtered[i]),
+                              onMore: () =>
+                                  _showRoleOptionsMenu(context, filtered[i]),
+                              onManageUsers: () => _showUserAssignmentModal(
+                                  context, filtered[i]),
+                              onDelete: filtered[i].isSystem
+                                  ? null
+                                  : () => _confirmDeleteRole(
+                                      context, filtered[i]),
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 14),
+                            itemBuilder: (ctx, i) => _RoleCard(
+                              role: filtered[i],
+                              totalPermissions: totalPermCount,
+                              onConfigure: () => _navigateToEditor(filtered[i]),
+                              onMore: () =>
+                                  _showRoleOptionsMenu(context, filtered[i]),
+                              onManageUsers: () => _showUserAssignmentModal(
+                                  context, filtered[i]),
+                              onDelete: filtered[i].isSystem
+                                  ? null
+                                  : () => _confirmDeleteRole(
+                                      context, filtered[i]),
                             ),
                           ),
-                        ),
-                      ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF0EA5E9),
-        onPressed: _showCreateRoleDialog,
+        onPressed: () => _showCreateRoleDialog(context),
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );
+  },
+);
   }
 }
 
-// ─── Stats Bar ────────────────────────────────────────────────────────────────
+// ─── Stats Bar Widget ─────────────────────────────────────────────────────────
 
 class _StatsBar extends StatelessWidget {
   final List<RoleModel> roles;
+
   const _StatsBar({required this.roles});
 
   @override
@@ -624,27 +807,35 @@ class _StatsBar extends StatelessWidget {
     final systemRoles = roles.where((r) => r.isSystem).length;
     final customRoles = roles.where((r) => !r.isSystem).length;
     final totalUsers =
-        roles.fold<int>(0, (s, r) => s + r.activeUsers.length);
+        roles.fold<int>(0, (s, r) => s + r.userCount);
     final w = MediaQuery.of(context).size.width;
-    final _cardBg = Theme.of(context).colorScheme.surface;
-    final _border = AppTheme.borderOf(context);
+    final cardBg = Theme.of(context).colorScheme.surface;
+    final border = AppTheme.borderOf(context);
 
     return Container(
-      color: _cardBg,
+      color: cardBg,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       margin: const EdgeInsets.only(bottom: 2),
       child: Row(
         children: [
-          _StatItem(label: 'Total Roles', value: '${roles.length}',
+          _StatItem(
+              label: 'Total Roles',
+              value: '${roles.length}',
               color: const Color(0xFF0EA5E9)),
-          _vDivider(_border, w < 360 ? 4 : 8),
-          _StatItem(label: 'System', value: '$systemRoles',
+          _vDivider(border, w < 360 ? 4 : 8),
+          _StatItem(
+              label: 'System',
+              value: '$systemRoles',
               color: const Color(0xFF8B5CF6)),
-          _vDivider(_border, w < 360 ? 4 : 8),
-          _StatItem(label: 'Custom', value: '$customRoles',
+          _vDivider(border, w < 360 ? 4 : 8),
+          _StatItem(
+              label: 'Custom',
+              value: '$customRoles',
               color: const Color(0xFF10B981)),
-          _vDivider(_border, w < 360 ? 4 : 8),
-          _StatItem(label: 'Total Users', value: '$totalUsers',
+          _vDivider(border, w < 360 ? 4 : 8),
+          _StatItem(
+              label: 'Total Users',
+              value: '$totalUsers',
               color: const Color(0xFFF59E0B)),
         ],
       ),
@@ -652,14 +843,18 @@ class _StatsBar extends StatelessWidget {
   }
 
   Widget _vDivider(Color border, double horizontalMargin) => Container(
-      width: 1, height: 28, color: border,
-      margin: EdgeInsets.symmetric(horizontal: horizontalMargin));
+        width: 1,
+        height: 28,
+        color: border,
+        margin: EdgeInsets.symmetric(horizontal: horizontalMargin),
+      );
 }
 
 class _StatItem extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
+
   const _StatItem(
       {required this.label, required this.value, required this.color});
 
@@ -671,13 +866,16 @@ class _StatItem extends StatelessWidget {
       child: Column(children: [
         Text(value,
             style: TextStyle(
-                fontSize: isCompact ? 15 : 18, fontWeight: FontWeight.w700, color: color),
+                fontSize: isCompact ? 15 : 18,
+                fontWeight: FontWeight.w700,
+                color: color),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center),
         Text(label,
-            style:
-                TextStyle(fontSize: isCompact ? 8 : 10, color: AppTheme.textSecondaryOf(context)),
+            style: TextStyle(
+                fontSize: isCompact ? 8 : 10,
+                color: AppTheme.textSecondaryOf(context)),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center),
@@ -686,43 +884,53 @@ class _StatItem extends StatelessWidget {
   }
 }
 
-// ─── Role Card ────────────────────────────────────────────────────────────────
+// ─── Role Card Widget ─────────────────────────────────────────────────────────
 
 class _RoleCard extends StatelessWidget {
   final RoleModel role;
-  final VoidCallback onMore;
+  final int totalPermissions;
   final VoidCallback onConfigure;
-  const _RoleCard(
-      {required this.role,
-      required this.onMore,
-      required this.onConfigure});
+  final VoidCallback onMore;
+  final VoidCallback onManageUsers;
+  final VoidCallback? onDelete;
 
-  Color get _permColor {
-    final pct = role.permissionsEnabled / role.totalPermissions;
+  const _RoleCard({
+    required this.role,
+    required this.totalPermissions,
+    required this.onConfigure,
+    required this.onMore,
+    required this.onManageUsers,
+    this.onDelete,
+  });
+
+  Color _permColor(int enabled, int total) {
+    final pct = total > 0 ? enabled / total : 0;
     if (pct >= 0.7) return const Color(0xFF0EA5E9);
-    if (pct >= 0.4) return const Color(0xFF10B981);
+    if (pct >= 0.3) return const Color(0xFF10B981);
     return const Color(0xFFF59E0B);
   }
 
   @override
   Widget build(BuildContext context) {
-    final pct = role.permissionsEnabled / role.totalPermissions;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final _cardBg = Theme.of(context).colorScheme.surface;
-    final _border = AppTheme.borderOf(context);
-    final _textPrimary = AppTheme.textPrimaryOf(context);
-    final _textSecondary = AppTheme.textSecondaryOf(context);
+    final cardBg = Theme.of(context).colorScheme.surface;
+    final border = AppTheme.borderOf(context);
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+
+    final enabledCount = role.permissions.length;
+    final permColor = _permColor(enabledCount, totalPermissions);
 
     return Container(
       decoration: BoxDecoration(
-        color: _cardBg,
+        color: cardBg,
         borderRadius: BorderRadius.circular(14),
-        border: isDark ? Border.all(color: _border, width: 1) : null,
+        border: Border.all(color: border, width: 1),
         boxShadow: isDark
             ? []
             : [
                 BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
+                    color: Colors.black.withOpacity(0.03),
                     blurRadius: 8,
                     offset: const Offset(0, 2)),
               ],
@@ -730,7 +938,7 @@ class _RoleCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row
+          // Header Row
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 14, 10, 10),
             child: Row(
@@ -740,7 +948,9 @@ class _RoleCard extends StatelessWidget {
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF0EA5E9).withOpacity(0.15) : const Color(0xFFE0F2FE),
+                    color: isDark
+                        ? const Color(0xFF0EA5E9).withOpacity(0.15)
+                        : const Color(0xFFE0F2FE),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.shield_outlined,
@@ -751,1292 +961,166 @@ class _RoleCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(role.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: _textPrimary)),
-                      const SizedBox(height: 2),
-                      Text(role.description,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: 12, color: _textSecondary)),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              role.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: textPrimary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: role.isSystem
+                                  ? const Color(0xFF8B5CF6).withOpacity(0.12)
+                                  : const Color(0xFF10B981).withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              role.isSystem ? 'SYSTEM' : 'CUSTOM',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: role.isSystem
+                                    ? const Color(0xFF8B5CF6)
+                                    : const Color(0xFF10B981),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        role.description != null && role.description!.isNotEmpty
+                            ? role.description!
+                            : 'No description provided.',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12, color: textSecondary),
+                      ),
                     ],
                   ),
                 ),
-                // Permissions badge
+                const SizedBox(width: 8),
+                // Permissions Count Badge
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    const Text('PERMISSIONS',
-                        style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF0EA5E9),
-                            letterSpacing: 0.5)),
-                    Text(
-                      '${role.permissionsEnabled} / ${role.totalPermissions}',
+                    const Text(
+                      'PERMISSIONS',
                       style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: _permColor),
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0EA5E9),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    Text(
+                      '$enabledCount / $totalPermissions',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: permColor,
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(width: 4),
-                GestureDetector(
-                  onTap: onMore,
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(Icons.more_vert_rounded,
-                        size: 20, color: _textSecondary),
-                  ),
+                IconButton(
+                  icon: Icon(Icons.more_vert_rounded,
+                      size: 20, color: textSecondary),
+                  onPressed: onMore,
+                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.all(4),
                 ),
               ],
             ),
           ),
-          // Progress bar
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: pct,
-                backgroundColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF1F5F9),
-                color: _permColor,
-                minHeight: 5,
-              ),
-            ),
-          ),
           const SizedBox(height: 12),
-          // Users row
+          Divider(color: border, height: 1),
+          // Footer Row
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Row(
               children: [
-                Icon(Icons.people_outline_rounded,
-                    size: 14, color: _textSecondary),
-                const SizedBox(width: 4),
-                Text(
-                  '${role.activeUsers.length} Active User${role.activeUsers.length != 1 ? 's' : ''}',
-                  style: TextStyle(
-                      fontSize: 12, color: _textSecondary),
+                // User avatars / Count (Tappable for user assignment modal)
+                GestureDetector(
+                  onTap: onManageUsers,
+                  child: Row(
+                    children: [
+                      if (role.activeUsers.isNotEmpty)
+                        SizedBox(
+                          height: 22,
+                          width: (role.activeUsers.length * 16 + 10).toDouble(),
+                          child: Stack(
+                            children: List.generate(role.activeUsers.length, (idx) {
+                              final user = role.activeUsers[idx];
+                              return Positioned(
+                                left: idx * 14.0,
+                                child: CircleAvatar(
+                                  radius: 11,
+                                  backgroundColor: user.color,
+                                  child: Text(
+                                    user.initial,
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ),
+                        ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${role.userCount} Active User${role.userCount == 1 ? '' : 's'}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: const Color(0xFF0EA5E9),
+                          fontWeight: FontWeight.w600,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: role.isSystem
-                        ? (isDark ? const Color(0xFF0EA5E9).withOpacity(0.15) : const Color(0xFFE0F2FE))
-                        : (isDark ? const Color(0xFF10B981).withOpacity(0.15) : const Color(0xFFECFDF5)),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    role.isSystem ? 'SYSTEM' : 'CUSTOM',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: role.isSystem
-                          ? (isDark ? const Color(0xFF38BDF8) : const Color(0xFF0369A1))
-                          : (isDark ? const Color(0xFF34D399) : const Color(0xFF059669)),
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          // Avatar row
-          if (role.activeUsers.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Row(
-                children: role.activeUsers
-                    .take(5)
-                    .map((u) => Container(
-                          width: 28,
-                          height: 28,
-                          margin: const EdgeInsets.only(right: 4),
-                          decoration: BoxDecoration(
-                            color: u.color.withOpacity(0.2),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                                color: _cardBg, width: 1.5),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(u.initial,
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: u.color)),
-                        ))
-                    .toList(),
-              ),
-            ),
-          const SizedBox(height: 12),
-          Container(height: 1, color: _border),
-          // Configure button
-          GestureDetector(
-            onTap: onConfigure,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 12),
-              child: Row(
-                children: const [
-                  Text('Configure Permissions',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF0EA5E9))),
-                  Spacer(),
-                  Icon(Icons.arrow_forward_rounded,
-                      size: 16, color: Color(0xFF0EA5E9)),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Role Options Sheet ───────────────────────────────────────────────────────
-
-class _RoleOptionsSheet extends StatelessWidget {
-  final RoleModel role;
-  final VoidCallback onConfigure;
-  final VoidCallback? onDelete;
-  const _RoleOptionsSheet(
-      {required this.role,
-      required this.onConfigure,
-      this.onDelete});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final _cardBg = Theme.of(context).colorScheme.surface;
-    final _border = AppTheme.borderOf(context);
-    final _textPrimary = AppTheme.textPrimaryOf(context);
-    final _textMuted = AppTheme.textMutedOf(context);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: _cardBg,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        border: isDark ? Border.all(color: _border, width: 1) : null,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 12),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-                color: _border,
-                borderRadius: BorderRadius.circular(2)),
-          ),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(role.name,
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: _textPrimary)),
-            ),
-          ),
-          const SizedBox(height: 8),
-          _SheetOption(
-            icon: Icons.settings_outlined,
-            label: 'Configure Permissions',
-            onTap: onConfigure,
-          ),
-          _SheetOption(
-            icon: Icons.people_outline_rounded,
-            label: 'Manage Users',
-            onTap: () => Navigator.pop(context),
-          ),
-          _SheetOption(
-            icon: Icons.copy_outlined,
-            label: 'Duplicate Role',
-            onTap: () => Navigator.pop(context),
-          ),
-          if (onDelete != null)
-            _SheetOption(
-              icon: Icons.delete_outline_rounded,
-              label: 'Delete Role',
-              labelColor: const Color(0xFFEF4444),
-              iconColor: const Color(0xFFEF4444),
-              onTap: onDelete!,
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 20, vertical: 10),
-              child: Row(
-                children: [
-                  Icon(Icons.lock_outline_rounded,
-                      size: 16, color: _textMuted),
-                  const SizedBox(width: 8),
-                  Text('System roles cannot be deleted',
-                      style: TextStyle(
-                          fontSize: 12, color: _textMuted)),
-                ],
-              ),
-            ),
-          const SizedBox(height: 16),
-        ],
-      ),
-    );
-  }
-}
-
-class _SheetOption extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final Color? labelColor;
-  final Color? iconColor;
-  const _SheetOption(
-      {required this.icon,
-      required this.label,
-      required this.onTap,
-      this.labelColor,
-      this.iconColor});
-
-  @override
-  Widget build(BuildContext context) {
-    final _textPrimary = AppTheme.textPrimaryOf(context);
-    final _textSecondary = AppTheme.textSecondaryOf(context);
-    final _textMuted = AppTheme.textMutedOf(context);
-
-    return ListTile(
-      onTap: onTap,
-      leading: Icon(icon,
-          size: 20, color: iconColor ?? _textSecondary),
-      title: Text(label,
-          style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: labelColor ?? _textPrimary)),
-      trailing: Icon(Icons.chevron_right_rounded,
-          size: 18, color: _textMuted),
-    );
-  }
-}
-
-// ─── Create Role Dialog ───────────────────────────────────────────────────────
-
-class _CreateRoleDialog extends StatefulWidget {
-  final Function(String name, String desc) onCreated;
-  const _CreateRoleDialog({required this.onCreated});
-
-  @override
-  State<_CreateRoleDialog> createState() => _CreateRoleDialogState();
-}
-
-class _CreateRoleDialogState extends State<_CreateRoleDialog> {
-  final _nameCtrl = TextEditingController();
-  final _descCtrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _descCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final _cardBg = Theme.of(context).colorScheme.surface;
-    final _textPrimary = AppTheme.textPrimaryOf(context);
-    final _textSecondary = AppTheme.textSecondaryOf(context);
-
-    return Dialog(
-      backgroundColor: _cardBg,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text('Create Enterprise Role',
-                      style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: _textPrimary)),
-                ),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Icon(Icons.close_rounded,
-                      size: 20, color: _textSecondary),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Define a new role. You can configure granular permissions after creation.',
-              style:
-                  TextStyle(fontSize: 12, color: _textSecondary),
-            ),
-            const SizedBox(height: 16),
-            Text('Role Name',
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: _textSecondary)),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _nameCtrl,
-              autofocus: true,
-              style: TextStyle(color: _textPrimary, fontSize: 13),
-              decoration: _inputDec(context, 'e.g. Project Manager'),
-            ),
-            const SizedBox(height: 14),
-            Text('Description',
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: _textSecondary)),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _descCtrl,
-              maxLines: 3,
-              style: TextStyle(color: _textPrimary, fontSize: 13),
-              decoration:
-                  _inputDec(context, 'Explain the responsibilities of this role...'),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('Cancel',
-                      style: TextStyle(
-                          color: _textSecondary, fontSize: 14)),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () {
-                    if (_nameCtrl.text.trim().isNotEmpty) {
-                      widget.onCreated(
-                          _nameCtrl.text.trim(), _descCtrl.text.trim());
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0EA5E9),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 10),
-                  ),
-                  child: const Text('Create Role',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600)),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  InputDecoration _inputDec(BuildContext context, String hint) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final _border = AppTheme.borderOf(context);
-    final _textMuted = AppTheme.textMutedOf(context);
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: TextStyle(color: _textMuted, fontSize: 13),
-      filled: true,
-      fillColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC),
-      contentPadding: const EdgeInsets.symmetric(
-          horizontal: 12, vertical: 12),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFF0EA5E9)),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: _border),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide:
-            const BorderSide(color: Color(0xFF0EA5E9), width: 1.5),
-      ),
-    );
-  }
-}
-
-// ─── Configure Role Screen ────────────────────────────────────────────────────
-
-class _ConfigureRoleScreen extends StatefulWidget {
-  final RoleModel role;
-  const _ConfigureRoleScreen({required this.role});
-
-  @override
-  State<_ConfigureRoleScreen> createState() =>
-      _ConfigureRoleScreenState();
-}
-
-class _ConfigureRoleScreenState extends State<_ConfigureRoleScreen> {
-  late List<ModuleAccess> _modules;
-  late Map<String, List<Permission>> _groups;
-  bool _showPreview = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Deep copy
-    _modules = widget.role.moduleAccesses
-        .map((m) => ModuleAccess(
-            name: m.name, description: m.description, enabled: m.enabled))
-        .toList();
-    _groups = Map.fromEntries(
-      widget.role.permissionGroups.entries.map((e) => MapEntry(
-        e.key,
-        e.value
-            .map((p) => Permission(
-                id: p.id,
-                name: p.name,
-                description: p.description,
-                enabled: p.enabled))
-            .toList(),
-      )),
-    );
-    // If no permission groups defined, build from admin template
-    if (_groups.isEmpty) {
-      _groups = Map.fromEntries(
-        _buildAdminPermissions().entries.map((e) => MapEntry(
-          e.key,
-          e.value
-              .map((p) => Permission(
-                  id: p.id,
-                  name: p.name,
-                  description: p.description,
-                  enabled: false))
-              .toList(),
-        )),
-      );
-    }
-  }
-
-  int get _enabledCount => _groups.values
-      .fold<int>(0, (s, list) => s + list.where((p) => p.enabled).length);
-
-  int get _totalCount =>
-      _groups.values.fold<int>(0, (s, list) => s + list.length);
-
-  int get _enabledModules => _modules.where((m) => m.enabled).length;
-
-  List<String> get _visibleModuleNames =>
-      _modules.where((m) => m.enabled).map((m) => m.name).toList();
-
-  void _selectAll() {
-    setState(() {
-      for (final list in _groups.values) {
-        for (final p in list) {
-          p.enabled = true;
-        }
-      }
-      for (final m in _modules) {
-        m.enabled = true;
-      }
-    });
-  }
-
-  void _revokeAll() {
-    setState(() {
-      for (final list in _groups.values) {
-        for (final p in list) {
-          p.enabled = false;
-        }
-      }
-      for (final m in _modules) {
-        m.enabled = false;
-      }
-    });
-  }
-
-  int _groupEnabled(List<Permission> perms) =>
-      perms.where((p) => p.enabled).length;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final _bg = Theme.of(context).scaffoldBackgroundColor;
-    final _cardBg = Theme.of(context).colorScheme.surface;
-    final _border = AppTheme.borderOf(context);
-    final _textPrimary = AppTheme.textPrimaryOf(context);
-    final _textSecondary = AppTheme.textSecondaryOf(context);
-
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
-        backgroundColor: _cardBg,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-          color: _textPrimary,
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Configure: ${widget.role.name}',
-              style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: _textPrimary),
-            ),
-          ],
-        ),
-        actions: [
-          BlocBuilder<ThemeBloc, ThemeState>(
-            builder: (context, themeState) {
-              final isDarkTheme = themeState.themeMode == ThemeMode.dark;
-              return IconButton(
-                icon: Icon(
-                  isDarkTheme ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-                  color: isDarkTheme ? Colors.white : const Color(0xFF374151),
-                ),
-                onPressed: () {
-                  context.read<ThemeBloc>().add(ToggleThemeEvent());
-                },
-              );
-            },
-          ),
-          TextButton(
-            onPressed: () {
-              setState(() => _showPreview = !_showPreview);
-            },
-            child: Text(
-              _showPreview ? 'Hide Preview' : 'Preview',
-              style: const TextStyle(
-                  fontSize: 13, color: Color(0xFF0EA5E9)),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              AppSnackBar.showCustom(context, 
-                const SnackBar(
-                  content: Text('Configuration saved successfully'),
-                  backgroundColor: Color(0xFF10B981),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
-            child: const Text('Save',
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF0EA5E9))),
-          ),
-          const SizedBox(width: 8),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(color: _border, height: 1),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Define granular access rights and module visibility. Changes reflect instantly for all assigned users.',
-              style: TextStyle(fontSize: 13, color: _textSecondary),
-            ),
-            const SizedBox(height: 16),
-
-            // Workspace Preview (collapsible)
-            if (_showPreview) ...[
-              _WorkspacePreviewCard(
-                visibleModules: _visibleModuleNames,
-                enabledCount: _enabledCount,
-                totalCount: _totalCount,
-                onSelectAll: _selectAll,
-                onRevokeAll: _revokeAll,
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            // Select/Revoke buttons (always visible)
-            if (!_showPreview)
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _selectAll,
-                      icon: const Icon(Icons.check_circle_outline_rounded,
-                          size: 14, color: Color(0xFF10B981)),
-                      label: const Text('Select All Access',
+                InkWell(
+                  onTap: onConfigure,
+                  borderRadius: BorderRadius.circular(6),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Configure Permissions',
                           style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF10B981),
-                              fontWeight: FontWeight.w600)),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: isDark ? const Color(0xFF059669) : const Color(0xFFA7F3D0)),
-                        backgroundColor: isDark ? const Color(0xFF064E3B) : const Color(0xFFF0FDF4),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 10),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _revokeAll,
-                      icon: const Icon(Icons.cancel_outlined,
-                          size: 14, color: Color(0xFFEF4444)),
-                      label: const Text('Revoke All Access',
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFFEF4444),
-                              fontWeight: FontWeight.w600)),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: isDark ? const Color(0xFFDC2626) : const Color(0xFFFECACA)),
-                        backgroundColor: isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFFF5F5),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 10),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            const SizedBox(height: 20),
-
-            // Section 1: Module Access
-            _SectionHeader(
-              number: '1',
-              title: 'MODULE ACCESS (SIDEBAR VISIBILITY)',
-            ),
-            const SizedBox(height: 12),
-            ..._buildModuleGrid(),
-
-            const SizedBox(height: 24),
-
-            // Section 2: Granular Actions
-            _SectionHeader(
-              number: '2',
-              title: 'GRANULAR ACTIONS (FEATURE RIGHTS)',
-            ),
-            const SizedBox(height: 12),
-            ..._groups.entries.map((e) => _PermissionGroup(
-                  title: e.key,
-                  permissions: e.value,
-                  enabledCount: _groupEnabled(e.value),
-                  onToggle: (perm) =>
-                      setState(() => perm.enabled = !perm.enabled),
-                  onToggleGroup: (enabled) {
-                    setState(() {
-                      for (final p in e.value) {
-                        p.enabled = enabled;
-                      }
-                    });
-                  },
-                )),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<Widget> _buildModuleGrid() {
-    final widgets = <Widget>[];
-    for (int i = 0; i < _modules.length; i += 2) {
-      widgets.add(
-        Row(
-          children: [
-            Expanded(
-                child: _ModuleToggleCard(
-                    module: _modules[i],
-                    onToggle: () =>
-                        setState(() => _modules[i].enabled = !_modules[i].enabled))),
-            const SizedBox(width: 10),
-            i + 1 < _modules.length
-                ? Expanded(
-                    child: _ModuleToggleCard(
-                        module: _modules[i + 1],
-                        onToggle: () => setState(() =>
-                            _modules[i + 1].enabled =
-                                !_modules[i + 1].enabled)))
-                : const Expanded(child: SizedBox()),
-          ],
-        ),
-      );
-      widgets.add(const SizedBox(height: 10));
-    }
-    return widgets;
-  }
-}
-
-// ─── Section Header ───────────────────────────────────────────────────────────
-
-class _SectionHeader extends StatelessWidget {
-  final String number;
-  final String title;
-  const _SectionHeader({required this.number, required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    final _textSecondary = AppTheme.textSecondaryOf(context);
-    return Row(
-      children: [
-        Container(
-          width: 24,
-          height: 24,
-          decoration: BoxDecoration(
-            color: const Color(0xFF0EA5E9),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          alignment: Alignment.center,
-          child: Text(number,
-              style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white)),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: _textSecondary,
-              letterSpacing: 0.4),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Module Toggle Card ───────────────────────────────────────────────────────
-
-class _ModuleToggleCard extends StatelessWidget {
-  final ModuleAccess module;
-  final VoidCallback onToggle;
-  const _ModuleToggleCard(
-      {required this.module, required this.onToggle});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final _border = AppTheme.borderOf(context);
-    final _textSecondary = AppTheme.textSecondaryOf(context);
-    final _textMuted = AppTheme.textMutedOf(context);
-
-    // Dynamic colors for selection state in light/dark mode
-    final activeBg = isDark ? const Color(0xFF0F2D4A) : const Color(0xFFEFF6FF);
-    final inactiveBg = isDark ? AppTheme.bgCardDark : Colors.white;
-    final activeBorder = isDark ? const Color(0xFF1D4ED8) : const Color(0xFFBFDBFE);
-    final inactiveBorder = _border;
-    final activeTextColor = isDark ? const Color(0xFF60A5FA) : const Color(0xFF1D4ED8);
-    final inactiveTextColor = _textSecondary;
-
-    return GestureDetector(
-      onTap: onToggle,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: module.enabled ? activeBg : inactiveBg,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: module.enabled ? activeBorder : inactiveBorder,
-            width: 1,
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 20,
-              height: 20,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: module.enabled
-                    ? const Color(0xFF0EA5E9)
-                    : Colors.transparent,
-                border: module.enabled
-                    ? null
-                    : Border.all(
-                        color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1), width: 1.5),
-              ),
-              child: module.enabled
-                  ? const Icon(Icons.check_rounded,
-                      size: 12, color: Colors.white)
-                  : null,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    module.name,
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: module.enabled ? activeTextColor : inactiveTextColor),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    module.description,
-                    style: TextStyle(
-                        fontSize: 10, color: _textMuted),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Permission Group ─────────────────────────────────────────────────────────
-
-class _PermissionGroup extends StatefulWidget {
-  final String title;
-  final List<Permission> permissions;
-  final int enabledCount;
-  final Function(Permission) onToggle;
-  final Function(bool) onToggleGroup;
-  const _PermissionGroup({
-    required this.title,
-    required this.permissions,
-    required this.enabledCount,
-    required this.onToggle,
-    required this.onToggleGroup,
-  });
-
-  @override
-  State<_PermissionGroup> createState() => _PermissionGroupState();
-}
-
-class _PermissionGroupState extends State<_PermissionGroup> {
-  bool _expanded = true;
-
-  bool get _allEnabled =>
-      widget.permissions.every((p) => p.enabled);
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final _cardBg = Theme.of(context).colorScheme.surface;
-    final _border = AppTheme.borderOf(context);
-    final _textPrimary = AppTheme.textPrimaryOf(context);
-    final _textMuted = AppTheme.textMutedOf(context);
-
-    final allEnabled = _allEnabled;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: _cardBg,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: isDark ? null : [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 6,
-              offset: const Offset(0, 1)),
-        ],
-        border: isDark ? Border.all(color: _border) : null,
-      ),
-      child: Column(
-        children: [
-          // Group header
-          GestureDetector(
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 12),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () =>
-                        widget.onToggleGroup(!allEnabled),
-                    child: Container(
-                      width: 22,
-                      height: 22,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: allEnabled
-                            ? const Color(0xFF0EA5E9)
-                            : Colors.transparent,
-                        border: allEnabled
-                            ? null
-                            : Border.all(
-                                color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
-                                width: 1.5),
-                      ),
-                      child: allEnabled
-                          ? const Icon(Icons.check_rounded,
-                              size: 13, color: Colors.white)
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      widget.title.toUpperCase(),
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: _textPrimary,
-                          letterSpacing: 0.4),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: widget.enabledCount ==
-                              widget.permissions.length
-                          ? (isDark ? const Color(0xFF064E3B) : const Color(0xFFD1FAE5))
-                          : widget.enabledCount == 0
-                              ? (isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9))
-                              : (isDark ? const Color(0xFF78350F) : const Color(0xFFFEF3C7)),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      '${widget.enabledCount} / ${widget.permissions.length} ENABLED',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: widget.enabledCount ==
-                                widget.permissions.length
-                            ? (isDark ? const Color(0xFF34D399) : const Color(0xFF059669))
-                            : widget.enabledCount == 0
-                                ? _textMuted
-                                : (isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Icon(
-                    _expanded
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
-                    size: 18,
-                    color: _textMuted,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (_expanded) ...[
-            Container(height: 1, color: _border),
-            // Permissions grid
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                children: [
-                  for (int i = 0;
-                      i < widget.permissions.length;
-                      i += 2)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _PermissionTile(
-                              perm: widget.permissions[i],
-                              onToggle: () => widget
-                                  .onToggle(widget.permissions[i]),
-                            ),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0EA5E9),
                           ),
-                          const SizedBox(width: 8),
-                          i + 1 < widget.permissions.length
-                              ? Expanded(
-                                  child: _PermissionTile(
-                                    perm: widget.permissions[i + 1],
-                                    onToggle: () => widget.onToggle(
-                                        widget.permissions[i + 1]),
-                                  ),
-                                )
-                              : const Expanded(child: SizedBox()),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Permission Tile ──────────────────────────────────────────────────────────
-
-class _PermissionTile extends StatelessWidget {
-  final Permission perm;
-  final VoidCallback onToggle;
-  const _PermissionTile({required this.perm, required this.onToggle});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final _border = AppTheme.borderOf(context);
-    final _textSecondary = AppTheme.textSecondaryOf(context);
-    final _textMuted = AppTheme.textMutedOf(context);
-
-    final activeBg = isDark ? const Color(0xFF0F2D4A) : const Color(0xFFEFF6FF);
-    final inactiveBg = isDark ? AppTheme.bgBaseDark : const Color(0xFFF8FAFC);
-    final activeBorder = isDark ? const Color(0xFF1D4ED8) : const Color(0xFFBFDBFE);
-    final inactiveBorder = _border;
-    final activeTextColor = isDark ? const Color(0xFF60A5FA) : const Color(0xFF1D4ED8);
-    final inactiveTextColor = _textSecondary;
-
-    return GestureDetector(
-      onTap: onToggle,
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: perm.enabled ? activeBg : inactiveBg,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: perm.enabled ? activeBorder : inactiveBorder,
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 18,
-              height: 18,
-              margin: const EdgeInsets.only(top: 1),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: perm.enabled
-                    ? const Color(0xFF0EA5E9)
-                    : Colors.transparent,
-                border: perm.enabled
-                    ? null
-                    : Border.all(
-                        color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1), width: 1.5),
-              ),
-              child: perm.enabled
-                  ? const Icon(Icons.check_rounded,
-                      size: 11, color: Colors.white)
-                  : null,
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    perm.name,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: perm.enabled ? activeTextColor : inactiveTextColor,
+                        ),
+                        SizedBox(width: 4),
+                        Icon(Icons.arrow_forward_rounded,
+                            size: 14, color: Color(0xFF0EA5E9)),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    perm.description,
-                    style: TextStyle(
-                        fontSize: 10, color: _textMuted),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Workspace Preview Card ───────────────────────────────────────────────────
-
-class _WorkspacePreviewCard extends StatelessWidget {
-  final List<String> visibleModules;
-  final int enabledCount;
-  final int totalCount;
-  final VoidCallback onSelectAll;
-  final VoidCallback onRevokeAll;
-  const _WorkspacePreviewCard({
-    required this.visibleModules,
-    required this.enabledCount,
-    required this.totalCount,
-    required this.onSelectAll,
-    required this.onRevokeAll,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final _cardBg = Theme.of(context).colorScheme.surface;
-    final _border = AppTheme.borderOf(context);
-    final _textPrimary = AppTheme.textPrimaryOf(context);
-    final _textMuted = AppTheme.textMutedOf(context);
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isDark ? _border : const Color(0xFFE0F2FE), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.visibility_outlined,
-                  size: 16, color: Color(0xFF0EA5E9)),
-              const SizedBox(width: 6),
-              const Text('WORKSPACE PREVIEW',
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF0EA5E9),
-                      letterSpacing: 0.5)),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text('What users with this role will see',
-              style:
-                  TextStyle(fontSize: 11, color: _textMuted)),
-          const SizedBox(height: 12),
-          Text('VISIBLE MODULES',
-              style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: _textMuted,
-                  letterSpacing: 0.5)),
-          const SizedBox(height: 8),
-          visibleModules.isEmpty
-              ? Text('No modules visible',
-                  style: TextStyle(
-                      fontSize: 12, color: _textMuted))
-              : Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: visibleModules
-                      .take(12)
-                      .map((m) => Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: isDark ? const Color(0xFF0F2D4A) : const Color(0xFFEFF6FF),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              m.toUpperCase(),
-                              style: TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                  color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF1D4ED8),
-                                  letterSpacing: 0.3),
-                            ),
-                          ))
-                      .toList(),
-                ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('TOTAL PERMISSIONS',
-                  style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: _textMuted)),
-              Text('$enabledCount / $totalCount',
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: _textPrimary)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: totalCount > 0 ? enabledCount / totalCount : 0,
-              backgroundColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF1F5F9),
-              color: const Color(0xFF0EA5E9),
-              minHeight: 6,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onSelectAll,
-                  icon: const Icon(Icons.check_circle_outline_rounded,
-                      size: 13, color: Color(0xFF10B981)),
-                  label: const Text('Select All',
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF10B981),
-                          fontWeight: FontWeight.w600)),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: isDark ? const Color(0xFF059669) : const Color(0xFFA7F3D0)),
-                    backgroundColor: isDark ? const Color(0xFF064E3B) : const Color(0xFFF0FDF4),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onRevokeAll,
-                  icon: const Icon(Icons.cancel_outlined,
-                      size: 13, color: Color(0xFFEF4444)),
-                  label: const Text('Revoke All',
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFFEF4444),
-                          fontWeight: FontWeight.w600)),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: isDark ? const Color(0xFFDC2626) : const Color(0xFFFECACA)),
-                    backgroundColor: isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFFF5F5),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                ),
-              ),
-            ],
           ),
         ],
       ),
