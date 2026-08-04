@@ -3,7 +3,7 @@ import 'dart:io';
 
 void main() async {
   final client = HttpClient();
-  final tables = ['profiles', 'department_members', 'payroll'];
+  final tables = ['leads', 'proposals', 'payments', 'invoices', 'projects', 'tasks'];
   
   for (final table in tables) {
     print('\n=== TABLE: $table ===');

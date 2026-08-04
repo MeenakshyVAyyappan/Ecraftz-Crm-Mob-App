@@ -118,7 +118,9 @@ class BillingBloc extends Bloc<BillingEvent, BillingState> {
         String? projectId;
 
         // Resolve client ID
-        if (event.invoice.clientName.isNotEmpty) {
+        if (event.invoice.clientId != null && event.invoice.clientId!.isNotEmpty) {
+          clientId = event.invoice.clientId;
+        } else if (event.invoice.clientName.isNotEmpty) {
           final clientsRes = await _client
               .from('clients')
               .select('id')

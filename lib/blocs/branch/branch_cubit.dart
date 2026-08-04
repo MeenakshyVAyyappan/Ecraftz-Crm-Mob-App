@@ -53,7 +53,7 @@ class BranchState extends Equatable {
   final String? dubaiBranchId;
 
   const BranchState({
-    this.selectedBranch = BranchFilter.calicut,
+    this.selectedBranch = BranchFilter.allBranches,
     this.calicutBranchId,
     this.dubaiBranchId,
   });
@@ -99,7 +99,7 @@ class BranchCubit extends Cubit<BranchState> {
     // 1. Restore persisted branch selection
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString(_prefKey);
-    BranchFilter restoredFilter = BranchFilter.calicut; // default
+    BranchFilter restoredFilter = BranchFilter.allBranches; // default
     if (saved == 'allBranches') restoredFilter = BranchFilter.allBranches;
     if (saved == 'dubai') restoredFilter = BranchFilter.dubai;
     if (saved == 'calicut') restoredFilter = BranchFilter.calicut;

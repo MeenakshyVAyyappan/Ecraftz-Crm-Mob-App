@@ -17,6 +17,7 @@ import '../../models/client_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/branch_switcher.dart';
+import '../../services/invoice_pdf_generator.dart';
 
 const _kPrimary = Color(0xFF00BCD4);
 const _kDarkHeader = Color(0xFF0F172A);
@@ -1035,7 +1036,7 @@ class _CreateInvoicesPageState extends State<CreateInvoicesPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _InvoiceFormModal(
+      builder: (_) => InvoiceFormModal(
         gstProfile: profile,
         onSave: (inv) {
           context.read<BillingBloc>().add(AddInvoiceEvent(inv, branchState: branchState));
@@ -1056,7 +1057,7 @@ class _CreateInvoicesPageState extends State<CreateInvoicesPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _InvoiceFormModal(
+      builder: (_) => InvoiceFormModal(
         existingInvoice: inv,
         gstProfile: profile,
         onSave: (updatedInv) {
@@ -2007,350 +2008,11 @@ class _CreateInvoicesPageState extends State<CreateInvoicesPage> {
   }
 
   void _printInvoice(Invoice inv, GstProfile profile) async {
-    final pdfBytes = await _buildInvoicePdfBytes(inv, profile);
-    await Printing.layoutPdf(
-      onLayout: (_) async => pdfBytes,
-      name: 'Invoice_${inv.invoiceNumber}',
-    );
+    await InvoicePdfGenerator.printInvoice(inv, profile);
   }
 
   Future<Uint8List> _buildInvoicePdfBytes(Invoice inv, GstProfile profile) async {
-    final pdf = pw.Document();
-
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        build: (pw.Context ctx) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            // Company Header
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Container(
-                  width: 45,
-                  height: 45,
-                  decoration: pw.BoxDecoration(
-                    color: PdfColors.blueGrey900,
-                    borderRadius: pw.BorderRadius.circular(4),
-                  ),
-                  child: pw.Center(
-                    child: pw.Text(
-                      'E',
-                      style: pw.TextStyle(
-                        color: PdfColors.white,
-                        fontSize: 24,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-                pw.SizedBox(width: 14),
-                pw.Expanded(
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        profile.legalName.isNotEmpty
-                            ? profile.legalName
-                            : 'Ecraftz Info Solutions LLP',
-                        style: pw.TextStyle(
-                          fontSize: 16,
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.blueGrey900,
-                        ),
-                      ),
-                      pw.Text(
-                        profile.address.isNotEmpty
-                            ? profile.address
-                            : 'Ecraftz, A9, First floor, NV Tower, M20/265, Kallai, Kozhikode, Kerala 673003',
-                        style: const pw.TextStyle(
-                            fontSize: 9, color: PdfColors.grey700),
-                      ),
-                    ],
-                  ),
-                ),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
-                  children: [
-                    pw.Text('UK | UAE | INDIA',
-                        style: const pw.TextStyle(
-                            fontSize: 9, color: PdfColors.grey800)),
-                    pw.Text(profile.website.isNotEmpty ? profile.website : 'www.vbecraftz.com',
-                        style: const pw.TextStyle(
-                            fontSize: 9, color: PdfColors.grey700)),
-                    pw.Text(profile.email.isNotEmpty ? profile.email : 'mail@ecraftz.in',
-                        style: const pw.TextStyle(
-                            fontSize: 9, color: PdfColors.grey700)),
-                  ],
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 14),
-            pw.Divider(color: PdfColors.grey300),
-            pw.SizedBox(height: 10),
-
-            // Meta bar
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text('Invoice #: ${inv.invoiceNumber}',
-                    style: pw.TextStyle(
-                        fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                pw.Text('Place Of Supply: ${inv.placeOfSupply ?? "32"}',
-                    style: pw.TextStyle(
-                        fontSize: 11, fontWeight: pw.FontWeight.bold)),
-              ],
-            ),
-            pw.Text(
-                'Invoice Date: ${DateFormat("dd-MM-yyyy").format(inv.issuedDate)}',
-                style: const pw.TextStyle(fontSize: 10)),
-            pw.SizedBox(height: 14),
-
-            // Billed By / To Box
-            pw.Container(
-              decoration: pw.BoxDecoration(
-                border: pw.Border.all(color: PdfColors.grey300),
-                borderRadius: pw.BorderRadius.circular(4),
-              ),
-              child: pw.Column(
-                children: [
-                  pw.Container(
-                    color: PdfColors.grey200,
-                    padding: const pw.EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
-                    child: pw.Row(
-                      children: [
-                        pw.Expanded(
-                            child: pw.Text('BILLED BY',
-                                style: pw.TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: pw.FontWeight.bold))),
-                        pw.Expanded(
-                            child: pw.Text('BILLED TO',
-                                style: pw.TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: pw.FontWeight.bold))),
-                      ],
-                    ),
-                  ),
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.all(12),
-                    child: pw.Row(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Expanded(
-                          child: pw.Column(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            children: [
-                              pw.Text('Ecraftz Info Solutions LLP',
-                                  style: pw.TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: pw.FontWeight.bold)),
-                              pw.Text(
-                                profile.address.isNotEmpty
-                                    ? profile.address
-                                    : 'Ecraftz, A9, First floor, NV Tower, Kallai, Kozhikode 673003',
-                                style: const pw.TextStyle(
-                                    fontSize: 8, color: PdfColors.grey700),
-                              ),
-                              pw.Text(
-                                'GSTIN: ${profile.gstin.isNotEmpty ? profile.gstin : "32AAYFE1819K1Z4"}',
-                                style: pw.TextStyle(
-                                    fontSize: 8,
-                                    fontWeight: pw.FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
-                        pw.SizedBox(width: 12),
-                        pw.Expanded(
-                          child: pw.Column(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            children: [
-                              pw.Text(
-                                inv.clientName.isNotEmpty
-                                    ? inv.clientName
-                                    : 'CLIENT NAME',
-                                style: pw.TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: pw.FontWeight.bold),
-                              ),
-                              pw.Text(
-                                inv.clientAddress?.isNotEmpty == true
-                                    ? inv.clientAddress!
-                                    : 'INDIA',
-                                style: const pw.TextStyle(
-                                    fontSize: 8, color: PdfColors.grey700),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            pw.SizedBox(height: 14),
-
-            // Itemized Table
-            pw.TableHelper.fromTextArray(
-              border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-              headerStyle: pw.TextStyle(
-                  fontSize: 8, fontWeight: pw.FontWeight.bold),
-              cellStyle: const pw.TextStyle(fontSize: 8),
-              headerDecoration:
-                  const pw.BoxDecoration(color: PdfColors.grey200),
-              headers: [
-                'S.No',
-                'Description',
-                'HSN/SAC',
-                'Unit',
-                'Rate',
-                'Disc',
-                'SGST %',
-                'SGST Amt',
-                'CGST %',
-                'CGST Amt',
-                'Net Amt'
-              ],
-              data: inv.items.asMap().entries.map((e) {
-                final idx = e.key + 1;
-                final item = e.value;
-                return [
-                  '$idx',
-                  item.description,
-                  item.hsnSac ?? '-',
-                  item.category ?? 'Nos',
-                  item.unitPrice.toStringAsFixed(2),
-                  item.discountAmount > 0
-                      ? item.discountAmount.toStringAsFixed(0)
-                      : '0.0%',
-                  '${item.sgstRate.toStringAsFixed(1)}%',
-                  item.sgstAmount.toStringAsFixed(2),
-                  '${item.cgstRate.toStringAsFixed(1)}%',
-                  item.cgstAmount.toStringAsFixed(2),
-                  item.total.toStringAsFixed(2),
-                ];
-              }).toList(),
-            ),
-
-            pw.SizedBox(height: 16),
-
-            // Totals and Bank Details
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Expanded(
-                  flex: 6,
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text('TOTAL IN WORDS:',
-                          style: pw.TextStyle(
-                              fontSize: 8, fontWeight: pw.FontWeight.bold)),
-                      pw.Text(_numberToWordsIndian(inv.grossAmount),
-                          style: pw.TextStyle(
-                              fontSize: 9,
-                              fontWeight: pw.FontWeight.bold,
-                              fontStyle: pw.FontStyle.italic)),
-                      pw.SizedBox(height: 14),
-                      pw.Text('BANK ACCOUNT DETAILS:',
-                          style: pw.TextStyle(
-                              fontSize: 8, fontWeight: pw.FontWeight.bold)),
-                      pw.Text('Company: ECRAFTZ TECHNOLOGIES PVT LTD',
-                          style: const pw.TextStyle(fontSize: 8)),
-                      pw.Text('Account No: 751405500282',
-                          style: const pw.TextStyle(fontSize: 8)),
-                      pw.Text('IFSC Code: ICIC0007514',
-                          style: const pw.TextStyle(fontSize: 8)),
-                      pw.Text('Bank: ICICI Bank (ICIC1)',
-                          style: const pw.TextStyle(fontSize: 8)),
-                      pw.Text('Branch: Calicut, Medical College',
-                          style: const pw.TextStyle(fontSize: 8)),
-                    ],
-                  ),
-                ),
-                pw.SizedBox(width: 16),
-                pw.Expanded(
-                  flex: 4,
-                  child: pw.Container(
-                    padding: const pw.EdgeInsets.all(8),
-                    decoration: pw.BoxDecoration(
-                      border: pw.Border.all(color: PdfColors.grey300),
-                    ),
-                    child: pw.Column(
-                      children: [
-                        pw.Row(
-                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                          children: [
-                            pw.Text('Sub Total',
-                                style: const pw.TextStyle(fontSize: 8)),
-                            pw.Text(inv.subtotal.toStringAsFixed(2),
-                                style: const pw.TextStyle(fontSize: 8)),
-                          ],
-                        ),
-                        pw.Row(
-                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                          children: [
-                            pw.Text(
-                                'CGST (${(inv.items.firstOrNull?.cgstRate ?? 0.0).toStringAsFixed(1)}%)',
-                                style: const pw.TextStyle(fontSize: 8)),
-                            pw.Text(inv.totalCgst.toStringAsFixed(2),
-                                style: const pw.TextStyle(fontSize: 8)),
-                          ],
-                        ),
-                        pw.Row(
-                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                          children: [
-                            pw.Text(
-                                'SGST (${(inv.items.firstOrNull?.sgstRate ?? 0.0).toStringAsFixed(1)}%)',
-                                style: const pw.TextStyle(fontSize: 8)),
-                            pw.Text(inv.totalSgst.toStringAsFixed(2),
-                                style: const pw.TextStyle(fontSize: 8)),
-                          ],
-                        ),
-                        pw.Divider(color: PdfColors.grey400),
-                        pw.Row(
-                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                          children: [
-                            pw.Text('Total',
-                                style: pw.TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: pw.FontWeight.bold)),
-                            pw.Text('₹${inv.grossAmount.toStringAsFixed(2)}',
-                                style: pw.TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: pw.FontWeight.bold)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            pw.Spacer(),
-            pw.Align(
-              alignment: pw.Alignment.centerRight,
-              child: pw.Column(
-                children: [
-                  pw.Container(width: 120, height: 0.5, color: PdfColors.grey700),
-                  pw.SizedBox(height: 2),
-                  pw.Text('Authorized Signature',
-                      style: pw.TextStyle(
-                          fontSize: 8, fontWeight: pw.FontWeight.bold)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    return pdf.save();
+    return InvoicePdfGenerator.buildInvoicePdfBytes(inv, profile);
   }
 }
 
@@ -2487,22 +2149,25 @@ class _MetricCard extends StatelessWidget {
 
 // ─── INVOICE FORM MODAL ───────────────────────────────────────────────────────
 
-class _InvoiceFormModal extends StatefulWidget {
+class InvoiceFormModal extends StatefulWidget {
   final Invoice? existingInvoice;
+  final ActiveClient? prefilledClient;
   final GstProfile gstProfile;
   final Function(Invoice) onSave;
 
-  const _InvoiceFormModal({
+  const InvoiceFormModal({
+    super.key,
     this.existingInvoice,
+    this.prefilledClient,
     required this.gstProfile,
     required this.onSave,
   });
 
   @override
-  State<_InvoiceFormModal> createState() => _InvoiceFormModalState();
+  State<InvoiceFormModal> createState() => InvoiceFormModalState();
 }
 
-class _InvoiceFormModalState extends State<_InvoiceFormModal> {
+class InvoiceFormModalState extends State<InvoiceFormModal> {
   final _formKey = GlobalKey<FormState>();
 
   late String _documentType;
@@ -2598,6 +2263,57 @@ class _InvoiceFormModalState extends State<_InvoiceFormModal> {
           unitPrice: 10000,
           cgstAmount: 900,
           sgstAmount: 900,
+        ));
+      }
+    } else if (widget.prefilledClient != null) {
+      final client = widget.prefilledClient!;
+      _documentType = 'Invoice';
+      _branch = 'Head Office (HO)';
+      _invoiceNum =
+          'INV-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+      _issueDate = DateTime.now();
+      _dueDate = DateTime.now().add(const Duration(days: 15));
+      _placeOfSupply = '(32) Kerala';
+      _selectedCrmClient = client.name;
+      _clientNameCtrl = TextEditingController(text: client.name);
+      _clientAddressCtrl = TextEditingController(text: client.address ?? '');
+      _status = InvoiceStatus.draft;
+      _notesCtrl = TextEditingController(text: 'Thank you for your business!');
+      _termsCtrl = TextEditingController(
+          text:
+              '1. Payment should be made to our official bank account.\n2. Invoices are subject to 18% GST.');
+
+      if (client.services.isNotEmpty) {
+        final perService = client.contractValue / client.services.length;
+        for (final service in client.services) {
+          final taxable = perService;
+          final cgst = taxable * 0.09;
+          final sgst = taxable * 0.09;
+          final total = taxable + cgst + sgst;
+          
+          _items.add(InvoiceItem(
+            itemName: service,
+            description: service,
+            hsnSac: '998311',
+            category: 'Nos',
+            quantity: 1,
+            unitPrice: perService,
+            cgstAmount: cgst,
+            sgstAmount: sgst,
+            igstAmount: 0,
+            cessAmount: 0,
+            taxPercent: 18,
+            taxableValue: taxable,
+            totalAmount: total,
+          ));
+        }
+      } else {
+        _items.add(InvoiceItem(
+          description: 'Web Development Services',
+          quantity: 1,
+          unitPrice: client.contractValue > 0 ? client.contractValue : 10000,
+          cgstAmount: (client.contractValue > 0 ? client.contractValue : 10000) * 0.09,
+          sgstAmount: (client.contractValue > 0 ? client.contractValue : 10000) * 0.09,
         ));
       }
     } else {

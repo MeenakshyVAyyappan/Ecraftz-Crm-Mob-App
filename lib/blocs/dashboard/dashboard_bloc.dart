@@ -114,6 +114,78 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         final activitiesRes = await _client.from('activities').select().order('created_at', ascending: false).limit(5);
         final activities = activitiesRes as List;
 
+        // 5. Fetch Leads
+        var leadsQuery = _client.from('leads').select().isFilter('deleted_at', null);
+        if (start != null && end != null) {
+          leadsQuery = leadsQuery
+              .gte('created_at', start.toIso8601String())
+              .lte('created_at', end.toIso8601String());
+        }
+        if (branchId != null && branchId.isNotEmpty) {
+          leadsQuery = leadsQuery.eq('branch_id', branchId);
+        }
+        List leads = [];
+        try {
+          final res = await leadsQuery;
+          leads = res as List;
+        } catch (_) {
+          var fallback = _client.from('leads').select().isFilter('deleted_at', null);
+          if (start != null && end != null) {
+            fallback = fallback
+                .gte('created_at', start.toIso8601String())
+                .lte('created_at', end.toIso8601String());
+          }
+          try {
+            final res = await fallback;
+            leads = res as List;
+          } catch (_) {}
+        }
+
+        // 6. Fetch Proposals
+        var proposalsQuery = _client.from('proposals').select();
+        if (start != null && end != null) {
+          proposalsQuery = proposalsQuery
+              .gte('created_at', start.toIso8601String())
+              .lte('created_at', end.toIso8601String());
+        }
+        List proposals = [];
+        try {
+          final res = await proposalsQuery;
+          proposals = res as List;
+        } catch (_) {}
+
+        // 7. Fetch Payments
+        var paymentsQuery = _client.from('payments').select().isFilter('deleted_at', null);
+        if (start != null && end != null) {
+          paymentsQuery = paymentsQuery
+              .gte('date', start.toIso8601String().split('T')[0])
+              .lte('date', end.toIso8601String().split('T')[0]);
+        }
+        if (branchId != null && branchId.isNotEmpty) {
+          paymentsQuery = paymentsQuery.eq('branch_id', branchId);
+        }
+        List payments = [];
+        try {
+          final res = await paymentsQuery;
+          payments = res as List;
+        } catch (_) {
+          var fallback = _client.from('payments').select().isFilter('deleted_at', null);
+          if (start != null && end != null) {
+            fallback = fallback
+                .gte('date', start.toIso8601String().split('T')[0])
+                .lte('date', end.toIso8601String().split('T')[0]);
+          }
+          try {
+            final res = await fallback;
+            payments = res as List;
+          } catch (_) {
+            try {
+              final res = await _client.from('payments').select();
+              payments = res as List;
+            } catch (_) {}
+          }
+        }
+
         // --- Aggregations & Calculations ---
         
         // Total Invoiced Amount (grand_total of all non-cancelled invoices)
@@ -157,39 +229,95 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         int inProgressTasksCount = tasks.where((t) => t['status']?.toString().toLowerCase() == 'in_progress').length;
         int resourceLoadPercent = tasks.isNotEmpty ? ((inProgressTasksCount / tasks.length) * 100).round() : 0;
 
-        // Stats Cards List matching Web CRM
+        // Total Leads count
+        int totalLeadsCount = leads.length;
+
+        // New Leads count
+        int newLeadsCount = leads.where((l) => l['status']?.toString().toLowerCase() == 'new').length;
+
+        // Total Collections (only verified, paid, or success payments)
+        double totalCollectionsVal = 0.0;
+        for (final pay in payments) {
+          final status = pay['status']?.toString().toLowerCase() ?? '';
+          if (status == 'verified' || status == 'paid' || status == 'success') {
+            final amt = (pay['amount'] is num)
+                ? (pay['amount'] as num).toDouble()
+                : double.tryParse(pay['amount']?.toString() ?? '') ?? 0.0;
+            totalCollectionsVal += amt;
+          }
+        }
+
+        // Total Revenue equals Total Collections (All Time Earnings from verified payments)
+        double totalRevenueVal = totalCollectionsVal;
+
+        // Total Proposals count
+        int totalProposalsCount = proposals.length;
+
+        // Stats Cards List matching Web CRM (8 boxes)
         final statsList = [
           DashboardStats(
-            label: 'PERIOD REVENUE',
-            value: '₹${totalInvoiced.toStringAsFixed(0)}',
-            subtitle: start != null && end != null ? 'FOR SELECTED PERIOD' : 'FOR SELECTED PERIOD',
+            label: 'TOTAL LEADS',
+            value: '$totalLeadsCount',
+            subtitle: 'ALL LEADS IN SYSTEM',
             status: 'STABLE',
-            icon: 'currency_rupee',
+            icon: 'people_outline',
             colorIndex: 0,
           ),
           DashboardStats(
-            label: 'PROJECTS IN PERIOD',
+            label: 'NEW LEADS',
+            value: '$newLeadsCount',
+            subtitle: 'AWAITING RESPONSE',
+            status: newLeadsCount > 0 ? 'ALERT' : 'STABLE',
+            icon: 'star_outline_rounded',
+            colorIndex: 1,
+          ),
+          DashboardStats(
+            label: 'TOTAL COLLECTIONS',
+            value: '₹${totalCollectionsVal.toStringAsFixed(0)}',
+            subtitle: 'TOTAL PAYMENTS COLLECTED',
+            status: 'STABLE',
+            icon: 'payments_outlined',
+            colorIndex: 2,
+          ),
+          DashboardStats(
+            label: 'TOTAL PROPOSALS',
+            value: '$totalProposalsCount',
+            subtitle: 'GENERATED PROPOSALS',
+            status: 'STABLE',
+            icon: 'description_outlined',
+            colorIndex: 3,
+          ),
+          DashboardStats(
+            label: 'TOTAL REVENUE',
+            value: '₹${totalRevenueVal.toStringAsFixed(0)}',
+            subtitle: 'ALL TIME EARNINGS',
+            status: 'STABLE',
+            icon: 'currency_rupee_rounded',
+            colorIndex: 4,
+          ),
+          DashboardStats(
+            label: 'ACTIVE PROJECTS',
             value: '$activeProjectsCount',
             subtitle: 'ONGOING OPERATIONS',
             status: 'STABLE',
             icon: 'work_outline',
-            colorIndex: 1,
+            colorIndex: 5,
           ),
           DashboardStats(
-            label: 'TASKS IN PERIOD',
-            value: '${tasks.length}',
+            label: 'OVERDUE TASKS',
+            value: '$overdueTasksCount',
             subtitle: overdueTasksCount == 0 ? 'ALL CLEAR' : '$overdueTasksCount OVERDUE',
             status: overdueTasksCount == 0 ? 'STABLE' : 'ALERT',
             icon: 'warning_amber_rounded',
-            colorIndex: 2,
+            colorIndex: 6,
           ),
           DashboardStats(
             label: 'RESOURCE LOAD',
             value: '$resourceLoadPercent%',
-            subtitle: '0H LOGGED / 7D',
+            subtitle: 'WORKLOAD DISTRIBUTION',
             status: 'STABLE',
             icon: 'access_time',
-            colorIndex: 3,
+            colorIndex: 7,
           ),
         ];
 
@@ -293,10 +421,12 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           tasks: taskList,
           revenueData: revenuePoints,
           dateRange: event.dateRange,
-          totalRevenue: totalInvoiced,
+          totalRevenue: totalRevenueVal,
           receivables: unpaidRev,
         ));
-      } catch (e) {
+      } catch (e, stack) {
+        print('DASHBOARD_BLOC ERROR: $e');
+        print('DASHBOARD_BLOC STACKTRACE: $stack');
         emit(DashboardError(e.toString()));
       }
     });

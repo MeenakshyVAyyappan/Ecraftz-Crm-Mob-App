@@ -9,20 +9,32 @@ class StatCard extends StatelessWidget {
   const StatCard({super.key, required this.stat, required this.index});
 
   static const List<Color> _iconColors = [
-    AppTheme.success,
-    AppTheme.primary,
-    AppTheme.error,
-    AppTheme.warning,
+    Color(0xFF8B5CF6), // Total Leads: Purple
+    Color(0xFFF59E0B), // New Leads: Amber/Orange
+    Color(0xFF10B981), // Total Collections: Emerald
+    Color(0xFF06B6D4), // Total Proposals: Cyan/Teal
+    Color(0xFF3B82F6), // Total Revenue: Blue
+    Color(0xFF6366F1), // Active Projects: Indigo
+    Color(0xFFEF4444), // Overdue Tasks: Red
+    Color(0xFF64748B), // Resource Load: Blue Grey
   ];
 
   static const List<Color> _bgColors = [
-    AppTheme.successLight,
-    AppTheme.primaryLight,
-    AppTheme.errorLight,
-    AppTheme.warningLight,
+    Color(0xFFF5F3FF),
+    Color(0xFFFEF3C7),
+    Color(0xFFECFDF5),
+    Color(0xFFECFEFF),
+    Color(0xFFEFF6FF),
+    Color(0xFFEEF2FF),
+    Color(0xFFFEF2F2),
+    Color(0xFFF1F5F9),
   ];
 
   static const List<IconData> _icons = [
+    Icons.people_alt_outlined,
+    Icons.star_outline_rounded,
+    Icons.payments_outlined,
+    Icons.description_outlined,
     Icons.currency_rupee_rounded,
     Icons.work_outline_rounded,
     Icons.warning_amber_rounded,
@@ -36,9 +48,9 @@ class StatCard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? color.withOpacity(0.15) : rawBgColor;
     final icon = _icons[stat.colorIndex];
-
+ 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
@@ -52,46 +64,59 @@ class StatCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
                   color: bgColor,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, color: color, size: 20),
+                child: Icon(icon, color: color, size: 18),
               ),
               _StatusBadge(status: stat.status),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Text(
             stat.subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: AppTheme.textMutedOf(context),
-              fontSize: 9.5,
+              fontSize: 9.0,
               fontWeight: FontWeight.w600,
-              letterSpacing: 0.8,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  stat.value,
+                  style: TextStyle(
+                    color: AppTheme.textPrimaryOf(context),
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                    height: 1.1,
+                  ),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            stat.value,
-            style: TextStyle(
-              color: AppTheme.textPrimaryOf(context),
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -1,
-              height: 1,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
             stat.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: AppTheme.textSecondaryOf(context),
-              fontSize: 11,
+              fontSize: 10.5,
               fontWeight: FontWeight.w500,
-              letterSpacing: 0.2,
+              letterSpacing: 0.1,
             ),
           ),
         ],

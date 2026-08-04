@@ -78,7 +78,7 @@ class Lead {
   String jobTitle;
   String phone;
   LeadStatus status;
-  AcquisitionSource source;
+  String source;
   double value;
   final String? branchId;
   final String? branchName;
@@ -93,7 +93,7 @@ class Lead {
     this.jobTitle = '',
     this.phone = '',
     required this.status,
-    this.source = AcquisitionSource.website,
+    this.source = 'Website',
     this.value = 0,
     this.branchId,
     this.branchName,
@@ -117,7 +117,7 @@ class Lead {
       jobTitle: json['job_title']?.toString() ?? '',
       phone: json['phone']?.toString() ?? '',
       status: _parseLeadStatus(json['status']?.toString()),
-      source: _parseSource(json['source']?.toString()),
+      source: normalizeSourceName(json['source']?.toString()),
       value: (json['value'] is num) ? (json['value'] as num).toDouble() : double.tryParse(json['value']?.toString() ?? '') ?? 0.0,
       branchId: json['branch_id']?.toString(),
       branchName: json['branch_name']?.toString() ?? json['branch']?.toString(),
@@ -135,7 +135,7 @@ class Lead {
       // 'job_title' is not present in the database table schema
       'phone': phone,
       'status': _leadStatusToString(status),
-      'source': _sourceToString(source),
+      'source': source,
       'value': value,
       'organization_id': '00000000-0000-0000-0000-000000000000',
     };
@@ -216,5 +216,50 @@ String _sourceToString(AcquisitionSource source) {
     case AcquisitionSource.coldCall: return 'cold_call';
     case AcquisitionSource.email: return 'email';
     case AcquisitionSource.other: return 'other';
+  }
+}
+
+String normalizeSourceName(String? sourceStr) {
+  if (sourceStr == null || sourceStr.trim().isEmpty) return 'Website';
+  final s = sourceStr.toLowerCase().trim();
+  switch (s) {
+    case 'website': return 'Website';
+    case 'referral': return 'Referral';
+    case 'socialmedia':
+    case 'social_media':
+    case 'social media':
+      return 'Social Media';
+    case 'coldcall':
+    case 'cold_call':
+    case 'cold call':
+      return 'Cold Call';
+    case 'email': return 'Email';
+    case 'other': return 'Other';
+    case 'linkedin': return 'LinkedIn';
+    case 'instagram': return 'Instagram';
+    case 'facebook / meta ads':
+    case 'facebook/meta ads':
+    case 'facebook_meta_ads':
+      return 'Facebook / Meta Ads';
+    case 'google ads / search':
+    case 'google/ads':
+    case 'google ads':
+      return 'Google Ads / Search';
+    case 'justdial': return 'JustDial';
+    case 'trade show / event':
+    case 'trade show':
+      return 'Trade Show / Event';
+    case 'email campaign': return 'Email Campaign';
+    case 'agent / partner':
+    case 'agent':
+      return 'Agent / Partner';
+    case 'whatsapp direct':
+    case 'whatsapp':
+      return 'WhatsApp Direct';
+    default:
+      if (sourceStr.length > 1) {
+        return sourceStr[0].toUpperCase() + sourceStr.substring(1);
+      }
+      return sourceStr;
   }
 }

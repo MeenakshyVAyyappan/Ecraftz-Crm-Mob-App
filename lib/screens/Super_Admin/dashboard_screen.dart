@@ -25,6 +25,7 @@ import '../../services/bde_report_service.dart';
 import '../../models/bde_report_model.dart';
 import '../../services/meeting_service.dart';
 import '../../models/meeting_model.dart';
+import '../../blocs/meeting/meeting_bloc.dart';
 import 'teams_screen.dart' show teamMembers, TeamMember;
 
 class DashboardScreen extends StatefulWidget {
@@ -79,6 +80,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     context.read<DepartmentBloc>().add(LoadDepartmentsEvent());
     context.read<TaskBloc>().add(LoadTasksEvent());
     context.read<ProjectBloc>().add(LoadProjectsEvent());
+    context.read<MeetingBloc>().add(LoadMeetingsEvent());
   }
 
   Future<void> _loadNotifReadState() async {
@@ -131,6 +133,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     branchState: branchState,
                   ),
                 );
+                context.read<MeetingBloc>().add(LoadMeetingsEvent());
               },
             ),
             BlocListener<DepartmentBloc, DepartmentState>(
@@ -188,6 +191,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 _buildTabBar(),
                                 if (_selectedTab == 0) ...[
                                   const SizedBox(height: 20),
+                                  _buildMeetingSchedulesSection(),
+                                  const SizedBox(height: 20),
                                   _buildDataVisibilityHeader(),
                                   const SizedBox(height: 14),
                                   _buildStatsGrid(stats),
@@ -201,8 +206,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                                   _buildBdeDailyReportsSection(),
                                   const SizedBox(height: 24),
                                   _buildDynamicWorkspaceHeader(),
-                                  const SizedBox(height: 16),
-                                  _buildMeetingSchedulesSection(),
                                   const SizedBox(height: 16),
                                   _buildRevenueCard(totalRevenueVal, revenuePoints),
                                   const SizedBox(height: 16),
@@ -301,6 +304,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   branchState: context.read<BranchCubit>().state,
                 ),
               );
+              context.read<MeetingBloc>().add(LoadMeetingsEvent());
               await Future.delayed(const Duration(milliseconds: 600));
             },
           ),
@@ -734,7 +738,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         crossAxisCount: 2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: 1.1,
+        childAspectRatio: 1.0,
       ),
       itemCount: stats.length,
       itemBuilder: (context, i) {
@@ -743,16 +747,28 @@ class _DashboardScreenState extends State<DashboardScreen>
             int targetIndex = 0;
             switch (i) {
               case 0:
-                targetIndex = 7; // Billing
+                targetIndex = 1; // CRM Leads Page
                 break;
               case 1:
-                targetIndex = 4; // Projects
+                targetIndex = 1; // CRM Leads Page (New Leads filter)
                 break;
               case 2:
-                targetIndex = 5; // Tasks
+                targetIndex = 7; // Billing / Collections Page
                 break;
               case 3:
-                targetIndex = 16; // HR & Payroll
+                targetIndex = 2; // Active Clients (to manage/view proposals)
+                break;
+              case 4:
+                targetIndex = 7; // Billing / Revenue Page
+                break;
+              case 5:
+                targetIndex = 4; // Projects Page
+                break;
+              case 6:
+                targetIndex = 5; // Tasks Page
+                break;
+              case 7:
+                targetIndex = 16; // HR & Payroll Page
                 break;
               default:
                 targetIndex = 0;
@@ -2252,20 +2268,43 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  // ── 4. MEETING SCHEDULES SECTION ──────────────────────────────────────────────
+  String _getMeetingReminderTime(DateTime scheduledAt) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final scheduledDate = DateTime(scheduledAt.year, scheduledAt.month, scheduledAt.day);
+
+    final diffDays = scheduledDate.difference(today).inDays;
+    final timeStr = DateFormat('hh:mm a').format(scheduledAt);
+
+    if (diffDays == 0) {
+      final diffMins = scheduledAt.difference(now).inMinutes;
+      if (diffMins > 0 && diffMins <= 60) {
+        return 'IN $diffMins MINS';
+      } else if (diffMins <= 0 && diffMins >= -30) {
+        return 'ACTIVE';
+      }
+      return 'TODAY at $timeStr';
+    } else if (diffDays == 1) {
+      return 'TOMORROW at $timeStr';
+    } else {
+      return DateFormat('dd MMM, hh:mm a').format(scheduledAt);
+    }
+  }
+
+  // ── 4. MEETINGS SECTION ───────────────────────────────────────────────────────
   Widget _buildMeetingSchedulesSection() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return _SectionCard(
-      title: 'MEETING SCHEDULES',
+      title: 'UPCOMING MEETING REMINDERS',
       subtitle: 'Client discovery calls, product demos & follow-ups',
-      headerIcon: Icons.calendar_today_rounded,
-      headerIconColor: AppTheme.primary,
+      headerIcon: Icons.notifications_active_rounded,
+      headerIconColor: const Color(0xFFF59E0B),
       trailing: ElevatedButton.icon(
         onPressed: () {
           widget.onItemSelected(10);
         },
         icon: const Icon(Icons.add, size: 12, color: Colors.white),
-        label: const Text('+ SCHEDULE MEETING', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
+        label: const Text('+ SCHEDULE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
         style: ElevatedButton.styleFrom(
           backgroundColor: AppTheme.primary,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -2273,14 +2312,23 @@ class _DashboardScreenState extends State<DashboardScreen>
           elevation: 0,
         ),
       ),
-      child: FutureBuilder<List<Meeting>>(
-        future: MeetingService.instance.fetchAllMeetings(),
-        builder: (ctx, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+      child: BlocBuilder<MeetingBloc, MeetingState>(
+        builder: (ctx, state) {
+          if (state.status == MeetingStatusState.loading) {
             return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(strokeWidth: 2)));
           }
 
-          final meetings = snapshot.data ?? [];
+          final rawMeetings = state.meetings;
+          final now = DateTime.now();
+          
+          final meetings = rawMeetings.where((m) {
+            final isScheduled = m.status == 'scheduled' || m.status == 'rescheduled';
+            final isUpcoming = m.scheduledAt.isAfter(now.subtract(const Duration(minutes: 30)));
+            return isScheduled && isUpcoming;
+          }).toList();
+
+          meetings.sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+
           if (meetings.isEmpty) {
             return Center(
               child: Padding(
@@ -2298,45 +2346,122 @@ class _DashboardScreenState extends State<DashboardScreen>
           }
 
           return Column(
-            children: meetings.take(5).map((m) {
+            children: meetings.take(3).map((m) {
+              final isToday = DateTime(m.scheduledAt.year, m.scheduledAt.month, m.scheduledAt.day)
+                  .difference(DateTime(now.year, now.month, now.day)).inDays == 0;
+              final isUrgent = isToday && m.scheduledAt.difference(now).inMinutes <= 60;
+
+              final accentColor = isUrgent 
+                  ? const Color(0xFFEF4444)
+                  : (isToday ? const Color(0xFFF59E0B) : const Color(0xFF6366F1));
+              
+              final itemBgColor = isDark 
+                  ? accentColor.withOpacity(0.12)
+                  : (isUrgent 
+                      ? const Color(0xFFFEF2F2) 
+                      : (isToday ? const Color(0xFFFFFBEB) : const Color(0xFFF5F3FF)));
+
+              final timeText = _getMeetingReminderTime(m.scheduledAt);
+
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: isDark ? AppTheme.bgBaseDark : AppTheme.bgBase,
+                  color: itemBgColor,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppTheme.borderOf(context)),
+                  border: Border.all(
+                    color: isDark ? accentColor.withOpacity(0.2) : accentColor.withOpacity(0.15),
+                  ),
                 ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
+                child: IntrinsicHeight(
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 5,
+                        decoration: BoxDecoration(
+                          color: accentColor,
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(10),
+                            bottomLeft: Radius.circular(10),
+                          ),
+                        ),
                       ),
-                      child: const Icon(Icons.videocam_outlined, color: AppTheme.primary, size: 18),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(m.title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textPrimaryOf(context))),
-                          Text('${m.meetingType} • ${DateFormat('dd MMM, hh:mm a').format(m.scheduledAt)}',
-                              style: TextStyle(fontSize: 10, color: AppTheme.textSecondaryOf(context))),
-                        ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      m.title, 
+                                      style: TextStyle(
+                                        fontSize: 13, 
+                                        fontWeight: FontWeight.w700, 
+                                        color: AppTheme.textPrimaryOf(context),
+                                      ),
+                                    ),
+                                  ),
+                                  if (isUrgent) ...[
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      margin: const EdgeInsets.only(right: 8),
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFFEF4444),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(
+                                    m.meetingMode == 'online' ? Icons.videocam_outlined : Icons.place_outlined, 
+                                    size: 13, 
+                                    color: AppTheme.textMutedOf(context),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      m.meetingMode == 'online' 
+                                          ? '${m.meetingType} • Online'
+                                          : '${m.meetingType} • ${m.location ?? "In Person"}',
+                                      style: TextStyle(
+                                        fontSize: 10.5, 
+                                        color: AppTheme.textSecondaryOf(context),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppTheme.success.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(4),
+                      const SizedBox(width: 12),
+                      Container(
+                        margin: const EdgeInsets.only(right: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: accentColor,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          timeText,
+                          style: const TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
-                      child: Text(m.status.toUpperCase(), style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: AppTheme.success)),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               );
             }).toList(),

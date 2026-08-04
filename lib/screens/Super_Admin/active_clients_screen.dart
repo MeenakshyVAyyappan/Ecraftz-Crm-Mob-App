@@ -9,6 +9,10 @@ import '../../widgets/app_drawer.dart';
 import '../../widgets/app_refresh_button.dart';
 import '../../widgets/branch_switcher.dart';
 import '../../models/client_model.dart';
+import '../../blocs/billing/billing_bloc.dart';
+import '../../models/billing_model.dart';
+import '../../services/invoice_pdf_generator.dart';
+import 'create_invoices_screen.dart';
 import '../../blocs/client/client_bloc.dart';
 import '../../blocs/branch/branch_cubit.dart';
 import '../../theme/app_theme.dart';
@@ -154,11 +158,21 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
   }
 
   void _showInvoice(ActiveClient client) {
+    final profile = context.read<BillingBloc>().state.gstProfile;
+    final branchState = context.read<BranchCubit>().state;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _InvoiceSheet(client: client),
+      builder: (_) => InvoiceFormModal(
+        prefilledClient: client,
+        gstProfile: profile,
+        onSave: (inv) {
+          context.read<BillingBloc>().add(AddInvoiceEvent(inv, branchState: branchState));
+          InvoicePdfGenerator.printInvoice(inv, profile);
+        },
+      ),
     );
   }
 
@@ -968,7 +982,7 @@ class _ClientRow extends StatelessWidget {
                     const SizedBox(width: 8),
                     _ActionBtn(
                       icon: Icons.receipt_long_outlined,
-                      label: 'Invoice',
+                      label: 'Create Invoice',
                       onTap: onInvoice,
                       color: const Color(0xFF00BCD4),
                     ),
@@ -1064,7 +1078,7 @@ class _ClientRow extends StatelessWidget {
                 const SizedBox(width: 6),
                 _ActionBtn(
                   icon: Icons.receipt_long_outlined,
-                  label: 'Invoice',
+                  label: 'Create Invoice',
                   onTap: onInvoice,
                   color: const Color(0xFF00BCD4),
                 ),

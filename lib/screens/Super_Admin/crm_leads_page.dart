@@ -14,6 +14,7 @@ import '../../blocs/branch/branch_cubit.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
 import '../../services/lead_import_service.dart';
+import 'manage_sources_modal.dart';
 
 Future<void> _launchUrl(Uri uri, BuildContext context, {String failureMessage = 'Could not open link'}) async {
   try {
@@ -107,6 +108,7 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
   late TabController _tabController;
   bool _isKanban = true;
   String _searchQuery = '';
+  String? _selectedSourceFilter;
   final TextEditingController _searchController = TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final ScrollController _kanbanScrollController = ScrollController();
@@ -159,9 +161,13 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
   }
 
   List<Lead> _filteredLeads(List<Lead> leads) {
-    if (_searchQuery.isEmpty) return leads;
+    List<Lead> res = leads;
+    if (_selectedSourceFilter != null) {
+      res = res.where((l) => l.source.trim().toLowerCase() == _selectedSourceFilter!.trim().toLowerCase()).toList();
+    }
+    if (_searchQuery.isEmpty) return res;
     final q = _searchQuery.toLowerCase();
-    return leads.where((l) =>
+    return res.where((l) =>
       l.fullName.toLowerCase().contains(q) ||
       l.email.toLowerCase().contains(q) ||
       l.companyName.toLowerCase().contains(q)).toList();
@@ -209,6 +215,21 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
           } else {
             context.read<LeadBloc>().add(AddLeadEvent(lead));
           }
+        },
+      ),
+    );
+  }
+
+  void _openManageSourcesModal(BuildContext context, List<Lead> allLeads) {
+    showDialog(
+      context: context,
+      builder: (_) => ManageSourcesModal(
+        allLeads: allLeads,
+        activeFilter: _selectedSourceFilter,
+        onFilterChanged: (newFilter) {
+          setState(() {
+            _selectedSourceFilter = newFilter;
+          });
         },
       ),
     );
@@ -609,80 +630,171 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
                   tooltip: 'Delete Selected',
                 ),
               ]
-            : [
-                // Branch switcher
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: BranchSwitcher(compact: true),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.file_upload_outlined,
-                      color: Color(0xFF10B981)),
-                  onPressed: _handleExcelImport,
-                  tooltip: 'Import Leads from Excel',
-                ),
-                AppRefreshButton(
-                  onRefresh: () async {
-                    context.read<LeadBloc>().add(
-                          LoadLeadsEvent(
-                              branchState: context.read<BranchCubit>().state),
-                        );
-                    await Future.delayed(const Duration(milliseconds: 600));
-                  },
-                ),
-                const SizedBox(width: 4),
-                IconButton(
-                  icon: Icon(
-                    _isKanban ? Icons.view_list_rounded : Icons.view_kanban_rounded,
-                    color: const Color(0xFF00BCD4),
-                  ),
-                  onPressed: () => setState(() => _isKanban = !_isKanban),
-                  tooltip: _isKanban ? 'List View' : 'Kanban View',
-                ),
-                BlocBuilder<ThemeBloc, ThemeState>(
-                  builder: (context, themeState) {
-                    final isDarkTheme = themeState.themeMode == ThemeMode.dark;
-                    return IconButton(
+            : (isWide
+                ? [
+                    // Show all inline for wide screens
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: BranchSwitcher(compact: true),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.file_upload_outlined,
+                          color: Color(0xFF10B981)),
+                      onPressed: _handleExcelImport,
+                      tooltip: 'Import Leads from Excel',
+                    ),
+                    AppRefreshButton(
+                      onRefresh: () async {
+                        context.read<LeadBloc>().add(
+                              LoadLeadsEvent(
+                                  branchState: context.read<BranchCubit>().state),
+                            );
+                        await Future.delayed(const Duration(milliseconds: 600));
+                      },
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
                       icon: Icon(
-                        isDarkTheme
-                            ? Icons.light_mode_rounded
-                            : Icons.dark_mode_rounded,
-                        color:
-                            isDarkTheme ? Colors.white : const Color(0xFF374151),
+                        _isKanban ? Icons.view_list_rounded : Icons.view_kanban_rounded,
+                        color: const Color(0xFF00BCD4),
+                      ),
+                      onPressed: () => setState(() => _isKanban = !_isKanban),
+                      tooltip: _isKanban ? 'List View' : 'Kanban View',
+                    ),
+                    BlocBuilder<ThemeBloc, ThemeState>(
+                      builder: (context, themeState) {
+                        final isDarkTheme = themeState.themeMode == ThemeMode.dark;
+                        return IconButton(
+                          icon: Icon(
+                            isDarkTheme
+                                ? Icons.light_mode_rounded
+                                : Icons.dark_mode_rounded,
+                            color:
+                                isDarkTheme ? Colors.white : const Color(0xFF374151),
+                          ),
+                          onPressed: () {
+                            context.read<ThemeBloc>().add(ToggleThemeEvent());
+                          },
+                        );
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.track_changes_outlined,
+                        color: Color(0xFF00BCD4),
                       ),
                       onPressed: () {
-                        context.read<ThemeBloc>().add(ToggleThemeEvent());
+                        final allLeads = context.read<LeadBloc>().state.leads;
+                        _openManageSourcesModal(context, allLeads);
                       },
-                    );
-                  },
-                ),
-                if (isWide)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ElevatedButton.icon(
-                      onPressed: () => _showAddLeadDialog(),
-                      icon: const Icon(Icons.add, size: 16),
-                      label: const Text('Add Lead'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00BCD4),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
+                      tooltip: 'Acquisition Sources',
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ElevatedButton.icon(
+                        onPressed: () => _showAddLeadDialog(),
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Add Lead'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00BCD4),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 8),
+                        ),
                       ),
                     ),
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: IconButton(
-                      icon: const Icon(Icons.add_circle,
-                          color: Color(0xFF00BCD4), size: 28),
-                      onPressed: () => _showAddLeadDialog(),
+                  ]
+                : [
+                    // Group actions into a compact list on mobile/tablet to avoid overflow
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: BranchSwitcher(compact: true),
                     ),
-                  ),
-              ],
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: IconButton(
+                        icon: const Icon(Icons.add_circle_outline_rounded,
+                            color: Color(0xFF00BCD4), size: 24),
+                        onPressed: () => _showAddLeadDialog(),
+                        tooltip: 'Add Lead',
+                      ),
+                    ),
+                    PopupMenuButton<String>(
+                      icon: Icon(Icons.more_vert_rounded, color: isDark ? Colors.white : const Color(0xFF374151)),
+                      color: isDark ? AppTheme.bgCardDark : Colors.white,
+                      onSelected: (val) async {
+                        if (val == 'import') {
+                          _handleExcelImport();
+                        } else if (val == 'sources') {
+                          final allLeads = context.read<LeadBloc>().state.leads;
+                          _openManageSourcesModal(context, allLeads);
+                        } else if (val == 'toggle_view') {
+                          setState(() => _isKanban = !_isKanban);
+                        } else if (val == 'toggle_theme') {
+                          context.read<ThemeBloc>().add(ToggleThemeEvent());
+                        } else if (val == 'refresh') {
+                          context.read<LeadBloc>().add(
+                                LoadLeadsEvent(
+                                    branchState: context.read<BranchCubit>().state),
+                              );
+                        }
+                      },
+                      itemBuilder: (ctx) => [
+                        PopupMenuItem(
+                          value: 'refresh',
+                          child: Row(
+                            children: [
+                              Icon(Icons.refresh, size: 18, color: _textSecondary),
+                              const SizedBox(width: 8),
+                              Text('Refresh Leads', style: TextStyle(color: _textPrimary, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'toggle_view',
+                          child: Row(
+                            children: [
+                              Icon(_isKanban ? Icons.view_list_rounded : Icons.view_kanban_rounded, size: 18, color: _textSecondary),
+                              const SizedBox(width: 8),
+                              Text(_isKanban ? 'List View' : 'Kanban View', style: TextStyle(color: _textPrimary, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'sources',
+                          child: Row(
+                            children: [
+                              const Icon(Icons.track_changes_outlined, size: 18, color: Color(0xFF00BCD4)),
+                              const SizedBox(width: 8),
+                              Text('Manage Sources', style: TextStyle(color: _textPrimary, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'import',
+                          child: Row(
+                            children: [
+                              const Icon(Icons.file_upload_outlined, size: 18, color: Color(0xFF10B981)),
+                              const SizedBox(width: 8),
+                              Text('Import from Excel', style: TextStyle(color: _textPrimary, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'toggle_theme',
+                          child: Row(
+                            children: [
+                              Icon(isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded, size: 18, color: _textSecondary),
+                              const SizedBox(width: 8),
+                              Text(isDark ? 'Light Theme' : 'Dark Theme', style: TextStyle(color: _textPrimary, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ]),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(height: 1, color: _border),
@@ -721,6 +833,19 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
                           Text(
                             _isKanban ? 'Kanban View' : 'List View',
                             style: TextStyle(color: _textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.track_changes_outlined,
+                              color: Color(0xFF00BCD4),
+                              size: 20,
+                            ),
+                            onPressed: () {
+                              final allLeads = context.read<LeadBloc>().state.leads;
+                              _openManageSourcesModal(context, allLeads);
+                            },
+                            tooltip: 'Acquisition Sources',
                           ),
                         ],
                       ),
@@ -775,6 +900,32 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
                   ),
                 ),
               ),
+              if (_selectedSourceFilter != null)
+                Container(
+                  color: Theme.of(context).colorScheme.surface,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Filtered by Source: ',
+                        style: TextStyle(fontSize: 12, color: _textSecondary),
+                      ),
+                      const SizedBox(width: 6),
+                      Chip(
+                        label: Text(
+                          _selectedSourceFilter!,
+                          style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                        backgroundColor: const Color(0xFF00BCD4),
+                        deleteIcon: const Icon(Icons.cancel, size: 14, color: Colors.white),
+                        onDeleted: () => setState(() => _selectedSourceFilter = null),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      ),
+                    ],
+                  ),
+                ),
               // Stats strip
               _buildStatsStrip(filtered),
               // Content
@@ -1541,7 +1692,7 @@ class _LeadDetailSheet extends StatelessWidget {
                     title: 'Pipeline',
                     icon: Icons.bar_chart_outlined,
                     children: [
-                      _DetailRow(Icons.source_outlined, 'Source', lead.source.label),
+                      _DetailRow(Icons.source_outlined, 'Source', lead.source),
                       _DetailRow(Icons.currency_rupee, 'Value', lead.value > 0 ? '₹${lead.value.toStringAsFixed(0)}' : 'Not set'),
                     ],
                   ),
@@ -1692,7 +1843,9 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
   late TextEditingController _firstName, _lastName, _email,
       _company, _jobTitle, _phone, _value;
   late LeadStatus _status;
-  late AcquisitionSource _source;
+  late String _source;
+  List<String> _dynamicSources = [];
+  bool _loadingSources = true;
 
   @override
   void initState() {
@@ -1706,7 +1859,21 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
     _phone = TextEditingController(text: e?.phone ?? '');
     _value = TextEditingController(text: e?.value.toString() ?? '0');
     _status = e?.status ?? LeadStatus.newLead;
-    _source = e?.source ?? AcquisitionSource.website;
+    _source = e?.source ?? 'Website';
+    _loadDynamicSources();
+  }
+
+  Future<void> _loadDynamicSources() async {
+    final list = await ManageSourcesModal.getSavedSources();
+    if (mounted) {
+      setState(() {
+        _dynamicSources = list;
+        if (!_dynamicSources.any((s) => s.toLowerCase() == _source.toLowerCase())) {
+          _dynamicSources.insert(0, _source);
+        }
+        _loadingSources = false;
+      });
+    }
   }
 
   @override
@@ -1861,11 +2028,37 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Acquisition Source',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: textPrimary)),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Acquisition Source',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: textPrimary)),
+                              GestureDetector(
+                                onTap: () async {
+                                  final allLeads = context.read<LeadBloc>().state.leads;
+                                  await showDialog(
+                                    context: context,
+                                    builder: (_) => ManageSourcesModal(
+                                      allLeads: allLeads,
+                                      onFilterChanged: (_) {}, // no-op in edit dialog context
+                                    ),
+                                  );
+                                  _loadDynamicSources();
+                                },
+                                child: const Text(
+                                  'Manage',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF00BCD4),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                           const SizedBox(height: 6),
                           Container(
                             padding:
@@ -1875,21 +2068,35 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: DropdownButtonHideUnderline(
-                              child: DropdownButton<AcquisitionSource>(
-                                value: _source,
-                                isExpanded: true,
-                                dropdownColor: bg,
-                                style: TextStyle(
-                                    fontSize: 13, color: textPrimary),
-                                items: AcquisitionSource.values.map((s) {
-                                  return DropdownMenuItem(
-                                    value: s,
-                                    child: Text(s.label,
-                                        style: TextStyle(fontSize: 12, color: textPrimary)),
-                                  );
-                                }).toList(),
-                                onChanged: (v) => setState(() => _source = v!),
-                              ),
+                              child: _loadingSources
+                                  ? const SizedBox(
+                                      height: 38,
+                                      child: Center(
+                                        child: SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00BCD4)),
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  : DropdownButton<String>(
+                                      value: _source,
+                                      isExpanded: true,
+                                      dropdownColor: bg,
+                                      style: TextStyle(
+                                          fontSize: 13, color: textPrimary),
+                                      items: _dynamicSources.map((s) {
+                                        return DropdownMenuItem(
+                                          value: s,
+                                          child: Text(s,
+                                              style: TextStyle(fontSize: 12, color: textPrimary)),
+                                        );
+                                      }).toList(),
+                                      onChanged: (v) => setState(() => _source = v!),
+                                    ),
                             ),
                           ),
                         ],
