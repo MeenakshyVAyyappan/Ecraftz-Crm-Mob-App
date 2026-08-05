@@ -2180,16 +2180,9 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
       final name = match['name'];
       if (name != null && name.isNotEmpty && !isUuid(name)) return name;
     }
-    if (_bdeNameMap.containsKey(lead.createdBy)) {
-      final name = _bdeNameMap[lead.createdBy];
-      if (name != null && name.isNotEmpty && !isUuid(name)) return name;
-    }
-    if (_bdeNameMap.containsKey(lead.assignedTo)) {
-      final name = _bdeNameMap[lead.assignedTo];
-      if (name != null && name.isNotEmpty && !isUuid(name)) return name;
-    }
     return 'Keerthi';
   }
+
 
 
   @override
