@@ -219,7 +219,11 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
       if (mounted) {
         setState(() => _loadingBdes = false);
       }
+    }
+  }
+
   void _checkNotificationTapPayload(List<Lead> leads) {
+
     final payload = NotificationService.notificationTapPayload.value;
     if (payload != null && mounted) {
       final leadId = payload['lead_id']?.toString();
