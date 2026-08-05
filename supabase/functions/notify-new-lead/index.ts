@@ -138,8 +138,10 @@ Deno.serve(async (req: Request) => {
       } catch (_) {}
     }
 
+    const record = body.record || {};
     const leadName = record.name || record.lead_name || record.company || "New Lead";
-    const addedBy = record.created_by_name || record.bde || record.assigned_to || "Keerthi";
+    const addedBy = record.created_by_name || record.bde || record.assigned_to || "Team Member";
+
 
     const title = `🆕 New Lead: ${leadName}`;
     const notifBody = `Added by ${addedBy}`;
