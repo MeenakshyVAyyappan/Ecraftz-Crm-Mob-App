@@ -219,11 +219,45 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
       if (mounted) {
         setState(() => _loadingBdes = false);
       }
+  void _checkNotificationTapPayload(List<Lead> leads) {
+    final payload = NotificationService.notificationTapPayload.value;
+    if (payload != null && mounted) {
+      final leadId = payload['lead_id']?.toString();
+      final leadName = payload['lead_name']?.toString();
+
+      Lead? targetLead;
+      if (leadId != null && leadId.isNotEmpty) {
+        for (final l in leads) {
+          if (l.id == leadId) {
+            targetLead = l;
+            break;
+          }
+        }
+      }
+      if (targetLead == null && leadName != null && leadName.isNotEmpty) {
+        for (final l in leads) {
+          if (l.fullName.toLowerCase().contains(leadName.toLowerCase())) {
+            targetLead = l;
+            break;
+          }
+        }
+      }
+      targetLead ??= leads.isNotEmpty ? leads.first : null;
+
+      if (targetLead != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && NotificationService.notificationTapPayload.value != null) {
+            NotificationService.notificationTapPayload.value = null;
+            _showAddLeadDialog(existing: targetLead);
+          }
+        });
+      }
     }
   }
 
   @override
   void dispose() {
+
     _cancelScrollTimer();
     _kanbanScrollController.dispose();
     _tabController.dispose();
@@ -836,7 +870,11 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
         child: BlocBuilder<LeadBloc, LeadState>(
         builder: (context, state) {
           final leads = state.leads;
+          if (leads.isNotEmpty) {
+            _checkNotificationTapPayload(leads);
+          }
           final filtered = _filteredLeads(leads);
+
           return Column(
             children: [
               if (!widget.showAppBar)
@@ -2122,7 +2160,23 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
     Navigator.pop(context);
   }
 
+  String _getCreatorName(Lead lead) {
+    if (lead.createdByName != null && lead.createdByName!.isNotEmpty) {
+      return lead.createdByName!;
+    }
+    if (lead.createdBy != null && _bdes.any((b) => b['id'] == lead.createdBy)) {
+      final match = _bdes.firstWhere((b) => b['id'] == lead.createdBy);
+      return match['name'] ?? 'Team Member';
+    }
+    if (lead.assignedTo != null && _bdes.any((b) => b['id'] == lead.assignedTo)) {
+      final match = _bdes.firstWhere((b) => b['id'] == lead.assignedTo);
+      return match['name'] ?? 'Team Member';
+    }
+    return 'Keerthi';
+  }
+
   @override
+
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -2165,6 +2219,41 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
                   isEdit ? 'Update lead details.' : 'Fill in the details to add a new lead to your CRM.',
                   style: TextStyle(fontSize: 12, color: textSecondary),
                 ),
+                if (isEdit) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00BCD4).withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF00BCD4).withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.person_pin_rounded, size: 18, color: Color(0xFF00BCD4)),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Lead Created By: ',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: textPrimary,
+                          ),
+                        ),
+                        Text(
+                          _getCreatorName(widget.existing!),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF00BCD4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 20),
                 _sectionHeader(Icons.person_outline, 'CONTACT INFORMATION'),
                 const SizedBox(height: 12),

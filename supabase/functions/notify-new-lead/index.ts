@@ -138,22 +138,35 @@ Deno.serve(async (req: Request) => {
       } catch (_) {}
     }
 
-    const record = body.record || {};
-    const leadName = record.name || record.lead_name || record.company || "New Lead";
-    const addedBy = record.created_by_name || record.bde || record.assigned_to || "Team Member";
-
-
-    const title = `🆕 New Lead: ${leadName}`;
-    const notifBody = `Added by ${addedBy}`;
-
-    console.log(`Processing lead notification: "${title}" - "${notifBody}"`);
-
-
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || DEFAULT_SUPABASE_URL;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || 
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJuanZ1Z3h2Y29xZ2Z2dnZ3cHpjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MzMxMDg1MywiZXhwIjoyMDk4ODg2ODUzfQ.pS2JYB0U5HcuJbbEKwNVx3_5FyTnqhKy_beFoYlxbLI";
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const record = body.record || {};
+    const leadName = record.name || record.lead_name || (record.first_name ? `${record.first_name} ${record.last_name || ''}`.trim() : (record.company || "New Lead"));
+    
+    // Resolve creator's actual full name from profiles
+    let addedBy = record.created_by_name || record.bde || record.assigned_to;
+    const creatorId = record.created_by || record.user_id || record.assigned_to;
+    if (creatorId && typeof creatorId === 'string' && creatorId.includes('-')) {
+      const { data: creatorProfile } = await supabase
+        .from("profiles")
+        .select("full_name, name, email")
+        .eq("id", creatorId)
+        .maybeSingle();
+      if (creatorProfile) {
+        addedBy = creatorProfile.full_name || creatorProfile.name || creatorProfile.email;
+      }
+    }
+    addedBy = addedBy || "Team Member";
+
+    const title = `🆕 New Lead Created`;
+    const notifBody = `${leadName} was created by ${addedBy}`;
+
+    console.log(`Processing lead notification: "${title}" - "${notifBody}"`);
+
 
     // Fetch all device tokens (Super Admin / Admin)
     const { data: tokens, error } = await supabase
@@ -184,6 +197,9 @@ Deno.serve(async (req: Request) => {
         sendFcmNotification(accessToken, row.fcm_token, title, notifBody, {
           type: "new_lead",
           lead_id: record.id?.toString() || "",
+          lead_name: leadName,
+          created_by: addedBy,
+
         })
       )
     );

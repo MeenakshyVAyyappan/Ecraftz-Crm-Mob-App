@@ -90,6 +90,8 @@ class Lead {
   double? cpr;
   double? cpa;
   String? remarks;
+  String? createdBy;
+  String? createdByName;
 
   Lead({
     required this.id,
@@ -111,7 +113,10 @@ class Lead {
     this.cpr,
     this.cpa,
     this.remarks,
+    this.createdBy,
+    this.createdByName,
   });
+
 
   String get fullName => '$firstName $lastName'.trim();
   String get initials {
@@ -171,7 +176,10 @@ class Lead {
       cpr: (json['cpr'] is num) ? (json['cpr'] as num).toDouble() : double.tryParse(json['cpr']?.toString() ?? ''),
       cpa: (json['cpa'] is num) ? (json['cpa'] as num).toDouble() : double.tryParse(json['cpa']?.toString() ?? ''),
       remarks: json['remarks']?.toString(),
+      createdBy: json['created_by']?.toString() ?? json['user_id']?.toString(),
+      createdByName: json['created_by_name']?.toString() ?? json['bde']?.toString(),
     );
+
   }
 
   Map<String, dynamic> toJson() {
