@@ -1,9 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/dashboard_models.dart';
 import '../../services/supabase_service.dart';
 import '../branch/branch_cubit.dart';
+
+bool _isSuperAdminRole(String? role) {
+  if (role == null) return false;
+  final r = role.trim().toLowerCase();
+  return r == 'super_admin' ||
+      r == 'superadmin' ||
+      r == 'super admin' ||
+      r == 'admin' ||
+      r == 'administrator';
+}
 
 abstract class DashboardEvent extends Equatable {
   const DashboardEvent();
@@ -115,7 +126,26 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         final activities = activitiesRes as List;
 
         // 5. Fetch Leads
+        final currentUser = _client.auth.currentUser;
+        String? userRole;
+        if (currentUser != null) {
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            userRole = prefs.getString('user_role');
+          } catch (_) {}
+          if (userRole == null || userRole.isEmpty) {
+            try {
+              final prof = await _client.from('profiles').select('role').eq('id', currentUser.id).maybeSingle();
+              userRole = prof?['role']?.toString();
+            } catch (_) {}
+          }
+        }
+        final isSuperAdmin = _isSuperAdminRole(userRole);
+
         var leadsQuery = _client.from('leads').select().isFilter('deleted_at', null);
+        if (!isSuperAdmin && currentUser != null) {
+          leadsQuery = leadsQuery.or('user_id.eq.${currentUser.id},assigned_to.eq.${currentUser.id}');
+        }
         if (start != null && end != null) {
           leadsQuery = leadsQuery
               .gte('created_at', start.toIso8601String())
@@ -130,6 +160,9 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           leads = res as List;
         } catch (_) {
           var fallback = _client.from('leads').select().isFilter('deleted_at', null);
+          if (!isSuperAdmin && currentUser != null) {
+            fallback = fallback.or('user_id.eq.${currentUser.id},assigned_to.eq.${currentUser.id}');
+          }
           if (start != null && end != null) {
             fallback = fallback
                 .gte('created_at', start.toIso8601String())
@@ -139,6 +172,18 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
             final res = await fallback;
             leads = res as List;
           } catch (_) {}
+        }
+
+        if (!isSuperAdmin && currentUser != null) {
+          final uid = currentUser.id;
+          leads = leads.where((l) {
+            if (l is Map) {
+              final cb = l['created_by']?.toString() ?? l['user_id']?.toString();
+              final at = l['assigned_to']?.toString();
+              return cb == uid || at == uid;
+            }
+            return true;
+          }).toList();
         }
 
         // 6. Fetch Proposals
@@ -188,8 +233,6 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
 
         // --- Aggregations & Calculations ---
         
-        // Total Invoiced Amount (grand_total of all non-cancelled invoices)
-        double totalInvoiced = 0.0;
         double unpaidRev = 0.0;
         for (final inv in invoices) {
           final amt = (inv['grand_total'] is num)
@@ -204,7 +247,6 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           final status = inv['status']?.toString().toLowerCase() ?? '';
 
           if (status != 'cancelled') {
-            totalInvoiced += amt;
             unpaidRev += (status == 'paid' ? 0.0 : (dueAmt > 0 ? dueAmt : (amt - paidAmt)));
           }
         }

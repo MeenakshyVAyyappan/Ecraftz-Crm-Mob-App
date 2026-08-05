@@ -120,8 +120,26 @@ class _AuthWrapperState extends State<AuthWrapper> {
       },
       builder: (context, state) {
         if (state is AuthInitial || state is AuthLoading) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+          return Scaffold(
+            backgroundColor: const Color(0xFF0D1B2A),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/splashscreenlogo.png',
+                    width: 160,
+                    height: 160,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(height: 32),
+                  const CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2.5,
+                  ),
+                ],
+              ),
+            ),
           );
         } else if (state is Authenticated) {
           if (state.role == 'employee') {

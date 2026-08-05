@@ -204,6 +204,9 @@ class Lead {
     if (branchId != null && branchId!.isNotEmpty) {
       map['branch_id'] = branchId;
     }
+    if (createdBy != null && createdBy!.isNotEmpty) {
+      map['user_id'] = createdBy;
+    }
     return map;
   }
 }
@@ -248,36 +251,6 @@ String _leadStatusToString(LeadStatus status) {
     case LeadStatus.awaitingPayment: return 'awaiting_payment';
     case LeadStatus.convertedClient: return 'converted';
     case LeadStatus.closedLost: return 'closed_lost';
-  }
-}
-
-AcquisitionSource _parseSource(String? srcStr) {
-  if (srcStr == null) return AcquisitionSource.website;
-  switch (srcStr.toLowerCase()) {
-    case 'website': return AcquisitionSource.website;
-    case 'referral': return AcquisitionSource.referral;
-    case 'socialmedia':
-    case 'social_media':
-    case 'social media':
-      return AcquisitionSource.socialMedia;
-    case 'coldcall':
-    case 'cold_call':
-    case 'cold call':
-      return AcquisitionSource.coldCall;
-    case 'email': return AcquisitionSource.email;
-    case 'other': return AcquisitionSource.other;
-    default: return AcquisitionSource.website;
-  }
-}
-
-String _sourceToString(AcquisitionSource source) {
-  switch (source) {
-    case AcquisitionSource.website: return 'website';
-    case AcquisitionSource.referral: return 'referral';
-    case AcquisitionSource.socialMedia: return 'social_media';
-    case AcquisitionSource.coldCall: return 'cold_call';
-    case AcquisitionSource.email: return 'email';
-    case AcquisitionSource.other: return 'other';
   }
 }
 

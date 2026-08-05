@@ -47,6 +47,9 @@ flutter:
     - assets/app_icon_master.png
     - assets/app_icon_foreground.png
     - assets/splash_3d_a12.png
+    - assets/logosplash.png
+    - assets/splashscreenlogo.png
+    - assets/splash_a12_safe.png
 
 flutter_launcher_icons:
   android: true
@@ -57,15 +60,15 @@ flutter_launcher_icons:
   remove_alpha_ios: true
 
 flutter_native_splash:
-  color: "#FFFFFF"
-  image: "assets/splash_3d_a12.png"
+  color: "#0D1B2A"
+  image: "assets/splashscreenlogo.png"
   color_dark: "#0D1B2A"
-  image_dark: "assets/splash_3d_a12.png"
+  image_dark: "assets/splashscreenlogo.png"
   android_12:
-    color: "#FFFFFF"
-    image: "assets/splash_3d_a12.png"
+    color: "#0D1B2A"
+    image: "assets/splash_a12_safe.png"
     color_dark: "#0D1B2A"
-    image_dark: "assets/splash_3d_a12.png"
+    image_dark: "assets/splash_a12_safe.png"
 
 
 

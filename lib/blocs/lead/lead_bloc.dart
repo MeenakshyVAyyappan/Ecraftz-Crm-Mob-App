@@ -1,9 +1,20 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/lead_model.dart';
 import '../../services/supabase_service.dart';
 import '../branch/branch_cubit.dart';
+
+bool _isSuperAdminRole(String? role) {
+  if (role == null) return false;
+  final r = role.trim().toLowerCase();
+  return r == 'super_admin' ||
+      r == 'superadmin' ||
+      r == 'super admin' ||
+      r == 'admin' ||
+      r == 'administrator';
+}
 
 abstract class LeadEvent extends Equatable {
   const LeadEvent();
@@ -71,13 +82,37 @@ class LeadState extends Equatable {
 class LeadBloc extends Bloc<LeadEvent, LeadState> {
   final _client = SupabaseService.client;
 
+  Future<bool> _checkIsSuperAdmin() async {
+    final currentUser = _client.auth.currentUser;
+    if (currentUser == null) return false;
+    String? role;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      role = prefs.getString('user_role');
+    } catch (_) {}
+    if (role == null || role.isEmpty) {
+      try {
+        final prof = await _client.from('profiles').select('role').eq('id', currentUser.id).maybeSingle();
+        role = prof?['role']?.toString();
+      } catch (_) {}
+    }
+    return _isSuperAdminRole(role);
+  }
+
   LeadBloc() : super(const LeadState()) {
     on<LoadLeadsEvent>((event, emit) async {
       try {
+        final currentUser = _client.auth.currentUser;
+        final isSuperAdmin = await _checkIsSuperAdmin();
+
         var filterQuery = _client
             .from('leads')
             .select()
             .isFilter('deleted_at', null);
+
+        if (!isSuperAdmin && currentUser != null) {
+          filterQuery = filterQuery.or('user_id.eq.${currentUser.id},assigned_to.eq.${currentUser.id}');
+        }
 
         final branchState = event.branchState;
         if (branchState != null &&
@@ -90,6 +125,12 @@ class LeadBloc extends Bloc<LeadEvent, LeadState> {
 
         final res = await filterQuery.order('created_at', ascending: false);
         var list = (res as List).map((x) => Lead.fromJson(x)).toList();
+
+        // Secondary in-memory filtering fallback for non-superadmin users
+        if (!isSuperAdmin && currentUser != null) {
+          final uid = currentUser.id;
+          list = list.where((l) => l.createdBy == uid || l.assignedTo == uid).toList();
+        }
 
         // Secondary in-memory filtering fallback for branch matching
         if (branchState != null &&
@@ -116,12 +157,25 @@ class LeadBloc extends Bloc<LeadEvent, LeadState> {
         emit(LeadState(leads: list));
       } catch (e) {
         try {
-          final res = await _client
+          final currentUser = _client.auth.currentUser;
+          final isSuperAdmin = await _checkIsSuperAdmin();
+
+          var filterQuery = _client
               .from('leads')
               .select()
-              .isFilter('deleted_at', null)
-              .order('created_at', ascending: false);
+              .isFilter('deleted_at', null);
+
+          if (!isSuperAdmin && currentUser != null) {
+            filterQuery = filterQuery.or('user_id.eq.${currentUser.id},assigned_to.eq.${currentUser.id}');
+          }
+
+          final res = await filterQuery.order('created_at', ascending: false);
           var list = (res as List).map((x) => Lead.fromJson(x)).toList();
+
+          if (!isSuperAdmin && currentUser != null) {
+            final uid = currentUser.id;
+            list = list.where((l) => l.createdBy == uid || l.assignedTo == uid).toList();
+          }
 
           final branchState = event.branchState;
           if (branchState != null &&
@@ -155,22 +209,35 @@ class LeadBloc extends Bloc<LeadEvent, LeadState> {
       try {
         final Map<String, dynamic> data = event.lead.toJson();
         data.remove('id'); // let database generate UUID
+        data.remove('created_by');
+        data.remove('created_by_name');
+        final currentUser = _client.auth.currentUser;
+        if (currentUser != null) {
+          if (data['user_id'] == null || data['user_id'].toString().isEmpty) {
+            data['user_id'] = currentUser.id;
+          }
+        }
         await _client.from('leads').insert(data);
-        add(LoadLeadsEvent());
-      } catch (e) {
-        // handle error
+        add(const LoadLeadsEvent());
+      } catch (e, stack) {
+        debugPrint('Error inserting lead in AddLeadEvent: $e\n$stack');
+        add(const LoadLeadsEvent());
       }
     });
 
     on<UpdateLeadEvent>((event, emit) async {
       try {
+        final Map<String, dynamic> data = event.lead.toJson();
+        data.remove('created_by');
+        data.remove('created_by_name');
         await _client
             .from('leads')
-            .update(event.lead.toJson())
+            .update(data)
             .eq('id', event.lead.id);
-        add(LoadLeadsEvent());
-      } catch (e) {
-        // handle error
+        add(const LoadLeadsEvent());
+      } catch (e, stack) {
+        debugPrint('Error updating lead in UpdateLeadEvent: $e\n$stack');
+        add(const LoadLeadsEvent());
       }
     });
 
@@ -179,7 +246,7 @@ class LeadBloc extends Bloc<LeadEvent, LeadState> {
         await _client.from('leads').update({
           'deleted_at': DateTime.now().toUtc().toIso8601String(),
         }).eq('id', event.id);
-        add(LoadLeadsEvent());
+        add(const LoadLeadsEvent());
       } catch (e) {
         // handle error
       }
@@ -204,7 +271,7 @@ class LeadBloc extends Bloc<LeadEvent, LeadState> {
           'status': event.status.dbValue,
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         }).eq('id', event.id);
-        add(LoadLeadsEvent());
+        add(const LoadLeadsEvent());
       } catch (e) {
         // handle error
       }

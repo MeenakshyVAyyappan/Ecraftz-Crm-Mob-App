@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:convert';
 import '../../services/supabase_service.dart';
+import '../../services/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -1641,7 +1642,6 @@ class _LeadDetailSheetState extends State<_LeadDetailSheet> {
     final bg = isDark ? AppTheme.bgCardDark : Colors.white;
     final textPrimary = AppTheme.textPrimaryOf(context);
     final textSecondary = AppTheme.textSecondaryOf(context);
-    final textMuted = AppTheme.textMutedOf(context);
     final border = AppTheme.borderOf(context);
 
     return DraggableScrollableSheet(
