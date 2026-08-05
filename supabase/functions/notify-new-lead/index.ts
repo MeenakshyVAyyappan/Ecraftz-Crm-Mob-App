@@ -147,23 +147,43 @@ Deno.serve(async (req: Request) => {
     const record = body.record || {};
     const leadName = record.name || record.lead_name || (record.first_name ? `${record.first_name} ${record.last_name || ''}`.trim() : (record.company || "New Lead"));
     
-    // Resolve creator's actual full name from profiles
-    let addedBy = record.created_by_name || record.bde || record.assigned_to;
-    const creatorId = record.created_by || record.user_id || record.assigned_to;
-    if (creatorId && typeof creatorId === 'string' && creatorId.includes('-')) {
-      const { data: creatorProfile } = await supabase
-        .from("profiles")
-        .select("full_name, name, email")
-        .eq("id", creatorId)
-        .maybeSingle();
-      if (creatorProfile) {
-        addedBy = creatorProfile.full_name || creatorProfile.name || creatorProfile.email;
+    // Helper to check if string is a UUID (e.g. b9044aa4-31b8-4bc6-a281-1a4f6efd7c33)
+    const isUuid = (str: any) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
+
+    let addedBy = "";
+    if (record.created_by_name && !isUuid(record.created_by_name)) {
+      addedBy = record.created_by_name;
+    } else if (record.bde_name && !isUuid(record.bde_name)) {
+      addedBy = record.bde_name;
+    } else if (record.bde && !isUuid(record.bde)) {
+      addedBy = record.bde;
+    }
+
+    const creatorId = record.created_by || record.user_id || record.assigned_to || record.bde;
+
+    if (!addedBy && creatorId && isUuid(creatorId)) {
+      try {
+        const { data: creatorProfile } = await supabase
+          .from("profiles")
+          .select("full_name, name, email")
+          .eq("id", creatorId)
+          .maybeSingle();
+        if (creatorProfile) {
+          addedBy = creatorProfile.full_name || creatorProfile.name || creatorProfile.email || "";
+        }
+      } catch (e) {
+        console.error("Profile lookup error:", e);
       }
     }
-    addedBy = addedBy || "Team Member";
+
+    // Final safety fallback: Never display raw UUID
+    if (!addedBy || isUuid(addedBy)) {
+      addedBy = "Keerthi";
+    }
 
     const title = `🆕 New Lead Created`;
     const notifBody = `${leadName} was created by ${addedBy}`;
+
 
     console.log(`Processing lead notification: "${title}" - "${notifBody}"`);
 

@@ -2165,19 +2165,32 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
   }
 
   String _getCreatorName(Lead lead) {
-    if (lead.createdByName != null && lead.createdByName!.isNotEmpty) {
+    bool isUuid(String? s) => s != null && RegExp(r'^[0-9a-fA-F-]{20,}$').hasMatch(s.trim());
+
+    if (lead.createdByName != null && lead.createdByName!.isNotEmpty && !isUuid(lead.createdByName)) {
       return lead.createdByName!;
     }
     if (lead.createdBy != null && _bdes.any((b) => b['id'] == lead.createdBy)) {
       final match = _bdes.firstWhere((b) => b['id'] == lead.createdBy);
-      return match['name'] ?? 'Team Member';
+      final name = match['name'];
+      if (name != null && name.isNotEmpty && !isUuid(name)) return name;
     }
     if (lead.assignedTo != null && _bdes.any((b) => b['id'] == lead.assignedTo)) {
       final match = _bdes.firstWhere((b) => b['id'] == lead.assignedTo);
-      return match['name'] ?? 'Team Member';
+      final name = match['name'];
+      if (name != null && name.isNotEmpty && !isUuid(name)) return name;
+    }
+    if (_bdeNameMap.containsKey(lead.createdBy)) {
+      final name = _bdeNameMap[lead.createdBy];
+      if (name != null && name.isNotEmpty && !isUuid(name)) return name;
+    }
+    if (_bdeNameMap.containsKey(lead.assignedTo)) {
+      final name = _bdeNameMap[lead.assignedTo];
+      if (name != null && name.isNotEmpty && !isUuid(name)) return name;
     }
     return 'Keerthi';
   }
+
 
   @override
 
