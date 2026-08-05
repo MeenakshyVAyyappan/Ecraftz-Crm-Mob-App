@@ -1,4 +1,4 @@
-﻿// Supabase Edge Function: notify-new-lead
+// Supabase Edge Function: notify-new-lead
 // Sends FCM push notification to all Super Admin devices on leads table INSERT
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -138,14 +138,14 @@ Deno.serve(async (req: Request) => {
       } catch (_) {}
     }
 
-    const record = body.record || {};
-    const leadName = record.name || record.lead_name || "New Lead";
-    const addedBy = record.created_by_name || record.assigned_to || "A team member";
+    const leadName = record.name || record.lead_name || record.company || "New Lead";
+    const addedBy = record.created_by_name || record.bde || record.assigned_to || "Keerthi";
 
-    const title = "🆕 New Lead Added";
-    const notifBody = `${leadName} was added by ${addedBy}`;
+    const title = `🆕 New Lead: ${leadName}`;
+    const notifBody = `Added by ${addedBy}`;
 
-    console.log(`Processing lead notification: "${notifBody}"`);
+    console.log(`Processing lead notification: "${title}" - "${notifBody}"`);
+
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || DEFAULT_SUPABASE_URL;

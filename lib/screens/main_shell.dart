@@ -39,6 +39,36 @@ class _MainShellState extends State<MainShell> {
   void initState() {
     super.initState();
     _registerNotificationToken();
+    NotificationService.notificationTapPayload.addListener(_onNotificationTap);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _onNotificationTap();
+    });
+  }
+
+  @override
+  void dispose() {
+    NotificationService.notificationTapPayload.removeListener(_onNotificationTap);
+    super.dispose();
+  }
+
+  void _onNotificationTap() {
+    final payload = NotificationService.notificationTapPayload.value;
+    if (payload != null && mounted) {
+      setState(() {
+        _selectedIndex = 1; // Switch to CRM Leads Page
+      });
+      final leadName = payload['lead_name'] ?? 'New Lead';
+      final createdBy = payload['created_by'] ?? 'Team Member';
+      AppSnackBar.showCustom(
+        context,
+        SnackBar(
+          content: Text('🆕 Opened Lead: $leadName (Added by $createdBy)'),
+          backgroundColor: const Color(0xFF00BCD4),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      NotificationService.notificationTapPayload.value = null;
+    }
   }
 
   Future<void> _registerNotificationToken() async {
@@ -60,6 +90,7 @@ class _MainShellState extends State<MainShell> {
       }
     }
   }
+
 
   void _onItemSelected(int index) {
     setState(() {

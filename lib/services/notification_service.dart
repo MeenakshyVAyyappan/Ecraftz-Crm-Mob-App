@@ -14,6 +14,9 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 }
 
 class NotificationService {
+  static final ValueNotifier<Map<String, dynamic>?> notificationTapPayload =
+      ValueNotifier<Map<String, dynamic>?>(null);
+
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   static final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
@@ -42,8 +45,20 @@ class NotificationService {
     });
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       debugPrint('[FCM] App opened from notification: ${message.notification?.title}');
+      _handleNotificationTap(message.data);
     });
+
+    final initialMessage = await _messaging.getInitialMessage();
+    if (initialMessage != null) {
+      debugPrint('[FCM] Terminated launch from notification: ${initialMessage.notification?.title}');
+      _handleNotificationTap(initialMessage.data);
+    }
   }
+
+  static void _handleNotificationTap(Map<String, dynamic> data) {
+    notificationTapPayload.value = data;
+  }
+
 
   static Future<void> _initLocalNotifications() async {
     const AndroidInitializationSettings androidSettings =
