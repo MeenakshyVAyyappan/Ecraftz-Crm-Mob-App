@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
 
 enum LeadStatus {
   newLead,
@@ -83,6 +84,12 @@ class Lead {
   final String? branchId;
   final String? branchName;
   final DateTime createdAt;
+  String? assignedTo;
+  String? servicesNeeded;
+  String? targetLocations;
+  double? cpr;
+  double? cpa;
+  String? remarks;
 
   Lead({
     required this.id,
@@ -98,6 +105,12 @@ class Lead {
     this.branchId,
     this.branchName,
     required this.createdAt,
+    this.assignedTo,
+    this.servicesNeeded,
+    this.targetLocations,
+    this.cpr,
+    this.cpa,
+    this.remarks,
   });
 
   String get fullName => '$firstName $lastName'.trim();
@@ -105,6 +118,36 @@ class Lead {
     final f = firstName.isNotEmpty ? firstName[0].toUpperCase() : '';
     final l = lastName.isNotEmpty ? lastName[0].toUpperCase() : '';
     return '$f$l'.isEmpty ? '?' : '$f$l';
+  }
+
+  String get remarks1 {
+    try {
+      if (remarks != null && remarks!.startsWith('{')) {
+        final Map<String, dynamic> map = Map<String, dynamic>.from(jsonDecode(remarks!));
+        return map['remarks1']?.toString() ?? '';
+      }
+    } catch (_) {}
+    return remarks ?? '';
+  }
+
+  String get remarks2 {
+    try {
+      if (remarks != null && remarks!.startsWith('{')) {
+        final Map<String, dynamic> map = Map<String, dynamic>.from(jsonDecode(remarks!));
+        return map['remarks2']?.toString() ?? '';
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  String get remarks3 {
+    try {
+      if (remarks != null && remarks!.startsWith('{')) {
+        final Map<String, dynamic> map = Map<String, dynamic>.from(jsonDecode(remarks!));
+        return map['remarks3']?.toString() ?? '';
+      }
+    } catch (_) {}
+    return '';
   }
 
   factory Lead.fromJson(Map<String, dynamic> json) {
@@ -122,6 +165,12 @@ class Lead {
       branchId: json['branch_id']?.toString(),
       branchName: json['branch_name']?.toString() ?? json['branch']?.toString(),
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'].toString()) : DateTime.now(),
+      assignedTo: json['assigned_to']?.toString(),
+      servicesNeeded: json['services_needed']?.toString(),
+      targetLocations: json['target_locations']?.toString(),
+      cpr: (json['cpr'] is num) ? (json['cpr'] as num).toDouble() : double.tryParse(json['cpr']?.toString() ?? ''),
+      cpa: (json['cpa'] is num) ? (json['cpa'] as num).toDouble() : double.tryParse(json['cpa']?.toString() ?? ''),
+      remarks: json['remarks']?.toString(),
     );
   }
 
@@ -132,12 +181,17 @@ class Lead {
       'last_name': lastName,
       'email': email,
       'company': companyName,
-      // 'job_title' is not present in the database table schema
       'phone': phone,
       'status': _leadStatusToString(status),
       'source': source,
       'value': value,
       'organization_id': '00000000-0000-0000-0000-000000000000',
+      'assigned_to': assignedTo,
+      'services_needed': servicesNeeded,
+      'target_locations': targetLocations,
+      'cpr': cpr,
+      'cpa': cpa,
+      'remarks': remarks,
     };
     if (branchId != null && branchId!.isNotEmpty) {
       map['branch_id'] = branchId;

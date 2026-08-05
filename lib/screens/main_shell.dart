@@ -20,9 +20,12 @@ import 'Super_Admin/client_feedback_screen.dart';
 import 'Super_Admin/meeting_scheduler_screen.dart';
 import 'attendance/attendance_dashboard_screen.dart';
 import 'Super_Admin/create_invoices_screen.dart';
-
+import '../services/supabase_service.dart';
+import '../services/notification_service.dart';
 
 class MainShell extends StatefulWidget {
+
+
   const MainShell({super.key});
 
   @override
@@ -32,11 +35,38 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _selectedIndex = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    _registerNotificationToken();
+  }
+
+  Future<void> _registerNotificationToken() async {
+    final user = SupabaseService.currentUser;
+    if (user != null) {
+      try {
+        final profile = await SupabaseService.client
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .maybeSingle();
+        final role = profile?['role']?.toString().toLowerCase() ?? 'super_admin';
+        await NotificationService.registerTokenForUser(
+          userId: user.id,
+          role: role,
+        );
+      } catch (e) {
+        debugPrint('[FCM] Error registering token in MainShell: $e');
+      }
+    }
+  }
+
   void _onItemSelected(int index) {
     setState(() {
       _selectedIndex = index;
     });
   }
+
 
   Widget _buildPage(int index) {
     switch (index) {

@@ -2,6 +2,8 @@ import 'package:ecraftz_crm/widgets/app_snackbar.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:convert';
+import '../../services/supabase_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -186,6 +188,9 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
   Color get _textPrimary => AppTheme.textPrimaryOf(context);
   Color get _textSecondary => AppTheme.textSecondaryOf(context);
 
+  Map<String, String> _bdeNameMap = {};
+  bool _loadingBdes = true;
+
   @override
   void initState() {
     super.initState();
@@ -193,6 +198,28 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
     context.read<LeadBloc>().add(
           LoadLeadsEvent(branchState: context.read<BranchCubit>().state),
         );
+    _loadBdeNameMap();
+  }
+
+  Future<void> _loadBdeNameMap() async {
+    try {
+      final res = await SupabaseService.client.from('profiles').select('id, full_name');
+      final list = List<Map<String, dynamic>>.from(res as List);
+      if (mounted) {
+        setState(() {
+          _bdeNameMap = {
+            for (var item in list)
+              item['id']?.toString() ?? '': item['full_name']?.toString() ?? 'Unnamed Staff'
+          };
+          _loadingBdes = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading BDE name map: $e');
+      if (mounted) {
+        setState(() => _loadingBdes = false);
+      }
+    }
   }
 
   @override
@@ -1036,6 +1063,7 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
         final isSelected = _selectedLeadIds.contains(lead.id);
         return _LeadListTile(
           lead: lead,
+          bdeName: _bdeNameMap[lead.assignedTo],
           isSelectionMode: _isSelectionMode,
           isSelected: isSelected,
           onTap: () {
@@ -1380,6 +1408,7 @@ class _KanbanCard extends StatelessWidget {
 
 class _LeadListTile extends StatelessWidget {
   final Lead lead;
+  final String? bdeName;
   final bool isSelectionMode;
   final bool isSelected;
   final VoidCallback onTap;
@@ -1390,6 +1419,7 @@ class _LeadListTile extends StatelessWidget {
 
   const _LeadListTile({
     required this.lead,
+    this.bdeName,
     this.isSelectionMode = false,
     this.isSelected = false,
     required this.onTap,
@@ -1452,14 +1482,41 @@ class _LeadListTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(lead.fullName,
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textPrimaryOf(context))),
+                  Text(
+                    lead.companyName.isNotEmpty 
+                        ? '${lead.fullName} (${lead.companyName})' 
+                        : lead.fullName,
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textPrimaryOf(context)),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'BDE: ${bdeName ?? 'Unassigned'} • Src: ${lead.source}',
+                    style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context)),
+                  ),
+                  if ((lead.servicesNeeded != null && lead.servicesNeeded!.isNotEmpty) ||
+                      (lead.targetLocations != null && lead.targetLocations!.isNotEmpty))
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        'Service: ${lead.servicesNeeded ?? '—'} • Country: ${lead.targetLocations ?? '—'}',
+                        style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context)),
+                      ),
+                    ),
+                  if (lead.cpr != null || lead.cpa != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        'CPR: ₹${lead.cpr?.toStringAsFixed(0) ?? '—'} • CPA: ₹${lead.cpa?.toStringAsFixed(0) ?? '—'}',
+                        style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context)),
+                      ),
+                    ),
+                  const SizedBox(height: 2),
                   Text(lead.email,
                       style: TextStyle(
-                          fontSize: 11, color: AppTheme.textSecondaryOf(context)),
+                          fontSize: 11, color: AppTheme.textMutedOf(context)),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                 ],
@@ -1504,18 +1561,37 @@ class _LeadListTile extends StatelessWidget {
 
 // ─── LEAD DETAIL BOTTOM SHEET ─────────────────────────────────────────────────
 
-class _LeadDetailSheet extends StatelessWidget {
+class _LeadDetailSheet extends StatefulWidget {
   final Lead lead;
+  final String? bdeName;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final Function(LeadStatus) onStatusChange;
 
   const _LeadDetailSheet({
     required this.lead,
+    this.bdeName,
     required this.onEdit,
     required this.onDelete,
     required this.onStatusChange,
   });
+
+  @override
+  State<_LeadDetailSheet> createState() => _LeadDetailSheetState();
+}
+
+class _LeadDetailSheetState extends State<_LeadDetailSheet> {
+  late Lead _currentLead;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentLead = widget.lead;
+  }
+
+  void _onRemarksUpdated() {
+    setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1552,20 +1628,20 @@ class _LeadDetailSheet extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
               child: Row(
                 children: [
-                  _Avatar(name: lead.initials, color: lead.status.color, size: 44),
+                  _Avatar(name: _currentLead.initials, color: _currentLead.status.color, size: 44),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(lead.fullName,
+                        Text(_currentLead.fullName,
                             style: TextStyle(
                                 fontSize: 17,
                                 fontWeight: FontWeight.w700,
                                 color: textPrimary)),
-                        if (lead.jobTitle.isNotEmpty || lead.companyName.isNotEmpty)
+                        if (_currentLead.jobTitle.isNotEmpty || _currentLead.companyName.isNotEmpty)
                           Text(
-                            [lead.jobTitle, lead.companyName]
+                            [_currentLead.jobTitle, _currentLead.companyName]
                                 .where((s) => s.isNotEmpty)
                                 .join(' @ '),
                             style: TextStyle(
@@ -1577,12 +1653,12 @@ class _LeadDetailSheet extends StatelessWidget {
                   IconButton(
                     icon: const Icon(Icons.edit_outlined,
                         color: Color(0xFF00BCD4), size: 20),
-                    onPressed: onEdit,
+                    onPressed: widget.onEdit,
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete_outline,
                         color: Colors.red, size: 20),
-                    onPressed: onDelete,
+                    onPressed: widget.onDelete,
                   ),
                 ],
               ),
@@ -1598,25 +1674,30 @@ class _LeadDetailSheet extends StatelessWidget {
                     icon: Icons.phone_outlined,
                     label: 'Call',
                     color: const Color(0xFF2563EB),
-                    onTap: lead.phone.isNotEmpty ? () => _callPhone(lead.phone, context) : null,
+                    onTap: _currentLead.phone.isNotEmpty ? () => _callPhone(_currentLead.phone, context) : null,
                   ),
                   _ContactActionButton(
                     icon: Icons.message_outlined,
                     label: 'SMS',
                     color: const Color(0xFF0EA5E9),
-                    onTap: lead.phone.isNotEmpty ? () => _sendSms(lead.phone, context) : null,
+                    onTap: _currentLead.phone.isNotEmpty ? () => _sendSms(_currentLead.phone, context) : null,
                   ),
                   _ContactActionButton(
                     icon: Icons.chat_bubble_outline,
                     label: 'WhatsApp',
                     color: const Color(0xFF22C55E),
-                    onTap: lead.phone.isNotEmpty ? () => _sendWhatsApp(lead.phone, context) : null,
+                    onTap: _currentLead.phone.isNotEmpty ? () {
+                      showDialog(
+                        context: context,
+                        builder: (_) => _WhatsAppWishingDialog(lead: _currentLead),
+                      );
+                    } : null,
                   ),
                   _ContactActionButton(
                     icon: Icons.email_outlined,
                     label: 'Email',
                     color: const Color(0xFFEF4444),
-                    onTap: lead.email.isNotEmpty ? () => _sendEmail(lead.email, context) : null,
+                    onTap: _currentLead.email.isNotEmpty ? () => _sendEmail(_currentLead.email, context) : null,
                   ),
                 ],
               ),
@@ -1628,7 +1709,7 @@ class _LeadDetailSheet extends StatelessWidget {
                 controller: controller,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: [
-                  _StatusBadge(status: lead.status, large: true),
+                  _StatusBadge(status: _currentLead.status, large: true),
                   const SizedBox(height: 16),
                   // Change status
                   Text('Move to Stage',
@@ -1642,9 +1723,9 @@ class _LeadDetailSheet extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: LeadStatus.values.map((s) {
-                      final isActive = s == lead.status;
+                      final isActive = s == _currentLead.status;
                       return GestureDetector(
-                        onTap: () => onStatusChange(s),
+                        onTap: () => widget.onStatusChange(s),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 6),
@@ -1670,30 +1751,83 @@ class _LeadDetailSheet extends StatelessWidget {
                     title: 'Contact Information',
                     icon: Icons.person_outline,
                     children: [
-                      _DetailRow(Icons.email_outlined, 'Email', lead.email),
-                      if (lead.phone.isNotEmpty)
-                        _DetailRow(Icons.phone_outlined, 'Phone', lead.phone),
+                      _DetailRow(Icons.email_outlined, 'Email', _currentLead.email),
+                      if (_currentLead.phone.isNotEmpty)
+                        _DetailRow(Icons.phone_outlined, 'Phone', _currentLead.phone),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  if (lead.companyName.isNotEmpty || lead.jobTitle.isNotEmpty)
-                    _DetailSection(
-                      title: 'Company Details',
-                      icon: Icons.business_outlined,
-                      children: [
-                        if (lead.companyName.isNotEmpty)
-                          _DetailRow(Icons.apartment_outlined, 'Company', lead.companyName),
-                        if (lead.jobTitle.isNotEmpty)
-                          _DetailRow(Icons.work_outline, 'Job Title', lead.jobTitle),
-                      ],
-                    ),
+                  _DetailSection(
+                    title: 'Company & Lead Strategy',
+                    icon: Icons.business_outlined,
+                    children: [
+                      _DetailRow(Icons.apartment_outlined, 'Company', _currentLead.companyName.isNotEmpty ? _currentLead.companyName : '—'),
+                      if (_currentLead.jobTitle.isNotEmpty)
+                        _DetailRow(Icons.work_outline, 'Job Title', _currentLead.jobTitle),
+                      _DetailRow(Icons.person_pin_outlined, 'Assigned BDE', widget.bdeName ?? 'Unassigned'),
+                      _DetailRow(Icons.source_outlined, 'Lead Source', _currentLead.source),
+                      _DetailRow(Icons.design_services_outlined, 'Required Service', _currentLead.servicesNeeded ?? '—'),
+                      _DetailRow(Icons.public_outlined, 'Country', _currentLead.targetLocations ?? '—'),
+                      _DetailRow(Icons.currency_rupee, 'CPR (Cost Per Result)', _currentLead.cpr != null ? '₹${_currentLead.cpr!.toStringAsFixed(0)}' : '—'),
+                      _DetailRow(Icons.currency_rupee, 'CPA (Cost Per Acquisition)', _currentLead.cpa != null ? '₹${_currentLead.cpa!.toStringAsFixed(0)}' : '—'),
+                    ],
+                  ),
                   const SizedBox(height: 16),
                   _DetailSection(
-                    title: 'Pipeline',
-                    icon: Icons.bar_chart_outlined,
+                    title: 'Follow-up Remarks',
+                    icon: Icons.rate_review_outlined,
                     children: [
-                      _DetailRow(Icons.source_outlined, 'Source', lead.source),
-                      _DetailRow(Icons.currency_rupee, 'Value', lead.value > 0 ? '₹${lead.value.toStringAsFixed(0)}' : 'Not set'),
+                      _DetailRow(
+                        Icons.comment_outlined,
+                        'Remarks 1',
+                        _currentLead.remarks1.isNotEmpty ? _currentLead.remarks1 : '—',
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (dialogCtx) => _EditRemarkDialog(
+                              lead: _currentLead,
+                              remarkIndex: 1,
+                              initialValue: _currentLead.remarks1,
+                              leadBlocContext: context,
+                              onSaved: _onRemarksUpdated,
+                            ),
+                          );
+                        },
+                      ),
+                      _DetailRow(
+                        Icons.comment_outlined,
+                        'Remarks 2',
+                        _currentLead.remarks2.isNotEmpty ? _currentLead.remarks2 : '—',
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (dialogCtx) => _EditRemarkDialog(
+                              lead: _currentLead,
+                              remarkIndex: 2,
+                              initialValue: _currentLead.remarks2,
+                              leadBlocContext: context,
+                              onSaved: _onRemarksUpdated,
+                            ),
+                          );
+                        },
+                      ),
+                      _DetailRow(
+                        Icons.comment_outlined,
+                        'Remarks 3',
+                        _currentLead.remarks3.isNotEmpty ? _currentLead.remarks3 : '—',
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (dialogCtx) => _EditRemarkDialog(
+                              lead: _currentLead,
+                              remarkIndex: 3,
+                              initialValue: _currentLead.remarks3,
+                              leadBlocContext: context,
+                              onSaved: _onRemarksUpdated,
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -1755,12 +1889,13 @@ class _DetailRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
+  final VoidCallback? onTap;
 
-  const _DetailRow(this.icon, this.label, this.value);
+  const _DetailRow(this.icon, this.label, this.value, {this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    Widget content = Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
@@ -1772,12 +1907,25 @@ class _DetailRow extends StatelessWidget {
           Expanded(
             child: Text(value,
                 style: TextStyle(fontSize: 12, color: AppTheme.textPrimaryOf(context)),
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis),
           ),
+          if (onTap != null) ...[
+            const SizedBox(width: 4),
+            Icon(Icons.edit_outlined, size: 14, color: const Color(0xFF00BCD4).withOpacity(0.8)),
+          ],
         ],
       ),
     );
+
+    if (onTap != null) {
+      return GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: content,
+      );
+    }
+    return content;
   }
 }
 
@@ -1847,6 +1995,17 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
   List<String> _dynamicSources = [];
   bool _loadingSources = true;
 
+  String? _assignedTo;
+  late TextEditingController _servicesNeeded;
+  late TextEditingController _targetLocations;
+  late TextEditingController _cpr;
+  late TextEditingController _cpa;
+  late TextEditingController _remarks1;
+  late TextEditingController _remarks2;
+  late TextEditingController _remarks3;
+  List<Map<String, String>> _bdes = [];
+  bool _loadingBdes = true;
+
   @override
   void initState() {
     super.initState();
@@ -1860,7 +2019,39 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
     _value = TextEditingController(text: e?.value.toString() ?? '0');
     _status = e?.status ?? LeadStatus.newLead;
     _source = e?.source ?? 'Website';
+
+    _assignedTo = e?.assignedTo;
+    _servicesNeeded = TextEditingController(text: e?.servicesNeeded ?? '');
+    _targetLocations = TextEditingController(text: e?.targetLocations ?? '');
+    _cpr = TextEditingController(text: e?.cpr?.toString() ?? '');
+    _cpa = TextEditingController(text: e?.cpa?.toString() ?? '');
+    _remarks1 = TextEditingController(text: e?.remarks1 ?? '');
+    _remarks2 = TextEditingController(text: e?.remarks2 ?? '');
+    _remarks3 = TextEditingController(text: e?.remarks3 ?? '');
+
     _loadDynamicSources();
+    _loadBdes();
+  }
+
+  Future<void> _loadBdes() async {
+    try {
+      final res = await SupabaseService.client.from('profiles').select('id, full_name');
+      final list = List<Map<String, dynamic>>.from(res as List);
+      if (mounted) {
+        setState(() {
+          _bdes = list.map((item) => {
+            'id': item['id']?.toString() ?? '',
+            'name': item['full_name']?.toString() ?? 'Unnamed Staff',
+          }).toList();
+          _loadingBdes = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading BDEs: $e');
+      if (mounted) {
+        setState(() => _loadingBdes = false);
+      }
+    }
   }
 
   Future<void> _loadDynamicSources() async {
@@ -1878,7 +2069,22 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
 
   @override
   void dispose() {
-    for (final c in [_firstName, _lastName, _email, _company, _jobTitle, _phone, _value]) {
+    for (final c in [
+      _firstName,
+      _lastName,
+      _email,
+      _company,
+      _jobTitle,
+      _phone,
+      _value,
+      _servicesNeeded,
+      _targetLocations,
+      _cpr,
+      _cpa,
+      _remarks1,
+      _remarks2,
+      _remarks3
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -1886,6 +2092,13 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
 
   void _save() {
     if (!_formKey.currentState!.validate()) return;
+
+    final remarksJson = jsonEncode({
+      'remarks1': _remarks1.text.trim(),
+      'remarks2': _remarks2.text.trim(),
+      'remarks3': _remarks3.text.trim(),
+    });
+
     final lead = Lead(
       id: widget.existing?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
       firstName: _firstName.text.trim(),
@@ -1898,6 +2111,12 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
       source: _source,
       value: double.tryParse(_value.text) ?? 0,
       createdAt: widget.existing?.createdAt ?? DateTime.now(),
+      assignedTo: _assignedTo,
+      servicesNeeded: _servicesNeeded.text.trim(),
+      targetLocations: _targetLocations.text.trim(),
+      cpr: double.tryParse(_cpr.text.trim()),
+      cpa: double.tryParse(_cpa.text.trim()),
+      remarks: remarksJson,
     );
     widget.onSave(lead);
     Navigator.pop(context);
@@ -2105,9 +2324,84 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
                   ],
                 ),
                 const SizedBox(height: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Assigned BDE',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: textPrimary)),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: border),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: _loadingBdes
+                            ? const SizedBox(
+                                height: 38,
+                                child: Center(
+                                  child: SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00BCD4)),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : DropdownButton<String>(
+                                value: _bdes.any((b) => b['id'] == _assignedTo) ? _assignedTo : null,
+                                isExpanded: true,
+                                dropdownColor: bg,
+                                style: TextStyle(fontSize: 13, color: textPrimary),
+                                hint: Text('Select BDE / Staff Member', style: TextStyle(fontSize: 12, color: textSecondary)),
+                                items: _bdes.map((b) {
+                                  return DropdownMenuItem(
+                                    value: b['id'],
+                                    child: Text(b['name']!, style: TextStyle(fontSize: 12, color: textPrimary)),
+                                  );
+                                }).toList(),
+                                onChanged: (v) => setState(() => _assignedTo = v),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 _field(_value, 'Lead Value (₹)',
                     hint: '0',
                     keyboardType: TextInputType.number),
+                const SizedBox(height: 20),
+                _sectionHeader(Icons.architecture_outlined, 'LEAD SPECIFICATION'),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: _field(_servicesNeeded, 'Required Service', hint: 'Web Design')),
+                    const SizedBox(width: 12),
+                    Expanded(child: _field(_targetLocations, 'Country / Location', hint: 'UAE')),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: _field(_cpr, 'CPR (₹)', hint: '0', keyboardType: TextInputType.number)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _field(_cpa, 'CPA (₹)', hint: '0', keyboardType: TextInputType.number)),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _sectionHeader(Icons.rate_review_outlined, 'FOLLOW-UP REMARKS'),
+                const SizedBox(height: 12),
+                _field(_remarks1, 'Remarks 1', hint: 'Enter first follow-up note'),
+                const SizedBox(height: 12),
+                _field(_remarks2, 'Remarks 2', hint: 'Enter second follow-up note'),
+                const SizedBox(height: 12),
+                _field(_remarks3, 'Remarks 3', hint: 'Enter third follow-up note'),
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
@@ -2255,6 +2549,411 @@ class _StatusBadge extends StatelessWidget {
               fontWeight: FontWeight.w700,
               color: status.color,
               letterSpacing: 0.3)),
+    );
+  }
+}
+
+// ─── WHATSAPP WISHING MESSAGE DIALOG ──────────────────────────────────────────
+
+class _WhatsAppWishingDialog extends StatefulWidget {
+  final Lead lead;
+
+  const _WhatsAppWishingDialog({required this.lead});
+
+  @override
+  State<_WhatsAppWishingDialog> createState() => _WhatsAppWishingDialogState();
+}
+
+class _WhatsAppWishingDialogState extends State<_WhatsAppWishingDialog> {
+  int _currentTab = 0;
+  late TextEditingController _textController;
+
+  @override
+  void initState() {
+    super.initState();
+    _textController = TextEditingController(text: _getTemplateText(0));
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  String _getTemplateText(int index) {
+    final name = widget.lead.fullName;
+    switch (index) {
+      case 0:
+        return 'Hi $name, Greetings from ECRAFTZ! 👋\n\nThank you for reaching out to us. We received your inquiry regarding our services.\n\nHow can we assist you today?';
+      case 1:
+        return 'Hello $name, Hope you are having a wonderful day!\n\nThis is ECRAFTZ. We specialize in Web Design, Digital Marketing, and Branding solutions. We\'d love to connect and discuss your requirement for our services.\n\nWhen would be a good time for a quick call?';
+      case 2:
+        return 'Hi $name, Following up on your inquiry with ECRAFTZ regarding our services.\n\nPlease let us know if you have any questions or if we can schedule a quick discussion today!';
+      default:
+        return '';
+    }
+  }
+
+  void _onTabChange(int index) {
+    setState(() {
+      _currentTab = index;
+      _textController.text = _getTemplateText(index);
+    });
+  }
+
+  Future<void> _sendOnWhatsApp() async {
+    final text = Uri.encodeComponent(_textController.text);
+    final normalized = _normalizePhone(widget.lead.phone).replaceAll('+', '');
+    final uri = Uri.parse('https://wa.me/$normalized?text=$text');
+    await _launchUrl(uri, context, failureMessage: 'Could not launch WhatsApp.');
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppTheme.bgCardDark : Colors.white;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    final border = AppTheme.borderOf(context);
+
+    return Dialog(
+      backgroundColor: bg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                children: [
+                  const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF10B981), size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'SEND WHATSAPP WISHING MESSAGE',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: textPrimary,
+                        letterSpacing: 0.5,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: Icon(Icons.close, size: 20, color: textSecondary),
+                    onPressed: () => Navigator.pop(context),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Send a personalized WhatsApp greeting to ${widget.lead.fullName} (${widget.lead.phone}).',
+                style: TextStyle(fontSize: 11, color: textSecondary),
+              ),
+              const SizedBox(height: 16),
+              // Client details banner
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF10B981).withOpacity(0.2)),
+                ),
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.person_outline, size: 16, color: Color(0xFF10B981)),
+                        const SizedBox(width: 4),
+                        Text(widget.lead.fullName, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: textPrimary)),
+                      ],
+                    ),
+                    if (widget.lead.companyName.isNotEmpty)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.apartment_outlined, size: 16, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Text(widget.lead.companyName, style: TextStyle(fontSize: 12, color: textSecondary)),
+                        ],
+                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.phone_outlined, size: 16, color: Color(0xFF10B981)),
+                        const SizedBox(width: 4),
+                        Text(widget.lead.phone, style: TextStyle(fontSize: 12, color: const Color(0xFF10B981))),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Select message template title
+              Text(
+                'SELECT MESSAGE TEMPLATE',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: textPrimary,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 10),
+              // Template selection row
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTemplateTab(0, '👋\nWelcome Greeting'),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildTemplateTab(1, '💼\nCompany Intro'),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildTemplateTab(2, '📅\nFollow-up'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              // Message preview header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'MESSAGE PREVIEW & CUSTOMIZATION',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: textPrimary,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  Text(
+                    'EDITABLE',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      color: textSecondary.withOpacity(0.7),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Text Area
+              TextField(
+                controller: _textController,
+                maxLines: 6,
+                style: TextStyle(fontSize: 13, color: textPrimary, height: 1.4),
+                decoration: InputDecoration(
+                  contentPadding: const EdgeInsets.all(12),
+                  filled: true,
+                  fillColor: isDark ? const Color(0xFF1F2937) : const Color(0xFFF9FAFB),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFF10B981), width: 1.5),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Action buttons
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      side: BorderSide(color: border),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: Text('Cancel', style: TextStyle(color: textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    onPressed: _sendOnWhatsApp,
+                    icon: const Icon(Icons.send_rounded, size: 16),
+                    label: const Text('SEND ON WHATSAPP', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTemplateTab(int index, String label) {
+    final isSelected = _currentTab == index;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: () => _onTabChange(index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? const Color(0xFF10B981).withOpacity(0.08)
+              : (isDark ? const Color(0xFF1F2937) : const Color(0xFFF9FAFB)),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF10B981) : AppTheme.borderOf(context),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              color: isSelected ? const Color(0xFF10B981) : AppTheme.textPrimaryOf(context),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── EDIT REMARK DIALOG ──────────────────────────────────────────────────────
+
+class _EditRemarkDialog extends StatefulWidget {
+  final Lead lead;
+  final int remarkIndex;
+  final String initialValue;
+  final BuildContext leadBlocContext;
+  final VoidCallback onSaved;
+
+  const _EditRemarkDialog({
+    required this.lead,
+    required this.remarkIndex,
+    required this.initialValue,
+    required this.leadBlocContext,
+    required this.onSaved,
+  });
+
+  @override
+  State<_EditRemarkDialog> createState() => _EditRemarkDialogState();
+}
+
+class _EditRemarkDialogState extends State<_EditRemarkDialog> {
+  late TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final newValue = _controller.text.trim();
+    final r1 = widget.remarkIndex == 1 ? newValue : widget.lead.remarks1;
+    final r2 = widget.remarkIndex == 2 ? newValue : widget.lead.remarks2;
+    final r3 = widget.remarkIndex == 3 ? newValue : widget.lead.remarks3;
+
+    final remarksJson = jsonEncode({
+      'remarks1': r1,
+      'remarks2': r2,
+      'remarks3': r3,
+    });
+
+    widget.lead.remarks = remarksJson;
+    widget.leadBlocContext.read<LeadBloc>().add(UpdateLeadEvent(widget.lead));
+    widget.onSaved();
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppTheme.bgCardDark : Colors.white;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final border = AppTheme.borderOf(context);
+
+    return Dialog(
+      backgroundColor: bg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Edit Remarks ${widget.remarkIndex}',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: textPrimary),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _controller,
+              maxLines: 3,
+              style: TextStyle(fontSize: 13, color: textPrimary),
+              decoration: InputDecoration(
+                hintText: 'Enter remark note here...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: border),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _save,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00BCD4),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

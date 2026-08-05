@@ -62,6 +62,7 @@ class ActiveClientsPage extends StatefulWidget {
 class _ActiveClientsPageState extends State<ActiveClientsPage> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
+  String _sortBy = 'default';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   Color get _bg => Theme.of(context).scaffoldBackgroundColor;
@@ -83,12 +84,40 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
   }
 
   List<ActiveClient> _filtered(List<ActiveClient> clients) {
-    if (_searchQuery.isEmpty) return clients;
-    final q = _searchQuery.toLowerCase();
-    return clients.where((c) =>
-        c.name.toLowerCase().contains(q) ||
-        c.email.toLowerCase().contains(q) ||
-        c.services.any((s) => s.toLowerCase().contains(q))).toList();
+    // 1. Filter by search query
+    List<ActiveClient> result = clients;
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      result = result.where((c) =>
+          c.name.toLowerCase().contains(q) ||
+          c.email.toLowerCase().contains(q) ||
+          c.services.any((s) => s.toLowerCase().contains(q))).toList();
+    }
+
+    // 2. Sort
+    switch (_sortBy) {
+      case 'name_az':
+        result.sort((a, b) => a.name.compareTo(b.name));
+        break;
+      case 'name_za':
+        result.sort((a, b) => b.name.compareTo(a.name));
+        break;
+      case 'value_low_high':
+        result.sort((a, b) => a.contractValue.compareTo(b.contractValue));
+        break;
+      case 'value_high_low':
+        result.sort((a, b) => b.contractValue.compareTo(a.contractValue));
+        break;
+      case 'date_earliest':
+        result.sort((a, b) => a.onboardedAt.compareTo(b.onboardedAt));
+        break;
+      case 'date_latest':
+        result.sort((a, b) => b.onboardedAt.compareTo(a.onboardedAt));
+        break;
+      default:
+        break;
+    }
+    return result;
   }
 
   void _showBulkImport() {
@@ -482,41 +511,8 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
               children: [
                 // Stats strip
                 _buildStatsStrip(allClients),
-                // Search bar
-                Container(
-                  color: Theme.of(context).colorScheme.surface,
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: TextField(
-                    controller: _searchCtrl,
-                    onChanged: (v) => setState(() => _searchQuery = v),
-                    style: TextStyle(color: _textPrimary, fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Search active clients...',
-                      hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 13),
-                      prefixIcon: Icon(Icons.search, color: AppTheme.textMutedOf(context), size: 18),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: Icon(Icons.close, size: 16, color: _textSecondary),
-                              onPressed: () {
-                                _searchCtrl.clear();
-                                setState(() => _searchQuery = '');
-                              })
-                          : null,
-                      filled: true,
-                      fillColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: _border)),
-                      enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: _border)),
-                      focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                    ),
-                  ),
-                ),
+                // Search bar + Sort By
+                _buildSearchAndSort(isDark, isWide),
                 // Table
                 Expanded(
                   child: clients.isEmpty
@@ -528,6 +524,120 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
           },
         ),
       ),
+    );
+  }
+
+  /// Builds the search bar + Sort By dropdown row.
+  /// On wide screens (>600px): search and dropdown sit side-by-side.
+  /// On mobile: search fills the full width; dropdown is on a second row.
+  Widget _buildSearchAndSort(bool isDark, bool isWide) {
+    final sortDropdown = Container(
+      height: 42,
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _border),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _sortBy,
+          isDense: true,
+          icon: Icon(Icons.keyboard_arrow_down_rounded,
+              color: AppTheme.textMutedOf(context), size: 18),
+          style: TextStyle(color: _textPrimary, fontSize: 12),
+          dropdownColor: isDark ? AppTheme.bgCardDark : Colors.white,
+          items: const [
+            DropdownMenuItem(
+              value: 'default',
+              child: Text('Sort by...', style: TextStyle(fontSize: 12)),
+            ),
+            DropdownMenuItem(
+              value: 'name_az',
+              child: Text('Name: A → Z ↑', style: TextStyle(fontSize: 12, color: Color(0xFF00BCD4))),
+            ),
+            DropdownMenuItem(
+              value: 'name_za',
+              child: Text('Name: Z → A ↓', style: TextStyle(fontSize: 12, color: Color(0xFF00BCD4))),
+            ),
+            DropdownMenuItem(
+              value: 'value_low_high',
+              child: Text('Value: Low → High ↑', style: TextStyle(fontSize: 12, color: Color(0xFF00BCD4))),
+            ),
+            DropdownMenuItem(
+              value: 'value_high_low',
+              child: Text('Value: High → Low ↓', style: TextStyle(fontSize: 12, color: Color(0xFF00BCD4))),
+            ),
+            DropdownMenuItem(
+              value: 'date_earliest',
+              child: Text('Date: Earliest First ↑', style: TextStyle(fontSize: 12, color: Color(0xFF00BCD4))),
+            ),
+            DropdownMenuItem(
+              value: 'date_latest',
+              child: Text('Date: Latest First ↓', style: TextStyle(fontSize: 12, color: Color(0xFF00BCD4))),
+            ),
+          ],
+          onChanged: (v) {
+            if (v != null) setState(() => _sortBy = v);
+          },
+        ),
+      ),
+    );
+
+    final searchField = TextField(
+      controller: _searchCtrl,
+      onChanged: (v) => setState(() => _searchQuery = v),
+      style: TextStyle(color: _textPrimary, fontSize: 13),
+      decoration: InputDecoration(
+        hintText: 'Search active clients...',
+        hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 13),
+        prefixIcon:
+            Icon(Icons.search, color: AppTheme.textMutedOf(context), size: 18),
+        suffixIcon: _searchQuery.isNotEmpty
+            ? IconButton(
+                icon: Icon(Icons.close, size: 16, color: _textSecondary),
+                onPressed: () {
+                  _searchCtrl.clear();
+                  setState(() => _searchQuery = '');
+                })
+            : null,
+        filled: true,
+        fillColor: isDark ? AppTheme.bgBaseDark : const Color(0xFFF9FAFB),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: _border)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: _border)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
+        contentPadding: const EdgeInsets.symmetric(vertical: 10),
+      ),
+    );
+
+    return Container(
+      color: Theme.of(context).colorScheme.surface,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: isWide
+          // ── Wide screen: search + sort side by side ──
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(child: searchField),
+                const SizedBox(width: 10),
+                SizedBox(width: 190, child: sortDropdown),
+              ],
+            )
+          // ── Mobile: search first, sort below ──
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                searchField,
+                const SizedBox(height: 8),
+                sortDropdown,
+              ],
+            ),
     );
   }
 

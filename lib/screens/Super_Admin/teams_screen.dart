@@ -201,6 +201,8 @@ class _TeamsPageState extends State<TeamsPage> {
   bool _isCurrentUserSuperAdmin = false;
   List<TeamMember> _members = [];
   List<Map<String, dynamic>> _dynamicDepartments = [];
+  List<String> _dynamicRoles = ['Administrator', 'Employee', 'HR', 'Sales', 'Team Lead'];
+  Map<String, String> _roleNameToId = {};
   RealtimeChannel? _profileSubscription;
 
   List<String> get _departmentNames => ['No Department'] + _dynamicDepartments.map((d) => d['name'] as String).toList();
@@ -243,6 +245,36 @@ class _TeamsPageState extends State<TeamsPage> {
       final deptsRes = await SupabaseService.client.from('departments').select('id, name');
       final fetchedDepts = List<Map<String, dynamic>>.from(deptsRes as List);
 
+      final rolesRes = await SupabaseService.client.from('roles').select('id, name');
+      final fetchedRoles = List<Map<String, dynamic>>.from(rolesRes as List);
+
+      final userRolesRes = await SupabaseService.client.from('user_roles').select('user_id, role_id, roles(name)');
+      final userRolesList = List<Map<String, dynamic>>.from(userRolesRes as List);
+
+      final Map<String, String> userIdToCustomRole = {};
+      for (final ur in userRolesList) {
+        final userId = ur['user_id']?.toString() ?? '';
+        final roleMap = ur['roles'];
+        if (roleMap is Map) {
+          final roleName = roleMap['name']?.toString() ?? '';
+          if (userId.isNotEmpty && roleName.isNotEmpty) {
+            userIdToCustomRole[userId] = _mapRoleFromDb(roleName);
+          }
+        }
+      }
+
+      final Set<String> uniqueRoleNames = {};
+      final Map<String, String> nameToId = {};
+      for (final r in fetchedRoles) {
+        final name = r['name']?.toString() ?? '';
+        final id = r['id']?.toString() ?? '';
+        if (name.isNotEmpty && id.isNotEmpty && name.toLowerCase() != 'super admin' && name.toLowerCase() != 'super_admin') {
+          final mappedName = _mapRoleFromDb(name);
+          uniqueRoleNames.add(mappedName);
+          nameToId[mappedName.toLowerCase()] = id;
+        }
+      }
+
       final profilesRes = await SupabaseService.client
           .from('profiles')
           .select('*, departments:departments!fk_profiles_dept(id, name)')
@@ -256,7 +288,7 @@ class _TeamsPageState extends State<TeamsPage> {
         final email = p['email']?.toString() ?? '';
         
         final rawRole = p['role']?.toString();
-        final role = _mapRoleFromDb(rawRole);
+        final role = userIdToCustomRole[id] ?? _mapRoleFromDb(rawRole);
 
         final deptMap = p['departments'];
         final department = deptMap != null ? (deptMap['name']?.toString() ?? 'No Department') : 'No Department';
@@ -326,6 +358,8 @@ class _TeamsPageState extends State<TeamsPage> {
         _dynamicDepartments = fetchedDepts;
         _members = loadedMembers;
         _isCurrentUserSuperAdmin = isSuperAdmin;
+        _dynamicRoles = uniqueRoleNames.toList();
+        _roleNameToId = nameToId;
         _isLoading = false;
       });
     } catch (e) {
@@ -386,6 +420,18 @@ class _TeamsPageState extends State<TeamsPage> {
       'updated_at': nowIso,
     });
 
+    final roleId = _roleNameToId[role.toLowerCase()];
+    if (roleId != null) {
+      try {
+        await SupabaseService.client.from('user_roles').upsert({
+          'user_id': newUserId,
+          'role_id': roleId,
+        });
+      } catch (e) {
+        debugPrint('Error assigning custom role to user: $e');
+      }
+    }
+
     if (deptId != null) {
       try {
         await SupabaseService.client.from('department_members').insert({
@@ -416,7 +462,7 @@ class _TeamsPageState extends State<TeamsPage> {
     final passwordCtrl = TextEditingController();
     final biometricCtrl = TextEditingController();
 
-    String selectedRole = 'Employee';
+    String selectedRole = _dynamicRoles.isNotEmpty ? _dynamicRoles.first : 'Employee';
     String selectedDept = _departmentNames.isNotEmpty ? _departmentNames.first : 'No Department';
 
     bool isObscure = true;
@@ -447,10 +493,12 @@ class _TeamsPageState extends State<TeamsPage> {
                 const SizedBox(height: 5),
                 DropdownButtonFormField<String>(
                   isExpanded: true,
-                  value: selectedRole,
+                  value: _dynamicRoles.contains(selectedRole) ? selectedRole : (_dynamicRoles.isNotEmpty ? _dynamicRoles.first : 'Employee'),
                   dropdownColor: dialogBg,
                   style: TextStyle(color: textPrimary, fontSize: 13),
-                  items: _roles.map((r) => DropdownMenuItem(
+                  items: (_dynamicRoles.contains(selectedRole) 
+                      ? _dynamicRoles 
+                      : [..._dynamicRoles, selectedRole]).map((r) => DropdownMenuItem(
                     value: r,
                     child: Text(r, overflow: TextOverflow.ellipsis),
                   )).toList(),
@@ -824,6 +872,20 @@ class _TeamsPageState extends State<TeamsPage> {
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', m.id);
 
+      final roleId = _roleNameToId[role.toLowerCase()];
+      if (roleId != null) {
+        await SupabaseService.client.from('user_roles').upsert({
+          'user_id': m.id,
+          'role_id': roleId,
+        });
+      } else {
+        try {
+          await SupabaseService.client.from('user_roles').delete().eq('user_id', m.id);
+        } catch (e) {
+          debugPrint('Error clearing user role: $e');
+        }
+      }
+
       setState(() {
         m.role = role;
       });
@@ -1046,6 +1108,7 @@ class _TeamsPageState extends State<TeamsPage> {
                               onRoleChange: (r) => _updateRole(members[i], r),
                               onDeptChange: (d) => _updateDepartment(members[i], d),
                               deptItems: _departmentNames,
+                              roleItems: _dynamicRoles,
                             );
                           }
                           return _MemberRow(
@@ -1059,6 +1122,7 @@ class _TeamsPageState extends State<TeamsPage> {
                             onRoleChange: (r) => _updateRole(members[i], r),
                             onDeptChange: (d) => _updateDepartment(members[i], d),
                             deptItems: _departmentNames,
+                            roleItems: _dynamicRoles,
                           );
                         },
                       )),
@@ -1266,6 +1330,7 @@ class _MemberRow extends StatelessWidget {
   final Function(String) onRoleChange;
   final Function(String) onDeptChange;
   final List<String> deptItems;
+  final List<String> roleItems;
 
   const _MemberRow({
     required this.member,
@@ -1278,6 +1343,7 @@ class _MemberRow extends StatelessWidget {
     required this.onRoleChange,
     required this.onDeptChange,
     required this.deptItems,
+    required this.roleItems,
   });
 
   @override
@@ -1345,7 +1411,9 @@ class _MemberRow extends StatelessWidget {
                 ? _RoleBadge(role: member.role)
                 : _DropdownBadge(
                     value: member.role,
-                    items: _roles,
+                    items: roleItems.contains(member.role) 
+                        ? roleItems 
+                        : [...roleItems, member.role],
                     color: _roleColor(member.role),
                     onChanged: onRoleChange,
                   ),
@@ -1626,6 +1694,7 @@ class _MemberCardMobile extends StatelessWidget {
   final Function(String) onRoleChange;
   final Function(String) onDeptChange;
   final List<String> deptItems;
+  final List<String> roleItems;
 
   const _MemberCardMobile({
     required this.member,
@@ -1637,6 +1706,7 @@ class _MemberCardMobile extends StatelessWidget {
     required this.onRoleChange,
     required this.onDeptChange,
     required this.deptItems,
+    required this.roleItems,
   });
 
   @override
@@ -1713,7 +1783,9 @@ class _MemberCardMobile extends StatelessWidget {
                         ? _RoleBadge(role: member.role)
                         : _DropdownBadge(
                             value: member.role,
-                            items: _roles,
+                             items: roleItems.contains(member.role) 
+                                 ? roleItems 
+                                 : [...roleItems, member.role],
                             color: _roleColor(member.role),
                             onChanged: onRoleChange,
                           ),

@@ -640,26 +640,27 @@ class _RolesAccessScreenState extends State<RolesAccessScreen> {
               );
             },
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0EA5E9),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+          if (w >= 600)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0EA5E9),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-              ),
-              onPressed: () => _showCreateRoleDialog(context),
-              icon: const Icon(Icons.add_rounded, size: 16),
-              label: const Text(
-                '+ Create Custom Role',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                onPressed: () => _showCreateRoleDialog(context),
+                icon: const Icon(Icons.add_rounded, size: 16),
+                label: const Text(
+                  '+ Create Custom Role',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
+          if (w >= 600) const SizedBox(width: 8),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
@@ -1052,47 +1053,52 @@ class _RoleCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Row(
               children: [
-                // User avatars / Count (Tappable for user assignment modal)
-                GestureDetector(
-                  onTap: onManageUsers,
-                  child: Row(
-                    children: [
-                      if (role.activeUsers.isNotEmpty)
-                        SizedBox(
-                          height: 22,
-                          width: (role.activeUsers.length * 16 + 10).toDouble(),
-                          child: Stack(
-                            children: List.generate(role.activeUsers.length, (idx) {
-                              final user = role.activeUsers[idx];
-                              return Positioned(
-                                left: idx * 14.0,
-                                child: CircleAvatar(
-                                  radius: 11,
-                                  backgroundColor: user.color,
-                                  child: Text(
-                                    user.initial,
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
+                Expanded(
+                  child: GestureDetector(
+                    onTap: onManageUsers,
+                    child: Row(
+                      children: [
+                        if (role.activeUsers.isNotEmpty)
+                          SizedBox(
+                            height: 22,
+                            width: (role.activeUsers.length * 12 + 10).toDouble(),
+                            child: Stack(
+                              children: List.generate(role.activeUsers.length, (idx) {
+                                final user = role.activeUsers[idx];
+                                return Positioned(
+                                  left: idx * 10.0,
+                                  child: CircleAvatar(
+                                    radius: 11,
+                                    backgroundColor: user.color,
+                                    child: Text(
+                                      user.initial,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              );
-                            }),
+                                );
+                              }),
+                            ),
+                          ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            '${role.userCount} Active User${role.userCount == 1 ? '' : 's'}',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: const Color(0xFF0EA5E9),
+                              fontWeight: FontWeight.w600,
+                              decoration: TextDecoration.underline,
+                            ),
                           ),
                         ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${role.userCount} Active User${role.userCount == 1 ? '' : 's'}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: const Color(0xFF0EA5E9),
-                          fontWeight: FontWeight.w600,
-                          decoration: TextDecoration.underline,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
                 const Spacer(),

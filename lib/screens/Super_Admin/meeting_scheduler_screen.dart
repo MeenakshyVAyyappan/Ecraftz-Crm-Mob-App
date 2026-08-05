@@ -82,6 +82,18 @@ class _MeetingSchedulerScreenState extends State<MeetingSchedulerScreen>
   String _typeFilter   = 'All';
   late TabController _tabController;
 
+  DateTime _selectedDay = DateTime.now();
+  DateTime _focusedMonth = DateTime.now();
+  bool _isCalendarView = true;
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  List<Meeting> _meetingsForDay(DateTime day, List<Meeting> all) {
+    return all.where((m) => _isSameDay(m.scheduledAt, day)).toList();
+  }
+
   bool  get _isDark        => Theme.of(context).brightness == Brightness.dark;
   Color get _bg            => Theme.of(context).scaffoldBackgroundColor;
   Color get _cardBg        => Theme.of(context).colorScheme.surface;
@@ -89,6 +101,8 @@ class _MeetingSchedulerScreenState extends State<MeetingSchedulerScreen>
   Color get _textPrimary   => AppTheme.textPrimaryOf(context);
   Color get _textSecondary => AppTheme.textSecondaryOf(context);
   Color get _textMuted     => AppTheme.textMutedOf(context);
+
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -107,7 +121,32 @@ class _MeetingSchedulerScreenState extends State<MeetingSchedulerScreen>
   void dispose() {
     _searchCtrl.dispose();
     _tabController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _selectDay(DateTime day, List<Meeting> meetings) {
+    setState(() {
+      _selectedDay = day;
+    });
+
+    final dayMeetings = _meetingsForDay(day, meetings);
+    final displayed = _filtered(dayMeetings);
+    final isWide = MediaQuery.of(context).size.width >= 800;
+
+    if (displayed.isNotEmpty && !isWide && _scrollController.hasClients) {
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (_scrollController.hasClients) {
+          const targetOffset = 420.0;
+          final maxScroll = _scrollController.position.maxScrollExtent;
+          _scrollController.animateTo(
+            targetOffset > maxScroll ? maxScroll : targetOffset,
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
   }
 
   List<Meeting> _filtered(List<Meeting> all) {
@@ -161,6 +200,7 @@ class _MeetingSchedulerScreenState extends State<MeetingSchedulerScreen>
       builder: (_) => _MeetingFormDialog(
         edit: edit,
         clients: clients,
+        initialDate: _selectedDay,
         onSave: (data) {
           if (edit == null) {
             context.read<MeetingBloc>().add(CreateMeetingEvent(
@@ -308,6 +348,16 @@ class _MeetingSchedulerScreenState extends State<MeetingSchedulerScreen>
                 ],
               ),
               actions: [
+                IconButton(
+                  icon: Icon(
+                    _isCalendarView
+                        ? Icons.list_alt_rounded
+                        : Icons.calendar_today_rounded,
+                    color: _isDark ? Colors.white : const Color(0xFF374151),
+                  ),
+                  onPressed: () => setState(() => _isCalendarView = !_isCalendarView),
+                  tooltip: _isCalendarView ? 'List View' : 'Calendar View',
+                ),
                 BlocBuilder<ThemeBloc, ThemeState>(
                   builder: (context, s) => IconButton(
                     icon: Icon(
@@ -340,7 +390,7 @@ class _MeetingSchedulerScreenState extends State<MeetingSchedulerScreen>
         child: Column(
           children: [
             _buildSearchFilters(),
-            _buildTabs(),
+            if (!_isCalendarView) _buildTabs(),
             Expanded(
               child: BlocConsumer<MeetingBloc, MeetingState>(
                 listener: (context, state) {
@@ -366,25 +416,180 @@ class _MeetingSchedulerScreenState extends State<MeetingSchedulerScreen>
                   if (state.status == MeetingStatusState.loading) {
                     return const Center(child: CircularProgressIndicator());
                   }
-                  final displayed = _byTab(_filtered(state.meetings));
-                  if (displayed.isEmpty) return _buildEmpty();
-                  return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                    itemCount: displayed.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) => _MeetingCard(
-                      meeting: displayed[i],
-                      isDark: _isDark,
-                      cardBg: _cardBg,
-                      border: _border,
-                      textPrimary: _textPrimary,
-                      textSecondary: _textSecondary,
-                      textMuted: _textMuted,
-                      onTap: () => _showDetail(displayed[i]),
-                      onEdit: () => _openForm(edit: displayed[i]),
-                      onDelete: () => _confirmDelete(displayed[i]),
-                    ),
-                  );
+
+                  if (_isCalendarView) {
+                    final dayMeetings = _meetingsForDay(_selectedDay, state.meetings);
+                    final displayed = _filtered(dayMeetings);
+                    final isWide = MediaQuery.of(context).size.width >= 800;
+
+                    if (isWide) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 5,
+                            child: SingleChildScrollView(
+                              child: _buildCalendar(state.meetings),
+                            ),
+                          ),
+                          VerticalDivider(width: 1, color: _border),
+                          Expanded(
+                            flex: 6,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.calendar_today_rounded, 
+                                          color: const Color(0xFF3B82F6), size: 15),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Meetings on ${DateFormat('MMM d, yyyy').format(_selectedDay)}',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: _textPrimary,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Text(
+                                          displayed.length.toString(),
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                            color: const Color(0xFF3B82F6),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Expanded(
+                                  child: displayed.isEmpty
+                                      ? _buildEmpty(isDayFiltered: true)
+                                      : ListView.separated(
+                                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+                                          itemCount: displayed.length,
+                                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                                          itemBuilder: (_, i) => _MeetingCard(
+                                            meeting: displayed[i],
+                                            isDark: _isDark,
+                                            cardBg: _cardBg,
+                                            border: _border,
+                                            textPrimary: _textPrimary,
+                                            textSecondary: _textSecondary,
+                                            textMuted: _textMuted,
+                                            onTap: () => _showDetail(displayed[i]),
+                                            onEdit: () => _openForm(edit: displayed[i]),
+                                            onDelete: () => _confirmDelete(displayed[i]),
+                                          ),
+                                        ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+
+                    return SingleChildScrollView(
+                      controller: _scrollController,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildCalendar(state.meetings),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                            child: Row(
+                              children: [
+                                Icon(Icons.calendar_today_rounded, 
+                                    color: const Color(0xFF3B82F6), size: 15),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Meetings on ${DateFormat('MMM d, yyyy').format(_selectedDay)}',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: _textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    displayed.length.toString(),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFF3B82F6),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          displayed.isEmpty
+                              ? SizedBox(
+                                  height: 250,
+                                  child: _buildEmpty(isDayFiltered: true),
+                                )
+                              : Padding(
+                                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+                                  child: ListView.separated(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    itemCount: displayed.length,
+                                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                                    itemBuilder: (_, i) => _MeetingCard(
+                                      meeting: displayed[i],
+                                      isDark: _isDark,
+                                      cardBg: _cardBg,
+                                      border: _border,
+                                      textPrimary: _textPrimary,
+                                      textSecondary: _textSecondary,
+                                      textMuted: _textMuted,
+                                      onTap: () => _showDetail(displayed[i]),
+                                      onEdit: () => _openForm(edit: displayed[i]),
+                                      onDelete: () => _confirmDelete(displayed[i]),
+                                    ),
+                                  ),
+                                ),
+                        ],
+                      ),
+                    );
+                  } else {
+                    final displayed = _byTab(_filtered(state.meetings));
+                    if (displayed.isEmpty) return _buildEmpty();
+                    return ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                      itemCount: displayed.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (_, i) => _MeetingCard(
+                        meeting: displayed[i],
+                        isDark: _isDark,
+                        cardBg: _cardBg,
+                        border: _border,
+                        textPrimary: _textPrimary,
+                        textSecondary: _textSecondary,
+                        textMuted: _textMuted,
+                        onTap: () => _showDetail(displayed[i]),
+                        onEdit: () => _openForm(edit: displayed[i]),
+                        onDelete: () => _confirmDelete(displayed[i]),
+                      ),
+                    );
+                  }
                 },
               ),
             ),
@@ -530,12 +735,16 @@ class _MeetingSchedulerScreenState extends State<MeetingSchedulerScreen>
     );
   }
 
-  Widget _buildEmpty() {
+  Widget _buildEmpty({bool isDayFiltered = false}) {
     String tabLabel = 'meetings';
-    switch (_tabController.index) {
-      case 1: tabLabel = 'today\'s meetings'; break;
-      case 2: tabLabel = 'upcoming meetings'; break;
-      case 3: tabLabel = 'overdue meetings'; break;
+    if (isDayFiltered) {
+      tabLabel = 'meetings for this date';
+    } else {
+      switch (_tabController.index) {
+        case 1: tabLabel = 'today\'s meetings'; break;
+        case 2: tabLabel = 'upcoming meetings'; break;
+        case 3: tabLabel = 'overdue meetings'; break;
+      }
     }
 
     return Center(
@@ -570,6 +779,189 @@ class _MeetingSchedulerScreenState extends State<MeetingSchedulerScreen>
         ],
       ),
     );
+  }
+
+  Widget _buildCalendar(List<Meeting> allMeetings) {
+    final days = _generateGridDays(_focusedMonth);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    final Map<String, List<Meeting>> grouped = {};
+    for (var m in allMeetings) {
+      final key = DateFormat('yyyy-MM-dd').format(m.scheduledAt);
+      grouped.putIfAbsent(key, () => []).add(m);
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: _cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _border),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                )
+              ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Text(
+                  DateFormat('MMMM yyyy').format(_focusedMonth),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: _textPrimary,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: Icon(Icons.chevron_left_rounded, color: _textSecondary),
+                  onPressed: () {
+                    setState(() {
+                      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
+                    });
+                  },
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _focusedMonth = DateTime.now();
+                      _selectedDay = DateTime.now();
+                    });
+                  },
+                  child: const Text(
+                    'Today',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF3B82F6),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.chevron_right_rounded, color: _textSecondary),
+                  onPressed: () {
+                    setState(() {
+                      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
+                    });
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) {
+                return Expanded(
+                  child: Center(
+                    child: Text(
+                      day,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 8),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 7,
+                childAspectRatio: 1.0,
+                crossAxisSpacing: 4,
+                mainAxisSpacing: 4,
+              ),
+              itemCount: days.length,
+              itemBuilder: (context, index) {
+                final day = days[index];
+                final isSelected = _isSameDay(day, _selectedDay);
+                final isCurrentMonth = day.month == _focusedMonth.month;
+                final isToday = _isSameDay(day, DateTime.now());
+                
+                final dayKey = DateFormat('yyyy-MM-dd').format(day);
+                final dayMeetings = grouped[dayKey] ?? [];
+
+                return GestureDetector(
+                  onTap: () => _selectDay(day, allMeetings),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFF3B82F6)
+                          : (isToday
+                              ? const Color(0xFF3B82F6).withValues(alpha: 0.08)
+                              : Colors.transparent),
+                      shape: BoxShape.circle,
+                      border: isToday && !isSelected
+                          ? Border.all(color: const Color(0xFF3B82F6), width: 1.5)
+                          : null,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          day.day.toString(),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: isSelected || isToday
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color: isSelected
+                                ? Colors.white
+                                : (isCurrentMonth
+                                    ? _textPrimary
+                                    : _textMuted.withValues(alpha: 0.6)),
+                          ),
+                        ),
+                        if (dayMeetings.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: dayMeetings.take(3).map((m) {
+                              return Container(
+                                width: 4,
+                                height: 4,
+                                margin: const EdgeInsets.symmetric(horizontal: 0.5),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? Colors.white
+                                      : _statusColor(m.status),
+                                  shape: BoxShape.circle,
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ] else
+                          const SizedBox(height: 6),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<DateTime> _generateGridDays(DateTime month) {
+    final firstDay = DateTime(month.year, month.month, 1);
+    int offset = firstDay.weekday - 1;
+    final startDate = firstDay.subtract(Duration(days: offset));
+    return List.generate(42, (index) => startDate.add(Duration(days: index)));
   }
 }
 
@@ -1108,11 +1500,13 @@ class _DetailSheet extends StatelessWidget {
 class _MeetingFormDialog extends StatefulWidget {
   final Meeting? edit;
   final List<ActiveClient> clients;
+  final DateTime? initialDate;
   final void Function(Map<String, dynamic>) onSave;
 
   const _MeetingFormDialog({
     this.edit,
     required this.clients,
+    this.initialDate,
     required this.onSave,
   });
 
@@ -1157,6 +1551,15 @@ class _MeetingFormDialogState extends State<_MeetingFormDialog> {
       _duration    = e.durationMinutes;
       _scheduledAt = e.scheduledAt;
       _clientId    = e.clientId;
+    } else if (widget.initialDate != null) {
+      final now = DateTime.now();
+      _scheduledAt = DateTime(
+        widget.initialDate!.year,
+        widget.initialDate!.month,
+        widget.initialDate!.day,
+        now.hour,
+        now.minute,
+      ).add(const Duration(hours: 1));
     }
   }
 

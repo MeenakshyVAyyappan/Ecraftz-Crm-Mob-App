@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/supabase_service.dart';
+import '../../services/notification_service.dart';
 
 abstract class AuthEvent extends Equatable {
   const AuthEvent();
@@ -99,9 +100,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               
               final prefs = await SharedPreferences.getInstance();
               await prefs.setString('user_role', role);
+
+              // Register FCM token for push notifications on app startup
+              NotificationService.registerTokenForUser(
+                userId: user.id,
+                role: role,
+              );
               
               emit(Authenticated(user: user, role: role));
               return;
+
             }
           }
           await SupabaseService.signOut();
@@ -174,6 +182,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('user_role', role);
+
+          // Register FCM token for push notifications
+          NotificationService.registerTokenForUser(
+            userId: user.id,
+            role: role,
+          );
           
           emit(Authenticated(user: user, role: role, isLoginEvent: true));
         } else {
@@ -235,6 +249,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthLogoutEvent>((event, emit) async {
       emit(AuthLoading());
       try {
+        // Remove FCM token before signing out
+        final user = SupabaseService.currentUser;
+        if (user != null) {
+          await NotificationService.unregisterToken(userId: user.id);
+        }
         await SupabaseService.signOut();
         _wasAuthenticated = false;
         emit(const Unauthenticated(loggedOut: true));

@@ -6,6 +6,7 @@ import 'screens/signin.dart';
 import 'screens/main_shell.dart';
 import 'screens/Employee/employee_dashboard.dart';
 import 'services/supabase_service.dart';
+import 'services/notification_service.dart';
 import 'blocs/theme/theme_bloc.dart';
 import 'blocs/auth/auth_bloc.dart';
 import 'blocs/lead/lead_bloc.dart';
@@ -30,6 +31,8 @@ import 'blocs/rbac/rbac_cubit.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SupabaseService.initialize();
+  // Initialize Firebase & FCM for push notifications
+  await NotificationService.initialize();
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(

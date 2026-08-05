@@ -8,6 +8,7 @@ import '../../widgets/app_drawer.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
 import '../../services/supabase_service.dart';
+import '../../services/renewal_import_service.dart';
 
 // ─── DATA MODELS ─────────────────────────────────────────────────────────────
 
@@ -298,11 +299,20 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
   final _searchCtrl = TextEditingController();
   String _search = '';
   String _statusFilter = 'ALL';
-  ServiceCategory? _categoryFilter;
-  String _sortBy = 'expiry';
+  String _sortBy = 'sort_by';
+  DateTime? _fromDate;
+  DateTime? _toDate;
 
-  List<AssetRenewal> _renewals = [];
+  // 0 = Asset Renewals (income), 1 = Server Renewals (expense)
+  int _mainTab = 0;
+
+  List<AssetRenewal> _assetRenewals = [];  // metadata['type'] != 'server'
+  List<AssetRenewal> _serverRenewals = []; // metadata['type'] == 'server'
   bool _isLoading = true;
+
+  // Returns the active list depending on which tab is selected
+  List<AssetRenewal> get _activeList =>
+      _mainTab == 0 ? _assetRenewals : _serverRenewals;
 
   @override
   void initState() {
@@ -326,9 +336,15 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
           .order('expiry_date', ascending: true);
 
       if (!mounted) return;
+      final all = (data as List).map((e) => AssetRenewal.fromJson(e)).toList();
+
       setState(() {
-        _renewals =
-            (data as List).map((e) => AssetRenewal.fromJson(e)).toList();
+        // The web CRM tags server renewals with metadata['type'] = 'server_infra'
+        // All other records (domain/hosting for clients) are asset renewals.
+        _serverRenewals = all.where((r) =>
+            r.metadata['type']?.toString() == 'server_infra').toList();
+        _assetRenewals = all.where((r) =>
+            r.metadata['type']?.toString() != 'server_infra').toList();
         _isLoading = false;
       });
     } catch (e) {
@@ -339,7 +355,8 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
   }
 
   List<AssetRenewal> get _filtered {
-    List<AssetRenewal> list = List.from(_renewals);
+    // Always filter from the active tab's list (asset or server)
+    List<AssetRenewal> list = List.from(_activeList);
 
     // Status Tab Filter
     if (_statusFilter == 'UPCOMING') {
@@ -352,9 +369,20 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
       list = list.where((r) => r.status == RenewalStatus.cancelled).toList();
     }
 
-    // Category Filter
-    if (_categoryFilter != null) {
-      list = list.where((r) => r.category == _categoryFilter).toList();
+    // Date Range Expiry Filtering
+    if (_fromDate != null) {
+      final startOfFrom = DateTime(_fromDate!.year, _fromDate!.month, _fromDate!.day);
+      list = list.where((r) {
+        final exp = DateTime(r.expiryDate.year, r.expiryDate.month, r.expiryDate.day);
+        return exp.isAtSameMomentAs(startOfFrom) || exp.isAfter(startOfFrom);
+      }).toList();
+    }
+    if (_toDate != null) {
+      final endOfTo = DateTime(_toDate!.year, _toDate!.month, _toDate!.day);
+      list = list.where((r) {
+        final exp = DateTime(r.expiryDate.year, r.expiryDate.month, r.expiryDate.day);
+        return exp.isAtSameMomentAs(endOfTo) || exp.isBefore(endOfTo);
+      }).toList();
     }
 
     // Search Query
@@ -364,14 +392,19 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
           r.description.toLowerCase().contains(q) ||
           r.clientName.toLowerCase().contains(q) ||
           r.projectName.toLowerCase().contains(q) ||
-          r.category.label.toLowerCase().contains(q)).toList();
+          r.category.label.toLowerCase().contains(q) ||
+          (r.metadata['vendor']?.toString().toLowerCase() ?? '').contains(q)).toList();
     }
 
     // Sorting
-    if (_sortBy == 'amount') {
+    if (_sortBy == 'date_earliest') {
+      list.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
+    } else if (_sortBy == 'date_latest') {
+      list.sort((a, b) => b.expiryDate.compareTo(a.expiryDate));
+    } else if (_sortBy == 'amount_low_high') {
+      list.sort((a, b) => a.amount.compareTo(b.amount));
+    } else if (_sortBy == 'amount_high_low') {
       list.sort((a, b) => b.amount.compareTo(a.amount));
-    } else if (_sortBy == 'client') {
-      list.sort((a, b) => a.clientName.compareTo(b.clientName));
     } else {
       list.sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
     }
@@ -379,45 +412,88 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
     return list;
   }
 
+  // ── Tab-aware stats ────────────────────────────────────────────────────────
   int get _totalRenewals =>
-      _renewals.where((r) => r.status != RenewalStatus.cancelled).length;
-  int get _criticalWindow => _renewals.where((r) => r.isExpiringSoon).length;
-  int get _overdueCount => _renewals.where((r) => r.isExpired).length;
-  double get _revenueLocked => _renewals.fold(0, (s, r) => s + r.amount);
+      _activeList.where((r) => r.status != RenewalStatus.cancelled).length;
+  int get _criticalWindow => _activeList.where((r) => r.isExpiringSoon).length;
+  int get _overdueCount => _activeList.where((r) => r.isExpired).length;
+  int get _renewedCount => _activeList.where((r) => r.status == RenewalStatus.paid).length;
 
   void _showScheduleDialog({AssetRenewal? existing}) {
-    showDialog(
-      context: context,
-      builder: (_) => _ScheduleRenewalDialog(
-        existing: existing,
-        onSave: (r) async {
-          setState(() => _isLoading = true);
-          try {
-            final payload = r.toSupabasePayload();
-            if (existing != null) {
-              await SupabaseService.client
-                  .from('renewals')
-                  .update(payload)
-                  .eq('id', existing.id);
-            } else {
-              await SupabaseService.client.from('renewals').insert(payload);
+    if (_mainTab == 1) {
+      // Server Renewal dialog
+      showDialog(
+        context: context,
+        builder: (_) => _ScheduleServerRenewalDialog(
+          existing: existing,
+          onSave: (r) async {
+            setState(() => _isLoading = true);
+            try {
+              final payload = r.toSupabasePayload();
+              // Stamp type = server_infra (matches web CRM convention)
+              final meta = Map<String, dynamic>.from(payload['metadata'] ?? {});
+              meta['type'] = 'server_infra';
+              payload['metadata'] = meta;
+              if (existing != null) {
+                await SupabaseService.client
+                    .from('renewals')
+                    .update(payload)
+                    .eq('id', existing.id);
+              } else {
+                await SupabaseService.client.from('renewals').insert(payload);
+              }
+              await _fetchRenewals();
+              if (mounted) {
+                _snack(
+                  existing != null ? 'Server renewal updated!' : 'Server renewal scheduled!',
+                  const Color(0xFF10B981),
+                );
+              }
+            } catch (e) {
+              if (mounted) {
+                setState(() => _isLoading = false);
+                _snack('Error saving server renewal: $e', Colors.red);
+              }
             }
-            await _fetchRenewals();
-            if (mounted) {
-              _snack(
-                existing != null ? 'Renewal updated!' : 'Renewal scheduled!',
-                const Color(0xFF10B981),
-              );
+          },
+        ),
+      );
+    } else {
+      // Asset Renewal dialog
+      showDialog(
+        context: context,
+        builder: (_) => _ScheduleRenewalDialog(
+          existing: existing,
+          onSave: (r) async {
+            setState(() => _isLoading = true);
+            try {
+              final payload = r.toSupabasePayload();
+              // Asset renewals do NOT get a type tag (matches web CRM convention)
+              if (existing != null) {
+                await SupabaseService.client
+                    .from('renewals')
+                    .update(payload)
+                    .eq('id', existing.id);
+              } else {
+                await SupabaseService.client.from('renewals').insert(payload);
+              }
+              await _fetchRenewals();
+              if (mounted) {
+                _snack(
+                  existing != null ? 'Renewal updated!' : 'Renewal scheduled!',
+                  const Color(0xFF10B981),
+                );
+              }
+            } catch (e) {
+              if (mounted) {
+                setState(() => _isLoading = false);
+                _snack('Error saving renewal: $e', Colors.red);
+              }
             }
-          } catch (e) {
-            if (mounted) {
-              setState(() => _isLoading = false);
-              _snack('Error saving renewal: $e', Colors.red);
-            }
-          }
-        },
-      ),
-    );
+          },
+        ),
+      );
+    }
   }
 
   Future<void> _markAsPaid(AssetRenewal r) async {
@@ -434,6 +510,69 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
         _snack('Failed to update status: $e', Colors.red);
       }
     }
+  }
+
+  // Builds the segmented tab row (Asset Renewals | Server Renewals)
+  Widget _buildMainTabs(bool isDark) {
+    Widget tab(int idx, String label, IconData icon, Color activeColor) {
+      final selected = _mainTab == idx;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => setState(() {
+            _mainTab = idx;
+            _statusFilter = 'ALL';
+            _search = '';
+            _searchCtrl.clear();
+            _fromDate = null;
+            _toDate = null;
+            _sortBy = 'sort_by';
+          }),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: selected
+                  ? activeColor
+                  : (isDark ? AppTheme.bgCardDark : Colors.white),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: selected ? activeColor : AppTheme.borderOf(context),
+                width: selected ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon,
+                    size: 14,
+                    color: selected
+                        ? Colors.white
+                        : AppTheme.textSecondaryOf(context)),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: selected
+                        ? Colors.white
+                        : AppTheme.textSecondaryOf(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        tab(0, 'Asset Renewals', Icons.language_outlined, const Color(0xFF00BCD4)),
+        const SizedBox(width: 8),
+        tab(1, 'Server Renewals', Icons.dns_outlined, const Color(0xFFF59E0B)),
+      ],
+    );
   }
 
   Future<void> _sendReminder(AssetRenewal r) async {
@@ -517,6 +656,156 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
       backgroundColor: Colors.transparent,
       builder: (_) => _QuickCreateSheet(onItemSelected: widget.onItemSelected),
     );
+  }
+
+  Widget _buildDatePickerButton({
+    required BuildContext context,
+    required String label,
+    required DateTime? selectedDate,
+    required Function(DateTime?) onDateSelected,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final displayStr = selectedDate != null
+        ? DateFormat('dd-MM-yyyy').format(selectedDate)
+        : label;
+    return GestureDetector(
+      onTap: () async {
+        final d = await showDatePicker(
+          context: context,
+          initialDate: selectedDate ?? DateTime.now(),
+          firstDate: DateTime(2020),
+          lastDate: DateTime(2035),
+        );
+        if (d != null) onDateSelected(d);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: isDark ? AppTheme.bgCardDark : Colors.white,
+          border: Border.all(color: AppTheme.borderOf(context)),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.calendar_today_outlined,
+                size: 14, color: AppTheme.textMutedOf(context)),
+            const SizedBox(width: 8),
+            Text(displayStr,
+                style: TextStyle(
+                    fontSize: 12,
+                    color: selectedDate != null
+                        ? AppTheme.textPrimaryOf(context)
+                        : AppTheme.textMutedOf(context))),
+            if (selectedDate != null) ...[
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: () => onDateSelected(null),
+                child: Icon(Icons.close,
+                    size: 14, color: AppTheme.textSecondaryOf(context)),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  static InputDecoration _filterInputDec(BuildContext context, String hint, {bool isDark = false}) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 12),
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: BorderSide(color: AppTheme.borderOf(context))),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: BorderSide(color: AppTheme.borderOf(context))),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(20),
+          borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      filled: true,
+      fillColor: isDark ? AppTheme.bgCardDark : Colors.white,
+    );
+  }
+
+  Future<void> _handleExcelImport() async {
+    final service = RenewalImportService();
+    final fileResult = await service.pickExcelFile();
+    if (fileResult == null || fileResult.files.isEmpty) return;
+
+    final bytes = fileResult.files.single.bytes;
+    if (bytes == null) {
+      _snack('Failed to read file data.', Colors.red);
+      return;
+    }
+
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return const Dialog(
+          child: Padding(
+            padding: EdgeInsets.all(20.0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: Color(0xFF00BCD4)),
+                SizedBox(width: 20),
+                Text("Importing renewals..."),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    try {
+      final result = await service.importRenewalsFromExcel(bytes: bytes);
+      Navigator.pop(context); // Close loading dialog
+
+      // Show results dialog
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Excel Import Result'),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Processed: ${result.totalRows} row(s)'),
+                  Text('Succeeded: ${result.successCount}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                  Text('Failed: ${result.failedCount}', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                  if (result.errorDetails.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    const Text('Details:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ...result.errorDetails.map((detail) => Padding(
+                          padding: const EdgeInsets.only(top: 4.0),
+                          child: Text('• $detail', style: const TextStyle(fontSize: 12)),
+                        )),
+                  ]
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          );
+        },
+      );
+
+      await _fetchRenewals();
+    } catch (e) {
+      if (mounted) Navigator.pop(context); // Close loading dialog
+      _snack('Import failed: $e', Colors.red);
+    }
   }
 
   @override
@@ -608,18 +897,22 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
           ),
           const SizedBox(height: 16),
 
-          // 1. Stats Bar
+          // 1. Main Tab Toggle (Asset Renewals | Server Renewals)
+          _buildMainTabs(isDark),
+          const SizedBox(height: 16),
+
+          // 2. Stats Bar (recalculates per tab)
           _buildStats(isWide),
           const SizedBox(height: 16),
 
-          // 2. Filter Tabs (ALL, UPCOMING, PAID, OVERDUE, CANCELLED)
+          // 3. Status Filter Chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
                 _buildFilterTab('ALL', 'All Records'),
                 _buildFilterTab('UPCOMING', 'Expiring Soon (${_criticalWindow})'),
-                _buildFilterTab('PAID', 'Active / Paid'),
+                _buildFilterTab('PAID', 'Renewed / Paid'),
                 _buildFilterTab('OVERDUE', 'Overdue (${_overdueCount})'),
                 _buildFilterTab('CANCELLED', 'Cancelled'),
               ],
@@ -629,172 +922,244 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
 
           // 3. Search & Controls Row
           if (!isWide) ...[
-            TextField(
-              controller: _searchCtrl,
-              onChanged: (v) => setState(() => _search = v),
-              decoration: InputDecoration(
-                hintText: 'Search by client, domain or category...',
-                hintStyle: TextStyle(
-                    color: AppTheme.textMutedOf(context), fontSize: 12),
-                prefixIcon: Icon(Icons.search,
-                    color: AppTheme.textMutedOf(context), size: 18),
-                suffixIcon: _search.isNotEmpty
-                    ? IconButton(
-                        icon: Icon(Icons.close,
-                            size: 16, color: AppTheme.textSecondaryOf(context)),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          setState(() => _search = '');
-                        })
-                    : null,
-                filled: true,
-                fillColor: isDark ? AppTheme.bgCardDark : Colors.white,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: AppTheme.borderOf(context))),
-                enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: AppTheme.borderOf(context))),
-                focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(
-                        color: Color(0xFF00BCD4), width: 1.5)),
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: DropdownButtonFormField<ServiceCategory?>(
-                    value: _categoryFilter,
-                    decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 8),
-                      filled: true,
-                      fillColor: isDark ? AppTheme.bgCardDark : Colors.white,
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide:
-                              BorderSide(color: AppTheme.borderOf(context))),
-                    ),
-                    items: [
-                      const DropdownMenuItem(
-                          value: null, child: Text('All Categories')),
-                      ...ServiceCategory.values.map((c) => DropdownMenuItem(
-                          value: c,
-                          child: Text(c.label,
-                              style: const TextStyle(fontSize: 11)))),
-                    ],
-                    onChanged: (v) => setState(() => _categoryFilter = v),
+                TextField(
+                  controller: _searchCtrl,
+                  onChanged: (v) => setState(() => _search = v),
+                  decoration: InputDecoration(
+                    hintText: 'Search by client, domain or category...',
+                    hintStyle: TextStyle(
+                        color: AppTheme.textMutedOf(context), fontSize: 12),
+                    prefixIcon: Icon(Icons.search,
+                        color: AppTheme.textMutedOf(context), size: 18),
+                    suffixIcon: _search.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.close,
+                                size: 16, color: AppTheme.textSecondaryOf(context)),
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              setState(() => _search = '');
+                            })
+                        : null,
+                    filled: true,
+                    fillColor: isDark ? AppTheme.bgCardDark : Colors.white,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: AppTheme.borderOf(context))),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: AppTheme.borderOf(context))),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                            color: Color(0xFF00BCD4), width: 1.5)),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
                   ),
                 ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 140,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _showScheduleDialog(),
-                    icon: const Icon(Icons.add, size: 15),
-                    label: const Text('Schedule',
-                        style: TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w700)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00BCD4),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildDatePickerButton(
+                        context: context,
+                        label: 'From Date',
+                        selectedDate: _fromDate,
+                        onDateSelected: (d) => setState(() => _fromDate = d),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildDatePickerButton(
+                        context: context,
+                        label: 'To Date',
+                        selectedDate: _toDate,
+                        onDateSelected: (d) => setState(() => _toDate = d),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: _sortBy,
+                        decoration: _filterInputDec(context, 'Sort by...', isDark: isDark),
+                        items: const [
+                          DropdownMenuItem(value: 'sort_by', child: Text('Sort by...', style: TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: 'date_earliest', child: Text('Date: Earliest First ↑', style: TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: 'date_latest', child: Text('Date: Latest First ↓', style: TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: 'amount_low_high', child: Text('Amount: Low → High ↑', style: TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: 'amount_high_low', child: Text('Amount: High → Low ↓', style: TextStyle(fontSize: 12))),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) setState(() => _sortBy = v);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _handleExcelImport,
+                        icon: const Icon(Icons.file_upload_outlined, size: 16),
+                        label: const Text('Import Excel',
+                            style: TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w700)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isDark ? AppTheme.bgCardDark : Colors.white,
+                          foregroundColor: const Color(0xFF10B981),
+                          side: const BorderSide(color: Color(0xFF10B981), width: 1.5),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _showScheduleDialog(),
+                        icon: const Icon(Icons.add, size: 15),
+                        label: const Text('Schedule',
+                            style: TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w700)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00BCD4),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ] else ...[
-            Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  flex: 3,
-                  child: TextField(
-                    controller: _searchCtrl,
-                    onChanged: (v) => setState(() => _search = v),
-                    decoration: InputDecoration(
-                      hintText: 'Search by client, domain or category...',
-                      hintStyle: TextStyle(
-                          color: AppTheme.textMutedOf(context), fontSize: 12),
-                      prefixIcon: Icon(Icons.search,
-                          color: AppTheme.textMutedOf(context), size: 18),
-                      suffixIcon: _search.isNotEmpty
-                          ? IconButton(
-                              icon: Icon(Icons.close,
-                                  size: 16,
-                                  color: AppTheme.textSecondaryOf(context)),
-                              onPressed: () {
-                                _searchCtrl.clear();
-                                setState(() => _search = '');
-                              })
-                          : null,
-                      filled: true,
-                      fillColor: isDark ? AppTheme.bgCardDark : Colors.white,
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide:
-                              BorderSide(color: AppTheme.borderOf(context))),
-                      enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide:
-                              BorderSide(color: AppTheme.borderOf(context))),
-                      focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(
-                              color: Color(0xFF00BCD4), width: 1.5)),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 4,
+                      child: TextField(
+                        controller: _searchCtrl,
+                        onChanged: (v) => setState(() => _search = v),
+                        decoration: InputDecoration(
+                          hintText: 'Search by client, domain or category...',
+                          hintStyle: TextStyle(
+                              color: AppTheme.textMutedOf(context), fontSize: 12),
+                          prefixIcon: Icon(Icons.search,
+                              color: AppTheme.textMutedOf(context), size: 18),
+                          suffixIcon: _search.isNotEmpty
+                              ? IconButton(
+                                  icon: Icon(Icons.close,
+                                      size: 16,
+                                      color: AppTheme.textSecondaryOf(context)),
+                                  onPressed: () {
+                                    _searchCtrl.clear();
+                                    setState(() => _search = '');
+                                  })
+                              : null,
+                          filled: true,
+                          fillColor: isDark ? AppTheme.bgCardDark : Colors.white,
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide:
+                                  BorderSide(color: AppTheme.borderOf(context))),
+                          enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide:
+                                  BorderSide(color: AppTheme.borderOf(context))),
+                          focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(
+                                  color: Color(0xFF00BCD4), width: 1.5)),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 2,
-                  child: DropdownButtonFormField<ServiceCategory?>(
-                    value: _categoryFilter,
-                    decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 10),
-                      filled: true,
-                      fillColor: isDark ? AppTheme.bgCardDark : Colors.white,
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide:
-                              BorderSide(color: AppTheme.borderOf(context))),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed: _handleExcelImport,
+                      icon: const Icon(Icons.file_upload_outlined, size: 16),
+                      label: const Text('Import Excel',
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w700)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isDark ? AppTheme.bgCardDark : Colors.white,
+                        foregroundColor: const Color(0xFF10B981),
+                        side: const BorderSide(color: Color(0xFF10B981), width: 1.5),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                      ),
                     ),
-                    items: [
-                      const DropdownMenuItem(
-                          value: null, child: Text('All Categories')),
-                      ...ServiceCategory.values.map((c) => DropdownMenuItem(
-                          value: c,
-                          child: Text(c.label,
-                              style: const TextStyle(fontSize: 12)))),
-                    ],
-                    onChanged: (v) => setState(() => _categoryFilter = v),
-                  ),
+                    const SizedBox(width: 10),
+                    ElevatedButton.icon(
+                      onPressed: () => _showScheduleDialog(),
+                      icon: const Icon(Icons.add, size: 15),
+                      label: const Text('Schedule Renewal',
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w700)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00BCD4),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 10),
-                ElevatedButton.icon(
-                  onPressed: () => _showScheduleDialog(),
-                  icon: const Icon(Icons.add, size: 15),
-                  label: const Text('Schedule Renewal',
-                      style: TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w700)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00BCD4),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 14),
-                  ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    _buildDatePickerButton(
+                      context: context,
+                      label: 'From Expiry Date',
+                      selectedDate: _fromDate,
+                      onDateSelected: (d) => setState(() => _fromDate = d),
+                    ),
+                    const SizedBox(width: 10),
+                    _buildDatePickerButton(
+                      context: context,
+                      label: 'To Expiry Date',
+                      selectedDate: _toDate,
+                      onDateSelected: (d) => setState(() => _toDate = d),
+                    ),
+                    const Spacer(),
+                    SizedBox(
+                      width: 200,
+                      child: DropdownButtonFormField<String>(
+                        value: _sortBy,
+                        decoration: _filterInputDec(context, 'Sort by...', isDark: isDark),
+                        items: const [
+                          DropdownMenuItem(value: 'sort_by', child: Text('Sort by...', style: TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: 'date_earliest', child: Text('Date: Earliest First ↑', style: TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: 'date_latest', child: Text('Date: Latest First ↓', style: TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: 'amount_low_high', child: Text('Amount: Low → High ↑', style: TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: 'amount_high_low', child: Text('Amount: High → Low ↓', style: TextStyle(fontSize: 12))),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) setState(() => _sortBy = v);
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            ),
+            )
           ],
           const SizedBox(height: 14),
 
@@ -805,8 +1170,10 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
               child: Center(
                   child: CircularProgressIndicator(color: Color(0xFF00BCD4))),
             )
+          else if (_mainTab == 0)
+            _buildTable(filtered, isWide)
           else
-            _buildTable(filtered, isWide),
+            _buildServerTable(filtered, isWide),
         ],
       ),
     );
@@ -846,15 +1213,15 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
 
   Widget _buildStats(bool isWide) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isAsset = _mainTab == 0;
+
     final cards = [
       _StatData(
-          'TOTAL RENEWALS',
+          isAsset ? 'TOTAL ASSET RENEWALS' : 'TOTAL SERVER RENEWALS',
           '$_totalRenewals',
-          'Active recurring services',
+          isAsset ? 'Active domain & hosting assets' : 'Active infrastructure services',
           Icons.calendar_month_outlined,
-          isDark
-              ? AppTheme.textSecondaryOf(context)
-              : const Color(0xFF374151),
+          isDark ? AppTheme.textSecondaryOf(context) : const Color(0xFF374151),
           isDark ? AppTheme.bgCardDark : Colors.white),
       _StatData(
           'CRITICAL WINDOW',
@@ -864,9 +1231,9 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
           const Color(0xFFF59E0B),
           isDark ? const Color(0xFF2E1F0F) : const Color(0xFFFFFBEB)),
       _StatData(
-          'REVENUE LOCKED',
-          '₹${_revenueLocked.toStringAsFixed(0)}',
-          'Current period collection',
+          isAsset ? 'RENEWED ASSETS' : 'RENEWED SERVICES',
+          '$_renewedCount',
+          'Successfully renewed',
           Icons.check_circle_outline_rounded,
           const Color(0xFF10B981),
           isDark ? const Color(0xFF08271C) : const Color(0xFFF0FDF4),
@@ -892,7 +1259,7 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
                 .toList());
   }
 
-  // ── TABLE ─────────────────────────────────────────────────────────────────
+  // ── ASSET RENEWALS TABLE ───────────────────────────────────────────────────
 
   Widget _buildTable(List<AssetRenewal> renewals, bool isWide) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -909,7 +1276,8 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
             ),
             child: Row(
               children: const [
-                Expanded(flex: 4, child: _TH('SERVICE / CLIENT')),
+                Expanded(flex: 4, child: _TH('ASSET / DOMAIN')),
+                Expanded(flex: 3, child: _TH('CLIENT NAME')),
                 Expanded(flex: 2, child: _TH('CATEGORY')),
                 Expanded(flex: 2, child: _TH('EXPIRY DATE')),
                 Expanded(flex: 2, child: _TH('AMOUNT')),
@@ -919,43 +1287,8 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
             ),
           ),
         if (renewals.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(48),
-            decoration: BoxDecoration(
-              color: isDark ? AppTheme.bgCardDark : Colors.white,
-              border: Border.all(color: AppTheme.borderOf(context)),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              children: [
-                const Icon(Icons.autorenew_rounded,
-                    size: 40, color: Color(0xFFD1D5DB)),
-                const SizedBox(height: 12),
-                Text('No renewals found',
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimaryOf(context))),
-                const SizedBox(height: 6),
-                Text('Schedule a renewal to start tracking.',
-                    style: TextStyle(
-                        color: AppTheme.textSecondaryOf(context),
-                        fontSize: 12)),
-                const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: () => _showScheduleDialog(),
-                  icon: const Icon(Icons.add, size: 15),
-                  label: const Text('Schedule Renewal'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00BCD4),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ],
-            ),
-          )
+          _buildEmptyState('No asset renewals found',
+              'Schedule a renewal to start tracking.', const Color(0xFF00BCD4))
         else if (isWide)
           ...renewals.asMap().entries.map((e) => _RenewalRow(
                 renewal: e.value,
@@ -976,6 +1309,96 @@ class _AssetRenewalsPageState extends State<AssetRenewalsPage> {
       ],
     );
   }
+
+  // ── SERVER RENEWALS TABLE ──────────────────────────────────────────────────
+
+  Widget _buildServerTable(List<AssetRenewal> renewals, bool isWide) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Column(
+      children: [
+        if (isWide)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF9FAFB),
+              border: Border.all(color: AppTheme.borderOf(context)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(10)),
+            ),
+            child: Row(
+              children: const [
+                Expanded(flex: 4, child: _TH('VENDOR / SERVICE')),
+                Expanded(flex: 2, child: _TH('CATEGORY')),
+                Expanded(flex: 2, child: _TH('EXPIRY DATE')),
+                Expanded(flex: 2, child: _TH('AMOUNT')),
+                Expanded(flex: 2, child: _TH('STATUS')),
+                SizedBox(width: 40),
+              ],
+            ),
+          ),
+        if (renewals.isEmpty)
+          _buildEmptyState('No server renewals found',
+              'Schedule a server renewal to track infrastructure costs.', const Color(0xFFF59E0B))
+        else if (isWide)
+          ...renewals.asMap().entries.map((e) => _ServerRenewalRow(
+                renewal: e.value,
+                isLast: e.key == renewals.length - 1,
+                onEdit: () => _showScheduleDialog(existing: e.value),
+                onMarkPaid: () => _markAsPaid(e.value),
+                onReminder: () => _sendReminder(e.value),
+                onDelete: () => _deleteRenewal(e.value),
+              ))
+        else
+          ...renewals.map((r) => _ServerRenewalCardMobile(
+                renewal: r,
+                onEdit: () => _showScheduleDialog(existing: r),
+                onMarkPaid: () => _markAsPaid(r),
+                onReminder: () => _sendReminder(r),
+                onDelete: () => _deleteRenewal(r),
+              )),
+      ],
+    );
+  }
+
+  Widget _buildEmptyState(String title, String subtitle, Color accent) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(48),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
+        border: Border.all(color: AppTheme.borderOf(context)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.autorenew_rounded, size: 40, color: accent.withValues(alpha: 0.4)),
+          const SizedBox(height: 12),
+          Text(title,
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimaryOf(context))),
+          const SizedBox(height: 6),
+          Text(subtitle,
+              style: TextStyle(
+                  color: AppTheme.textSecondaryOf(context), fontSize: 12),
+              textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () => _showScheduleDialog(),
+            icon: const Icon(Icons.add, size: 15),
+            label: Text(_mainTab == 0 ? 'Schedule Renewal' : 'Schedule Server Renewal'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: accent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ─── SCHEDULE RENEWAL DIALOG ─────────────────────────────────────────────────
@@ -992,16 +1415,18 @@ class _ScheduleRenewalDialog extends StatefulWidget {
 
 class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
   late TextEditingController _descCtrl, _amountCtrl;
+  late TextEditingController _clientNameCtrl;
+  late TextEditingController _sourceCtrl;
+  late TextEditingController _remarksCtrl;
   String? _selectedClientId;
   String? _selectedClientName;
   String? _selectedProjectId;
   String? _selectedProjectName;
-  ServiceCategory _category = ServiceCategory.hosting;
+  ServiceCategory _category = ServiceCategory.hostingDomain;
   RenewalStatus _status = RenewalStatus.pending;
-  DateTime _expiryDate = DateTime.now().add(const Duration(days: 365));
+  DateTime _expiryDate = DateTime.now();
 
   List<Map<String, dynamic>> _clientList = [];
-  List<Map<String, dynamic>> _projectList = [];
   bool _loadingLookups = true;
 
   @override
@@ -1010,14 +1435,17 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
     final e = widget.existing;
     _descCtrl = TextEditingController(text: e?.description ?? '');
     _amountCtrl = TextEditingController(text: e?.amount.toString() ?? '');
+    _clientNameCtrl = TextEditingController(
+        text: e?.metadata['client_name']?.toString() ?? e?.clientName ?? '');
+    _sourceCtrl = TextEditingController(text: e?.metadata['source']?.toString() ?? '');
+    _remarksCtrl = TextEditingController(text: e?.metadata['remarks']?.toString() ?? '');
     _selectedClientId = e?.clientId;
     _selectedClientName = e?.clientName;
     _selectedProjectId = e?.projectId;
     _selectedProjectName = e?.projectName;
-    _category = e?.category ?? ServiceCategory.hosting;
+    _category = e?.category ?? ServiceCategory.hostingDomain;
     _status = e?.status ?? RenewalStatus.pending;
-    _expiryDate =
-        e?.expiryDate ?? DateTime.now().add(const Duration(days: 365));
+    _expiryDate = e?.expiryDate ?? DateTime.now();
 
     _fetchLookups();
   }
@@ -1026,6 +1454,9 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
   void dispose() {
     _descCtrl.dispose();
     _amountCtrl.dispose();
+    _clientNameCtrl.dispose();
+    _sourceCtrl.dispose();
+    _remarksCtrl.dispose();
     super.dispose();
   }
 
@@ -1035,15 +1466,10 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
           .from('clients')
           .select('id, name')
           .order('name');
-      final projectsData = await SupabaseService.client
-          .from('projects')
-          .select('id, name')
-          .order('name');
 
       if (!mounted) return;
       setState(() {
         _clientList = List<Map<String, dynamic>>.from(clientsData);
-        _projectList = List<Map<String, dynamic>>.from(projectsData);
         _loadingLookups = false;
       });
     } catch (_) {
@@ -1052,32 +1478,81 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
     }
   }
 
+  void _pickExpiryDate() async {
+    final d = await showDatePicker(
+      context: context,
+      initialDate: _expiryDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+    );
+    if (d != null) setState(() => _expiryDate = d);
+  }
+
   void _save() {
-    if (_descCtrl.text.trim().isEmpty) {
+    final domainName = _descCtrl.text.trim();
+    if (domainName.isEmpty) {
       AppSnackBar.showCustom(context, 
         const SnackBar(
-            content: Text('Service description required'),
+            content: Text('Domain / Asset name required'),
             backgroundColor: Colors.red),
       );
       return;
     }
+
+    String finalClientName = _clientNameCtrl.text.trim();
+    if (finalClientName.isEmpty) {
+      finalClientName = domainName;
+    }
+
     final renewal = AssetRenewal(
       id: widget.existing?.id ?? '',
       organizationId: widget.existing?.organizationId,
       clientId: _selectedClientId,
       projectId: _selectedProjectId,
       category: _category,
-      description: _descCtrl.text.trim(),
+      description: domainName,
       amount: double.tryParse(_amountCtrl.text) ?? 0,
       expiryDate: _expiryDate,
       status: _status,
       remindersSent: widget.existing?.remindersSent ?? 0,
       lastReminderAt: widget.existing?.lastReminderAt,
-      clientName: _selectedClientName ?? 'General Client',
+      clientName: _selectedClientId != null ? (_selectedClientName ?? 'General Client') : finalClientName,
       projectName: _selectedProjectName ?? 'Independent Service',
+      metadata: {
+        ...widget.existing?.metadata ?? {},
+        'service_name': domainName,
+        'client_name': _selectedClientId != null ? (_selectedClientName ?? 'General Client') : finalClientName,
+        'source': _sourceCtrl.text.trim(),
+        'remarks': _remarksCtrl.text.trim(),
+      },
     );
     widget.onSave(renewal);
     Navigator.pop(context);
+  }
+
+  static InputDecoration _formInputDec(BuildContext context, String hint,
+      {required bool isDark}) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(
+          color: isDark ? Colors.white38 : const Color(0xFF64748B),
+          fontSize: 12),
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(
+              color: isDark ? Colors.white10 : const Color(0xFFE2E8F0))),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(
+              color: isDark ? Colors.white10 : const Color(0xFFE2E8F0))),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide:
+              const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      filled: true,
+      fillColor: isDark ? AppTheme.bgCardDark : const Color(0xFFF1F5F9),
+    );
   }
 
   @override
@@ -1098,21 +1573,33 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
           children: [
             // Header
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00BCD4).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.calendar_month_outlined, color: Color(0xFF00BCD4), size: 20),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        isEdit ? 'EDIT RENEWAL' : 'SCHEDULE NEW RENEWAL',
+                        'Schedule Asset Renewal',
                         style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
                             color: AppTheme.textPrimaryOf(context),
                             letterSpacing: 0.3),
                       ),
+                      const SizedBox(height: 2),
                       Text(
-                        'Configure renewal tracking for hosting, domains, or enterprise mail services.',
+                        'Add domain or hosting details to track expiration and send reminders to clients.',
                         style: TextStyle(
                             fontSize: 11,
                             color: AppTheme.textSecondaryOf(context),
@@ -1121,9 +1608,9 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
                 IconButton(
-                  icon: Icon(Icons.close,
-                      size: 20, color: AppTheme.textSecondaryOf(context)),
+                  icon: const Icon(Icons.cancel_outlined, size: 22, color: Color(0xFF00BCD4)),
                   onPressed: () => Navigator.pop(context),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -1132,71 +1619,89 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
             ),
             const SizedBox(height: 20),
 
-            // Service Description / Name
-            _DlgLabel(context, 'SERVICE / ASSET DESCRIPTION'),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _descCtrl,
-              style: TextStyle(
-                  fontSize: 13, color: AppTheme.textPrimaryOf(context)),
-              decoration: _formInputDec(
-                  context, 'e.g. AWS Production Hosting',
-                  isDark: isDark),
-            ),
-            const SizedBox(height: 14),
-
-            // Client & Project Dropdowns (Real Supabase FKs)
             if (_loadingLookups)
-              const Center(
-                  child: CircularProgressIndicator(color: Color(0xFF00BCD4)))
+              const Padding(
+                padding: EdgeInsets.all(48.0),
+                child: Center(
+                    child: CircularProgressIndicator(color: Color(0xFF00BCD4))),
+              )
             else ...[
               if (isMobile) ...[
-                _DlgLabel(context, 'CLIENT'),
-                const SizedBox(height: 6),
-                DropdownButtonFormField<String?>(
-                  value: _selectedClientId,
-                  decoration: _formInputDec(context, 'Select Client',
-                      isDark: isDark),
-                  items: [
-                    const DropdownMenuItem(
-                        value: null, child: Text('General Client')),
-                    ..._clientList.map((c) => DropdownMenuItem(
-                          value: c['id'].toString(),
-                          child: Text(c['name'].toString()),
-                        )),
-                  ],
-                  onChanged: (val) {
-                    setState(() {
-                      _selectedClientId = val;
-                      final match = _clientList
-                          .firstWhere((c) => c['id'].toString() == val, orElse: () => {});
-                      _selectedClientName = match['name']?.toString() ?? 'General Client';
-                    });
-                  },
+                _DlgLabel(context, 'DOMAIN / ASSET NAME *'),
+                TextField(
+                  controller: _descCtrl,
+                  style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+                  decoration: _formInputDec(context, 'e.g. dtrend.in or freejob.org', isDark: isDark),
                 ),
-                const SizedBox(height: 14),
-                _DlgLabel(context, 'ASSOCIATED PROJECT'),
-                const SizedBox(height: 6),
-                DropdownButtonFormField<String?>(
-                  value: _selectedProjectId,
-                  decoration: _formInputDec(context, 'Select Project',
-                      isDark: isDark),
-                  items: [
-                    const DropdownMenuItem(
-                        value: null, child: Text('Independent Service')),
-                    ..._projectList.map((p) => DropdownMenuItem(
-                          value: p['id'].toString(),
-                          child: Text(p['name'].toString()),
-                        )),
-                  ],
-                  onChanged: (val) {
-                    setState(() {
-                      _selectedProjectId = val;
-                      final match = _projectList
-                          .firstWhere((p) => p['id'].toString() == val, orElse: () => {});
-                      _selectedProjectName = match['name']?.toString() ?? 'Independent Service';
-                    });
-                  },
+                const SizedBox(height: 12),
+                _DlgLabel(context, 'CLIENT NAME (TEXT)'),
+                TextField(
+                  controller: _clientNameCtrl,
+                  style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+                  decoration: _formInputDec(context, 'Defaults to domain name if left empty', isDark: isDark),
+                ),
+                const SizedBox(height: 12),
+                _DlgLabel(context, 'SOURCE / REGISTRAR'),
+                TextField(
+                  controller: _sourceCtrl,
+                  style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+                  decoration: _formInputDec(context, 'E.G. GODADDY, HOSTINGER', isDark: isDark),
+                ),
+                const SizedBox(height: 12),
+                _DlgLabel(context, 'SERVICE CATEGORY'),
+                DropdownButtonFormField<ServiceCategory>(
+                  value: _category,
+                  decoration: _formInputDec(context, 'Select Category', isDark: isDark),
+                  items: ServiceCategory.values
+                      .map((c) => DropdownMenuItem(value: c, child: Text(c.label, style: const TextStyle(fontSize: 12))))
+                      .toList(),
+                  onChanged: (v) => setState(() => _category = v!),
+                ),
+                const SizedBox(height: 12),
+                _DlgLabel(context, 'EXPIRATION DATE'),
+                GestureDetector(
+                  onTap: _pickExpiryDate,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppTheme.bgCardDark : const Color(0xFFF1F5F9),
+                      border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(DateFormat('dd-MM-yyyy').format(_expiryDate),
+                            style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context))),
+                        const Spacer(),
+                        Icon(Icons.calendar_today_outlined, size: 16, color: AppTheme.textMutedOf(context)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _DlgLabel(context, 'RENEWAL AMOUNT (₹)'),
+                TextField(
+                  controller: _amountCtrl,
+                  keyboardType: TextInputType.number,
+                  style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+                  decoration: _formInputDec(context, '0.00', isDark: isDark),
+                ),
+                const SizedBox(height: 12),
+                _DlgLabel(context, 'STATUS'),
+                DropdownButtonFormField<RenewalStatus>(
+                  value: _status,
+                  decoration: _formInputDec(context, 'Status', isDark: isDark),
+                  items: RenewalStatus.values
+                      .map((s) => DropdownMenuItem(value: s, child: Text(s.label, style: const TextStyle(fontSize: 12))))
+                      .toList(),
+                  onChanged: (v) => setState(() => _status = v!),
+                ),
+                const SizedBox(height: 12),
+                _DlgLabel(context, 'UPLOAD STATUS / REMARKS'),
+                TextField(
+                  controller: _remarksCtrl,
+                  style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+                  decoration: _formInputDec(context, 'e.g. UPLOADED, DOMAIN TR', isDark: isDark),
                 ),
               ] else ...[
                 Row(
@@ -1205,63 +1710,138 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _DlgLabel(context, 'CLIENT'),
-                          const SizedBox(height: 6),
-                          DropdownButtonFormField<String?>(
-                            value: _selectedClientId,
-                            decoration: _formInputDec(context, 'Select Client',
-                                isDark: isDark),
-                            items: [
-                              const DropdownMenuItem(
-                                  value: null, child: Text('General Client')),
-                              ..._clientList.map((c) => DropdownMenuItem(
-                                    value: c['id'].toString(),
-                                    child: Text(c['name'].toString()),
-                                  )),
-                            ],
-                            onChanged: (val) {
-                              setState(() {
-                                _selectedClientId = val;
-                                final match = _clientList.firstWhere(
-                                    (c) => c['id'].toString() == val,
-                                    orElse: () => {});
-                                _selectedClientName =
-                                    match['name']?.toString() ?? 'General Client';
-                              });
-                            },
+                          _DlgLabel(context, 'DOMAIN / ASSET NAME *'),
+                          TextField(
+                            controller: _descCtrl,
+                            style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+                            decoration: _formInputDec(context, 'e.g. dtrend.in or freejob.org', isDark: isDark),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _DlgLabel(context, 'ASSOCIATED PROJECT'),
-                          const SizedBox(height: 6),
-                          DropdownButtonFormField<String?>(
-                            value: _selectedProjectId,
-                            decoration: _formInputDec(context, 'Select Project',
-                                isDark: isDark),
-                            items: [
-                              const DropdownMenuItem(
-                                  value: null, child: Text('Independent Service')),
-                              ..._projectList.map((p) => DropdownMenuItem(
-                                    value: p['id'].toString(),
-                                    child: Text(p['name'].toString()),
-                                  )),
-                            ],
-                            onChanged: (val) {
-                              setState(() {
-                                _selectedProjectId = val;
-                                final match = _projectList.firstWhere(
-                                    (p) => p['id'].toString() == val,
-                                    orElse: () => {});
-                                _selectedProjectName = match['name']?.toString() ??
-                                    'Independent Service';
-                              });
-                            },
+                          _DlgLabel(context, 'CLIENT NAME (TEXT)'),
+                          TextField(
+                            controller: _clientNameCtrl,
+                            style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+                            decoration: _formInputDec(context, 'Defaults to domain name if left empty', isDark: isDark),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _DlgLabel(context, 'SOURCE / REGISTRAR'),
+                          TextField(
+                            controller: _sourceCtrl,
+                            style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+                            decoration: _formInputDec(context, 'E.G. GODADDY, HOSTINGER', isDark: isDark),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _DlgLabel(context, 'SERVICE CATEGORY'),
+                          DropdownButtonFormField<ServiceCategory>(
+                            value: _category,
+                            decoration: _formInputDec(context, 'Select Category', isDark: isDark),
+                            items: ServiceCategory.values
+                                .map((c) => DropdownMenuItem(value: c, child: Text(c.label, style: const TextStyle(fontSize: 12))))
+                                .toList(),
+                            onChanged: (v) => setState(() => _category = v!),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _DlgLabel(context, 'EXPIRATION DATE'),
+                          GestureDetector(
+                            onTap: _pickExpiryDate,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: isDark ? AppTheme.bgCardDark : const Color(0xFFF1F5F9),
+                                border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  Text(DateFormat('dd-MM-yyyy').format(_expiryDate),
+                                      style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context))),
+                                  const Spacer(),
+                                  Icon(Icons.calendar_today_outlined, size: 16, color: AppTheme.textMutedOf(context)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _DlgLabel(context, 'RENEWAL AMOUNT (₹)'),
+                          TextField(
+                            controller: _amountCtrl,
+                            keyboardType: TextInputType.number,
+                            style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+                            decoration: _formInputDec(context, '0.00', isDark: isDark),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _DlgLabel(context, 'STATUS'),
+                          DropdownButtonFormField<RenewalStatus>(
+                            value: _status,
+                            decoration: _formInputDec(context, 'Status', isDark: isDark),
+                            items: RenewalStatus.values
+                                .map((s) => DropdownMenuItem(value: s, child: Text(s.label, style: const TextStyle(fontSize: 12))))
+                                .toList(),
+                            onChanged: (v) => setState(() => _status = v!),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _DlgLabel(context, 'UPLOAD STATUS / REMARKS'),
+                          TextField(
+                            controller: _remarksCtrl,
+                            style: TextStyle(fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+                            decoration: _formInputDec(context, 'e.g. UPLOADED, DOMAIN TR', isDark: isDark),
                           ),
                         ],
                       ),
@@ -1269,240 +1849,74 @@ class _ScheduleRenewalDialogState extends State<_ScheduleRenewalDialog> {
                   ],
                 ),
               ],
-            ],
-            const SizedBox(height: 14),
-
-            // Category + Expiry Date
-            if (isMobile) ...[
-              _DlgLabel(context, 'SERVICE CATEGORY'),
-              const SizedBox(height: 6),
-              DropdownButtonFormField<ServiceCategory>(
-                value: _category,
-                decoration: _formInputDec(context, 'Select Category',
-                    isDark: isDark),
-                items: ServiceCategory.values
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c.label)))
-                    .toList(),
-                onChanged: (v) => setState(() => _category = v!),
-              ),
-              const SizedBox(height: 14),
-              _DlgLabel(context, 'EXPIRATION DATE'),
-              const SizedBox(height: 6),
-              GestureDetector(
-                onTap: () async {
-                  final d = await showDatePicker(
-                    context: context,
-                    initialDate: _expiryDate,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime(2035),
-                  );
-                  if (d != null) setState(() => _expiryDate = d);
+              const SizedBox(height: 20),
+              _DlgLabel(context, 'LINK CRM ACTIVE CLIENT (OPTIONAL)'),
+              DropdownButtonFormField<String?>(
+                value: _selectedClientId,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0))),
+                  enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0))),
+                  focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  filled: true,
+                  fillColor: isDark ? AppTheme.bgCardDark : const Color(0xFFF8FAFC),
+                ),
+                icon: Icon(Icons.unfold_more, color: AppTheme.textMutedOf(context)),
+                items: [
+                  const DropdownMenuItem(
+                      value: null,
+                      child: Text('No CRM client linked (Standalone Asset)', style: TextStyle(fontSize: 12))),
+                  ..._clientList.map((c) => DropdownMenuItem(
+                        value: c['id'].toString(),
+                        child: Text(c['name'].toString(), style: const TextStyle(fontSize: 12)),
+                      )),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    _selectedClientId = val;
+                    if (val != null) {
+                      final match = _clientList.firstWhere(
+                          (c) => c['id'].toString() == val,
+                          orElse: () => {});
+                      _selectedClientName = match['name']?.toString() ?? 'General Client';
+                    } else {
+                      _selectedClientName = null;
+                    }
+                  });
                 },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppTheme.bgCardDark : Colors.white,
-                    border: Border.all(color: AppTheme.borderOf(context)),
-                    borderRadius: BorderRadius.circular(8),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: _save,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00BCD4),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
                   ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.calendar_today_outlined,
-                          size: 14, color: AppTheme.textMutedOf(context)),
-                      const SizedBox(width: 6),
-                      Text(DateFormat('dd-MM-yyyy').format(_expiryDate),
-                          style: TextStyle(
-                              fontSize: 13,
-                              color: AppTheme.textPrimaryOf(context))),
-                    ],
+                  child: Text(
+                    isEdit ? 'UPDATE RENEWAL' : 'SCHEDULE RENEWAL',
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5),
                   ),
                 ),
-              ),
-            ] else ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _DlgLabel(context, 'SERVICE CATEGORY'),
-                        const SizedBox(height: 6),
-                        DropdownButtonFormField<ServiceCategory>(
-                          value: _category,
-                          decoration: _formInputDec(context, 'Category',
-                              isDark: isDark),
-                          items: ServiceCategory.values
-                              .map((c) => DropdownMenuItem(
-                                  value: c, child: Text(c.label)))
-                              .toList(),
-                          onChanged: (v) => setState(() => _category = v!),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _DlgLabel(context, 'EXPIRATION DATE'),
-                        const SizedBox(height: 6),
-                        GestureDetector(
-                          onTap: () async {
-                            final d = await showDatePicker(
-                              context: context,
-                              initialDate: _expiryDate,
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime(2035),
-                            );
-                            if (d != null) setState(() => _expiryDate = d);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 14),
-                            decoration: BoxDecoration(
-                              color:
-                                  isDark ? AppTheme.bgCardDark : Colors.white,
-                              border:
-                                  Border.all(color: AppTheme.borderOf(context)),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(Icons.calendar_today_outlined,
-                                    size: 14,
-                                    color: AppTheme.textMutedOf(context)),
-                                const SizedBox(width: 6),
-                                Text(DateFormat('dd-MM-yyyy').format(_expiryDate),
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        color: AppTheme.textPrimaryOf(context))),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
               ),
             ],
-            const SizedBox(height: 14),
-
-            // Amount + Status
-            if (isMobile) ...[
-              _DlgLabel(context, 'RENEWAL AMOUNT (₹)'),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _amountCtrl,
-                keyboardType: TextInputType.number,
-                style: TextStyle(
-                    fontSize: 13, color: AppTheme.textPrimaryOf(context)),
-                decoration: _formInputDec(context, '0.00', isDark: isDark),
-              ),
-              const SizedBox(height: 14),
-              _DlgLabel(context, 'STATUS'),
-              const SizedBox(height: 6),
-              DropdownButtonFormField<RenewalStatus>(
-                value: _status,
-                decoration: _formInputDec(context, 'Status', isDark: isDark),
-                items: RenewalStatus.values
-                    .map((s) => DropdownMenuItem(value: s, child: Text(s.label)))
-                    .toList(),
-                onChanged: (v) => setState(() => _status = v!),
-              ),
-            ] else ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _DlgLabel(context, 'RENEWAL AMOUNT (₹)'),
-                        const SizedBox(height: 6),
-                        TextField(
-                          controller: _amountCtrl,
-                          keyboardType: TextInputType.number,
-                          style: TextStyle(
-                              fontSize: 13,
-                              color: AppTheme.textPrimaryOf(context)),
-                          decoration:
-                              _formInputDec(context, '0.00', isDark: isDark),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _DlgLabel(context, 'STATUS'),
-                        const SizedBox(height: 6),
-                        DropdownButtonFormField<RenewalStatus>(
-                          value: _status,
-                          decoration:
-                              _formInputDec(context, 'Status', isDark: isDark),
-                          items: RenewalStatus.values
-                              .map((s) => DropdownMenuItem(
-                                  value: s, child: Text(s.label)))
-                              .toList(),
-                          onChanged: (v) => setState(() => _status = v!),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            const SizedBox(height: 20),
-
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: _save,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00BCD4),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
-                ),
-                child: Text(
-                  isEdit ? 'UPDATE RENEWAL' : 'SCHEDULE RENEWAL',
-                  style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5),
-                ),
-              ),
-            ),
           ],
         ),
       ),
-    );
-  }
-
-  static InputDecoration _formInputDec(BuildContext context, String hint,
-      {required bool isDark}) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 12),
-      border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: AppTheme.borderOf(context))),
-      enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: AppTheme.borderOf(context))),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide:
-              const BorderSide(color: Color(0xFF00BCD4), width: 1.5)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      filled: true,
-      fillColor: isDark ? AppTheme.bgCardDark : Colors.white,
     );
   }
 }
@@ -2122,7 +2536,927 @@ class _RenewalCardMobile extends StatelessWidget {
   }
 }
 
+// ─── SERVER RENEWAL ROW (DESKTOP) ────────────────────────────────────────────
+
+class _ServerRenewalRow extends StatelessWidget {
+  final AssetRenewal renewal;
+  final bool isLast;
+  final VoidCallback onEdit;
+  final VoidCallback onMarkPaid;
+  final VoidCallback onReminder;
+  final VoidCallback onDelete;
+
+  const _ServerRenewalRow({
+    required this.renewal,
+    required this.isLast,
+    required this.onEdit,
+    required this.onMarkPaid,
+    required this.onReminder,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final vendor = renewal.metadata['vendor']?.toString() ?? renewal.serviceName;
+    final source = renewal.metadata['source']?.toString() ?? '';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(color: AppTheme.borderOf(context)),
+          right: BorderSide(color: AppTheme.borderOf(context)),
+          bottom: BorderSide(
+              color: isLast ? Colors.transparent : AppTheme.borderOf(context)),
+        ),
+        borderRadius: isLast
+            ? const BorderRadius.vertical(bottom: Radius.circular(10))
+            : BorderRadius.zero,
+        color: renewal.isExpired
+            ? (isDark ? const Color(0xFF3B1F21) : const Color(0xFFFEF2F2))
+                .withValues(alpha: 0.4)
+            : renewal.isExpiringSoon
+                ? (isDark ? const Color(0xFF2E1F0F) : const Color(0xFFFFFBEB))
+                    .withValues(alpha: 0.5)
+                : (isDark ? AppTheme.bgCardDark : Colors.white),
+      ),
+      child: Row(
+        children: [
+          // Vendor / Service
+          Expanded(
+            flex: 4,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(vendor,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textPrimaryOf(context)),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
+                if (source.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(source.toUpperCase(),
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFFF59E0B),
+                          letterSpacing: 0.3)),
+                ],
+              ],
+            ),
+          ),
+          // Category
+          Expanded(
+            flex: 2,
+            child: Row(
+              children: [
+                Icon(renewal.category.icon,
+                    size: 14, color: renewal.category.color),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(renewal.category.label,
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: renewal.category.color,
+                          letterSpacing: 0.3),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ),
+              ],
+            ),
+          ),
+          // Expiry
+          Expanded(
+            flex: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(renewal.formattedExpiry,
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textPrimaryOf(context))),
+                Text(renewal.expiryLabel,
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: renewal.isExpired
+                            ? const Color(0xFFEF4444)
+                            : renewal.isExpiringSoon
+                                ? const Color(0xFFF59E0B)
+                                : AppTheme.textMutedOf(context))),
+              ],
+            ),
+          ),
+          // Amount (expense shown in amber/orange)
+          Expanded(
+            flex: 2,
+            child: Text('₹${renewal.amount.toStringAsFixed(0)}',
+                style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFF59E0B))),
+          ),
+          // Status
+          Expanded(
+            flex: 2,
+            child: _StatusBadge(status: renewal.effectiveStatus),
+          ),
+          // Actions
+          SizedBox(
+            width: 40,
+            child: PopupMenuButton<String>(
+              icon: Icon(Icons.more_horiz,
+                  size: 18, color: AppTheme.textMutedOf(context)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              itemBuilder: (_) => [
+                _srvMenuItem(Icons.edit_outlined, 'EDIT RECORD',
+                    isDark ? Colors.white : const Color(0xFF374151), 'edit'),
+                _srvMenuItem(Icons.notifications_outlined, 'SEND REMINDER',
+                    const Color(0xFF3B82F6), 'remind'),
+                _srvMenuItem(Icons.check_circle_outline, 'MARK AS PAID',
+                    const Color(0xFF10B981), 'paid'),
+                _srvMenuItem(Icons.delete_outline, 'DELETE ENTRY',
+                    const Color(0xFFEF4444), 'delete'),
+              ],
+              onSelected: (v) {
+                if (v == 'edit') onEdit();
+                if (v == 'remind') onReminder();
+                if (v == 'paid') onMarkPaid();
+                if (v == 'delete') onDelete();
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  PopupMenuItem<String> _srvMenuItem(
+      IconData icon, String label, Color color, String value) {
+    return PopupMenuItem(
+      value: value,
+      height: 40,
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 8),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                  letterSpacing: 0.3)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── SERVER RENEWAL CARD (MOBILE) ────────────────────────────────────────────
+
+class _ServerRenewalCardMobile extends StatelessWidget {
+  final AssetRenewal renewal;
+  final VoidCallback onEdit;
+  final VoidCallback onMarkPaid;
+  final VoidCallback onReminder;
+  final VoidCallback onDelete;
+
+  const _ServerRenewalCardMobile({
+    required this.renewal,
+    required this.onEdit,
+    required this.onMarkPaid,
+    required this.onReminder,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final vendor = renewal.metadata['vendor']?.toString() ?? renewal.serviceName;
+    final source = renewal.metadata['source']?.toString() ?? '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.bgCardDark : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: renewal.isExpired
+              ? const Color(0xFFEF4444).withValues(alpha: 0.3)
+              : renewal.isExpiringSoon
+                  ? const Color(0xFFF59E0B).withValues(alpha: 0.4)
+                  : AppTheme.borderOf(context),
+        ),
+        boxShadow: isDark
+            ? []
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Category badge + Status + Actions
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: renewal.category.color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(renewal.category.icon,
+                        size: 12, color: renewal.category.color),
+                    const SizedBox(width: 4),
+                    Text(renewal.category.label,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: renewal.category.color,
+                          letterSpacing: 0.3,
+                        )),
+                  ],
+                ),
+              ),
+              Row(
+                children: [
+                  _StatusBadge(status: renewal.effectiveStatus),
+                  const SizedBox(width: 4),
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert,
+                        size: 18, color: AppTheme.textMutedOf(context)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    itemBuilder: (_) => [
+                      _srvMenuItem(Icons.edit_outlined, 'EDIT RECORD',
+                          isDark ? Colors.white : const Color(0xFF374151),
+                          'edit'),
+                      _srvMenuItem(Icons.notifications_outlined,
+                          'SEND REMINDER', const Color(0xFF3B82F6), 'remind'),
+                      _srvMenuItem(Icons.check_circle_outline, 'MARK AS PAID',
+                          const Color(0xFF10B981), 'paid'),
+                      _srvMenuItem(Icons.delete_outline, 'DELETE ENTRY',
+                          const Color(0xFFEF4444), 'delete'),
+                    ],
+                    onSelected: (v) {
+                      if (v == 'edit') onEdit();
+                      if (v == 'remind') onReminder();
+                      if (v == 'paid') onMarkPaid();
+                      if (v == 'delete') onDelete();
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Vendor / Service name
+          Text(vendor,
+              style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimaryOf(context))),
+
+          if (source.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(Icons.dns_outlined,
+                    size: 14, color: const Color(0xFFF59E0B)),
+                const SizedBox(width: 6),
+                Text(source.toUpperCase(),
+                    style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFF59E0B))),
+              ],
+            ),
+          ],
+
+          Divider(height: 20, color: AppTheme.borderOf(context)),
+
+          // Expiry & Amount Row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('EXPIRY DATE',
+                      style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textMutedOf(context),
+                          letterSpacing: 0.3)),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Text(renewal.formattedExpiry,
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.textPrimaryOf(context))),
+                      const SizedBox(width: 6),
+                      Text('(${renewal.expiryLabel})',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: renewal.isExpired
+                                ? const Color(0xFFEF4444)
+                                : renewal.isExpiringSoon
+                                    ? const Color(0xFFF59E0B)
+                                    : const Color(0xFF10B981),
+                          )),
+                    ],
+                  ),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('EXPENSE',
+                      style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textMutedOf(context),
+                          letterSpacing: 0.3)),
+                  const SizedBox(height: 2),
+                  Text('₹${renewal.amount.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFFF59E0B))),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  PopupMenuItem<String> _srvMenuItem(
+      IconData icon, String label, Color color, String value) {
+    return PopupMenuItem(
+      value: value,
+      height: 40,
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 8),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                  letterSpacing: 0.3)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── SCHEDULE SERVER RENEWAL DIALOG ──────────────────────────────────────────
+
+class _ScheduleServerRenewalDialog extends StatefulWidget {
+  final AssetRenewal? existing;
+  final Function(AssetRenewal) onSave;
+
+  const _ScheduleServerRenewalDialog({this.existing, required this.onSave});
+
+  @override
+  State<_ScheduleServerRenewalDialog> createState() =>
+      _ScheduleServerRenewalDialogState();
+}
+
+class _ScheduleServerRenewalDialogState
+    extends State<_ScheduleServerRenewalDialog> {
+  late TextEditingController _vendorCtrl;
+  late TextEditingController _descCtrl;
+  late TextEditingController _amountCtrl;
+  late TextEditingController _sourceCtrl;
+  late TextEditingController _remarksCtrl;
+  ServiceCategory _category = ServiceCategory.hosting;
+  RenewalStatus _status = RenewalStatus.pending;
+  DateTime _expiryDate = DateTime.now().add(const Duration(days: 365));
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.existing;
+    _vendorCtrl = TextEditingController(
+        text: e?.metadata['vendor']?.toString() ?? e?.description ?? '');
+    _descCtrl = TextEditingController(
+        text: e?.description ?? '');
+    _amountCtrl =
+        TextEditingController(text: e != null ? e.amount.toString() : '');
+    _sourceCtrl = TextEditingController(
+        text: e?.metadata['source']?.toString() ?? '');
+    _remarksCtrl = TextEditingController(
+        text: e?.metadata['remarks']?.toString() ?? '');
+    _category = e?.category ?? ServiceCategory.hosting;
+    _status = e?.status ?? RenewalStatus.pending;
+    _expiryDate =
+        e?.expiryDate ?? DateTime.now().add(const Duration(days: 365));
+  }
+
+  @override
+  void dispose() {
+    _vendorCtrl.dispose();
+    _descCtrl.dispose();
+    _amountCtrl.dispose();
+    _sourceCtrl.dispose();
+    _remarksCtrl.dispose();
+    super.dispose();
+  }
+
+  void _pickExpiryDate() async {
+    final d = await showDatePicker(
+      context: context,
+      initialDate: _expiryDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2040),
+    );
+    if (d != null) setState(() => _expiryDate = d);
+  }
+
+  void _save() {
+    final vendor = _vendorCtrl.text.trim();
+    if (vendor.isEmpty) {
+      AppSnackBar.showCustom(
+        context,
+        const SnackBar(
+            content: Text('Vendor / Service name is required'),
+            backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    final renewal = AssetRenewal(
+      id: widget.existing?.id ?? '',
+      organizationId: widget.existing?.organizationId,
+      clientId: null,
+      projectId: null,
+      category: _category,
+      description: vendor,
+      amount: double.tryParse(_amountCtrl.text) ?? 0,
+      expiryDate: _expiryDate,
+      status: _status,
+      remindersSent: widget.existing?.remindersSent ?? 0,
+      lastReminderAt: widget.existing?.lastReminderAt,
+      clientName: 'Ecraftz (Internal)',
+      projectName: 'Infrastructure',
+      metadata: {
+        ...widget.existing?.metadata ?? {},
+        'type': 'server',
+        'vendor': vendor,
+        'source': _sourceCtrl.text.trim(),
+        'remarks': _remarksCtrl.text.trim(),
+        'service_name': _descCtrl.text.trim().isNotEmpty
+            ? _descCtrl.text.trim()
+            : vendor,
+      },
+    );
+    widget.onSave(renewal);
+    Navigator.pop(context);
+  }
+
+  static InputDecoration _inp(BuildContext context, String hint,
+      {required bool isDark}) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(
+          color: isDark ? Colors.white38 : const Color(0xFF64748B),
+          fontSize: 12),
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(
+              color: isDark ? Colors.white10 : const Color(0xFFE2E8F0))),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(
+              color: isDark ? Colors.white10 : const Color(0xFFE2E8F0))),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide:
+              const BorderSide(color: Color(0xFFF59E0B), width: 1.5)),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      filled: true,
+      fillColor: isDark ? AppTheme.bgCardDark : const Color(0xFFF1F5F9),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.existing != null;
+    final isMobile = MediaQuery.of(context).size.width <= 600;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Dialog(
+      backgroundColor: isDark ? AppTheme.bgCardDark : Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.dns_outlined,
+                      color: Color(0xFFF59E0B), size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isEdit
+                            ? 'Edit Server Renewal'
+                            : 'Schedule Server Renewal',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: AppTheme.textPrimaryOf(context),
+                            letterSpacing: 0.3),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Track infrastructure expenses — hosting, VPS, domains and other server costs.',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.textSecondaryOf(context),
+                            height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.cancel_outlined,
+                      size: 22, color: Color(0xFFF59E0B)),
+                  onPressed: () => Navigator.pop(context),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            if (isMobile) ...[
+              _DlgLabel(context, 'VENDOR / SERVICE NAME *'),
+              TextField(
+                controller: _vendorCtrl,
+                style: TextStyle(
+                    fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+                decoration:
+                    _inp(context, 'e.g. Hostinger, AWS, DigitalOcean', isDark: isDark),
+              ),
+              const SizedBox(height: 12),
+              _DlgLabel(context, 'SERVICE DESCRIPTION'),
+              TextField(
+                controller: _descCtrl,
+                style: TextStyle(
+                    fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+                decoration: _inp(context,
+                    'e.g. Premium Web Hosting - General', isDark: isDark),
+              ),
+              const SizedBox(height: 12),
+              _DlgLabel(context, 'PLAN / SOURCE'),
+              TextField(
+                controller: _sourceCtrl,
+                style: TextStyle(
+                    fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+                decoration:
+                    _inp(context, 'e.g. Business Plan, Premium', isDark: isDark),
+              ),
+              const SizedBox(height: 12),
+              _DlgLabel(context, 'SERVER CATEGORY'),
+              DropdownButtonFormField<ServiceCategory>(
+                value: _category,
+                decoration: _inp(context, 'Select Category', isDark: isDark),
+                items: ServiceCategory.values
+                    .map((c) => DropdownMenuItem(
+                        value: c,
+                        child: Text(c.label,
+                            style: const TextStyle(fontSize: 12))))
+                    .toList(),
+                onChanged: (v) => setState(() => _category = v!),
+              ),
+              const SizedBox(height: 12),
+              _DlgLabel(context, 'EXPIRY DATE'),
+              GestureDetector(
+                onTap: _pickExpiryDate,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? AppTheme.bgCardDark
+                        : const Color(0xFFF1F5F9),
+                    border: Border.all(
+                        color: isDark
+                            ? Colors.white10
+                            : const Color(0xFFE2E8F0)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(DateFormat('dd-MM-yyyy').format(_expiryDate),
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: AppTheme.textPrimaryOf(context))),
+                      const Spacer(),
+                      Icon(Icons.calendar_today_outlined,
+                          size: 16, color: AppTheme.textMutedOf(context)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _DlgLabel(context, 'EXPENSE AMOUNT (₹)'),
+              TextField(
+                controller: _amountCtrl,
+                keyboardType: TextInputType.number,
+                style: TextStyle(
+                    fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+                decoration: _inp(context, '0.00', isDark: isDark),
+              ),
+              const SizedBox(height: 12),
+              _DlgLabel(context, 'STATUS'),
+              DropdownButtonFormField<RenewalStatus>(
+                value: _status,
+                decoration: _inp(context, 'Status', isDark: isDark),
+                items: RenewalStatus.values
+                    .map((s) => DropdownMenuItem(
+                        value: s,
+                        child: Text(s.label,
+                            style: const TextStyle(fontSize: 12))))
+                    .toList(),
+                onChanged: (v) => setState(() => _status = v!),
+              ),
+              const SizedBox(height: 12),
+              _DlgLabel(context, 'REMARKS'),
+              TextField(
+                controller: _remarksCtrl,
+                style: TextStyle(
+                    fontSize: 13, color: AppTheme.textPrimaryOf(context)),
+                decoration:
+                    _inp(context, 'e.g. Auto-renewal enabled', isDark: isDark),
+              ),
+            ] else ...[
+              // Wide layout — 2 columns
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _DlgLabel(context, 'VENDOR / SERVICE NAME *'),
+                        TextField(
+                          controller: _vendorCtrl,
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: AppTheme.textPrimaryOf(context)),
+                          decoration: _inp(context,
+                              'e.g. Hostinger, AWS, DigitalOcean',
+                              isDark: isDark),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _DlgLabel(context, 'SERVICE DESCRIPTION'),
+                        TextField(
+                          controller: _descCtrl,
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: AppTheme.textPrimaryOf(context)),
+                          decoration: _inp(
+                              context, 'e.g. Premium Web Hosting - General',
+                              isDark: isDark),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _DlgLabel(context, 'PLAN / SOURCE'),
+                        TextField(
+                          controller: _sourceCtrl,
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: AppTheme.textPrimaryOf(context)),
+                          decoration: _inp(
+                              context, 'e.g. Business Plan, Premium',
+                              isDark: isDark),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _DlgLabel(context, 'SERVER CATEGORY'),
+                        DropdownButtonFormField<ServiceCategory>(
+                          value: _category,
+                          decoration: _inp(context, 'Select Category',
+                              isDark: isDark),
+                          items: ServiceCategory.values
+                              .map((c) => DropdownMenuItem(
+                                  value: c,
+                                  child: Text(c.label,
+                                      style:
+                                          const TextStyle(fontSize: 12))))
+                              .toList(),
+                          onChanged: (v) => setState(() => _category = v!),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _DlgLabel(context, 'EXPIRY DATE'),
+                        GestureDetector(
+                          onTap: _pickExpiryDate,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? AppTheme.bgCardDark
+                                  : const Color(0xFFF1F5F9),
+                              border: Border.all(
+                                  color: isDark
+                                      ? Colors.white10
+                                      : const Color(0xFFE2E8F0)),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                Text(
+                                    DateFormat('dd-MM-yyyy')
+                                        .format(_expiryDate),
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        color:
+                                            AppTheme.textPrimaryOf(context))),
+                                const Spacer(),
+                                Icon(Icons.calendar_today_outlined,
+                                    size: 16,
+                                    color: AppTheme.textMutedOf(context)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _DlgLabel(context, 'EXPENSE AMOUNT (₹)'),
+                        TextField(
+                          controller: _amountCtrl,
+                          keyboardType: TextInputType.number,
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: AppTheme.textPrimaryOf(context)),
+                          decoration:
+                              _inp(context, '0.00', isDark: isDark),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _DlgLabel(context, 'STATUS'),
+                        DropdownButtonFormField<RenewalStatus>(
+                          value: _status,
+                          decoration:
+                              _inp(context, 'Status', isDark: isDark),
+                          items: RenewalStatus.values
+                              .map((s) => DropdownMenuItem(
+                                  value: s,
+                                  child: Text(s.label,
+                                      style:
+                                          const TextStyle(fontSize: 12))))
+                              .toList(),
+                          onChanged: (v) => setState(() => _status = v!),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _DlgLabel(context, 'REMARKS'),
+                        TextField(
+                          controller: _remarksCtrl,
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: AppTheme.textPrimaryOf(context)),
+                          decoration: _inp(
+                              context, 'e.g. Auto-renewal enabled',
+                              isDark: isDark),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF59E0B),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
+                ),
+                child: Text(
+                  isEdit
+                      ? 'UPDATE SERVER RENEWAL'
+                      : 'SCHEDULE SERVER RENEWAL',
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ─── STAT CARD ─────────────────────────────────────────────────────────────
+
 
 class _StatData {
   final String title;

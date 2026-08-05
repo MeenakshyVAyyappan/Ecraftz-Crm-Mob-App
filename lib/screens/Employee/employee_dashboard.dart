@@ -11,8 +11,9 @@ import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/task/task_bloc.dart';
 import '../../models/task_model.dart';
 import '../../services/supabase_service.dart';
-import 'package:provider/provider.dart';
-import '../../providers/rbac_provider.dart';
+import '../../blocs/rbac/rbac_cubit.dart';
+import '../../blocs/meeting/meeting_bloc.dart';
+import '../../models/meeting_model.dart';
 import '../../theme/app_theme.dart';
 import 'emply_project_screen.dart';
 import 'emply_tasks_screen.dart';
@@ -76,7 +77,7 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
   bool get _isCrmDepartment {
     final deptLower = _departmentName.toLowerCase();
     final roleLower = _userRole.toLowerCase();
-    final rbac = Provider.of<RbacProvider>(context, listen: false);
+    final rbac = context.read<RbacCubit>();
     return deptLower.contains('crm') ||
         roleLower.contains('admin') ||
         roleLower.contains('super') ||
@@ -127,7 +128,7 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
       setState(() => _isLoadingProfile = true);
     }
     try {
-      final rbac = Provider.of<RbacProvider>(context, listen: false);
+      final rbac = context.read<RbacCubit>();
       rbac.setUserRole(_userRole);
       rbac.loadUserPermissions(user.id);
       dynamic profileRows;
@@ -398,34 +399,71 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
           icon: Icon(Icons.notifications_outlined, color: isDark ? Colors.white : const Color(0xFF2C3E50)),
           onPressed: () {},
         ),
-        Container(
-          margin: const EdgeInsets.only(right: 12),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: AppTheme.sidebarAccent,
-                radius: 15,
-                child: Text(
-                  _userInitials,
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+        GestureDetector(
+          onTap: _showProfilePanel,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            margin: const EdgeInsets.only(right: 12),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: AppTheme.sidebarAccent,
+                  radius: 15,
+                  child: Text(
+                    _userInitials,
+                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                _userDisplayRole.toUpperCase(),
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white : const Color(0xFF1A1A2E),
+                const SizedBox(width: 6),
+                Text(
+                  _userDisplayRole.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : const Color(0xFF1A1A2E),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
         child: Container(color: AppTheme.borderOf(context), height: 1),
+      ),
+    );
+  }
+
+  void _showProfilePanel() {
+    final authState = context.read<AuthBloc>().state;
+    String fullName = _userName;
+    String email = '';
+    String role = _userDisplayRole;
+    String initials = _userInitials;
+
+    if (authState is Authenticated) {
+      email = authState.user.email ?? '';
+      final meta = authState.user.userMetadata;
+      final name = meta?['full_name']?.toString() ?? meta?['name']?.toString() ?? '';
+      if (name.isNotEmpty) {
+        fullName = name;
+      }
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ProfileSheet(
+        fullName: fullName,
+        email: email,
+        role: role,
+        initials: initials,
+        onLogout: () {
+          Navigator.pop(ctx);
+          context.read<AuthBloc>().add(AuthLogoutEvent());
+        },
       ),
     );
   }
@@ -869,6 +907,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
     _resetInactivityTimer();
     _subscribeToProfileChanges();
     context.read<ClientBloc>().add(LoadClientsEvent());
+    context.read<MeetingBloc>().add(LoadMeetingsEvent());
   }
 
   void _subscribeToProfileChanges() {
@@ -2163,6 +2202,9 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
     return RefreshIndicator(
       onRefresh: () async {
         await _loadEmployeeData();
+        if (context.mounted) {
+          context.read<MeetingBloc>().add(LoadMeetingsEvent());
+        }
       },
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
@@ -2173,6 +2215,7 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
+              _buildMeetingRemindersSection(),
               _buildPeriodSelector(),
               const SizedBox(height: 12),
               _buildTimeCard(),
@@ -2186,6 +2229,222 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
           ),
         ),
       ),
+    );
+  }
+
+  String _getMeetingReminderTime(DateTime scheduledAt) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final scheduledDate = DateTime(scheduledAt.year, scheduledAt.month, scheduledAt.day);
+
+    final diffDays = scheduledDate.difference(today).inDays;
+    final timeStr = DateFormat('hh:mm a').format(scheduledAt);
+
+    if (diffDays == 0) {
+      final diffMins = scheduledAt.difference(now).inMinutes;
+      if (diffMins > 0 && diffMins <= 60) {
+        return 'IN $diffMins MINS';
+      } else if (diffMins <= 0 && diffMins >= -30) {
+        return 'ACTIVE';
+      }
+      return 'TODAY at $timeStr';
+    } else if (diffDays == 1) {
+      return 'TOMORROW at $timeStr';
+    } else {
+      return DateFormat('dd MMM, hh:mm a').format(scheduledAt);
+    }
+  }
+
+  Widget _buildMeetingRemindersSection() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? AppTheme.bgCardDark : Colors.white;
+
+    return BlocBuilder<MeetingBloc, MeetingState>(
+      builder: (ctx, state) {
+        if (state.status == MeetingStatusState.loading) {
+          return const SizedBox.shrink();
+        }
+
+        final rawMeetings = state.meetings;
+        final now = DateTime.now();
+
+        final meetings = rawMeetings.where((m) {
+          final isScheduled = m.status == 'scheduled' || m.status == 'rescheduled';
+          final isUpcoming = m.scheduledAt.isAfter(now.subtract(const Duration(minutes: 30)));
+          return isScheduled && isUpcoming;
+        }).toList();
+
+        meetings.sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+
+        if (meetings.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.borderOf(context)),
+            boxShadow: isDark ? [] : [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.08),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              )
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.notifications_active_rounded,
+                    size: 16,
+                    color: Color(0xFFF59E0B),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'UPCOMING MEETING REMINDERS',
+                      style: TextStyle(
+                        color: AppTheme.textPrimaryOf(context),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Column(
+                children: meetings.take(3).map((m) {
+                  final isToday = DateTime(m.scheduledAt.year, m.scheduledAt.month, m.scheduledAt.day)
+                      .difference(DateTime(now.year, now.month, now.day)).inDays == 0;
+                  final isUrgent = isToday && m.scheduledAt.difference(now).inMinutes <= 60;
+
+                  final accentColor = isUrgent 
+                      ? const Color(0xFFEF4444)
+                      : (isToday ? const Color(0xFFF59E0B) : const Color(0xFF6366F1));
+                  
+                  final itemBgColor = isDark 
+                      ? accentColor.withOpacity(0.12)
+                      : (isUrgent 
+                          ? const Color(0xFFFEF2F2) 
+                          : (isToday ? const Color(0xFFFFFBEB) : const Color(0xFFF5F3FF)));
+
+                  final timeText = _getMeetingReminderTime(m.scheduledAt);
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: itemBgColor,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isDark ? accentColor.withOpacity(0.2) : accentColor.withOpacity(0.15),
+                      ),
+                    ),
+                    child: IntrinsicHeight(
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 5,
+                            decoration: BoxDecoration(
+                              color: accentColor,
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(10),
+                                bottomLeft: Radius.circular(10),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          m.title, 
+                                          style: TextStyle(
+                                            fontSize: 13, 
+                                            fontWeight: FontWeight.w700, 
+                                            color: AppTheme.textPrimaryOf(context),
+                                          ),
+                                        ),
+                                      ),
+                                      if (isUrgent) ...[
+                                        Container(
+                                          width: 8,
+                                          height: 8,
+                                          margin: const EdgeInsets.only(right: 8),
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFFEF4444),
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        m.meetingMode == 'online' ? Icons.videocam_outlined : Icons.place_outlined, 
+                                        size: 13, 
+                                        color: AppTheme.textMutedOf(context),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          m.meetingMode == 'online' 
+                                              ? '${m.meetingType} • Online'
+                                              : '${m.meetingType} • ${m.location ?? "In Person"}',
+                                          style: TextStyle(
+                                            fontSize: 10.5, 
+                                            color: AppTheme.textSecondaryOf(context),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Container(
+                            margin: const EdgeInsets.only(right: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: accentColor,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              timeText,
+                              style: const TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -6530,4 +6789,236 @@ class _EmployeeDashboardContentState extends State<EmployeeDashboardContent>
     );
   }
 
+}
+
+// ─── Profile Sheet ──────────────────────────────────────────────────────────
+
+class _ProfileSheet extends StatelessWidget {
+  final String fullName;
+  final String email;
+  final String role;
+  final String initials;
+  final VoidCallback onLogout;
+
+  const _ProfileSheet({
+    required this.fullName,
+    required this.email,
+    required this.role,
+    required this.initials,
+    required this.onLogout,
+  });
+
+  String _formatRole(String role) {
+    return role
+        .replaceAll('_', ' ')
+        .split(' ')
+        .map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : '')
+        .join(' ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = Theme.of(context).colorScheme.surface;
+    final border = AppTheme.borderOf(context);
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.55,
+      minChildSize: 0.4,
+      maxChildSize: 0.75,
+      builder: (_, ctrl) => Container(
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SingleChildScrollView(
+          controller: ctrl,
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 24),
+              // Avatar
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppTheme.primary, Color(0xFF34AAFF)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.primary.withOpacity(0.35),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    initials,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Name
+              Text(
+                fullName,
+                style: TextStyle(
+                  color: AppTheme.textPrimaryOf(context),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 4),
+              // Role badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
+                ),
+                child: Text(
+                  _formatRole(role),
+                  style: const TextStyle(
+                    color: AppTheme.primary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 28),
+              // Info cards
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  children: [
+                    _buildInfoRow(
+                      context,
+                      icon: Icons.email_outlined,
+                      label: 'Email',
+                      value: email.isNotEmpty ? email : '—',
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: 12),
+                    _buildInfoRow(
+                      context,
+                      icon: Icons.shield_outlined,
+                      label: 'Access Level',
+                      value: _formatRole(role),
+                      isDark: isDark,
+                      valueColor: AppTheme.primary,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 28),
+              // Logout button
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: onLogout,
+                    icon: const Icon(Icons.logout_rounded, size: 18, color: AppTheme.error),
+                    label: const Text(
+                      'Sign Out',
+                      style: TextStyle(
+                        color: AppTheme.error,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: AppTheme.error, width: 1.2),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+    required bool isDark,
+    Color? valueColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.bgBaseDark : AppTheme.bgBase,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.borderOf(context)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: AppTheme.primary, size: 18),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: AppTheme.textMutedOf(context),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: valueColor ?? AppTheme.textPrimaryOf(context),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
