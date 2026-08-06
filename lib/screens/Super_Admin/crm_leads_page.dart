@@ -112,6 +112,7 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
   bool _isKanban = true;
   String _searchQuery = '';
   String? _selectedSourceFilter;
+  String? _selectedColorTagFilter;
   final TextEditingController _searchController = TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final ScrollController _kanbanScrollController = ScrollController();
@@ -167,6 +168,17 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
     List<Lead> res = leads;
     if (_selectedSourceFilter != null) {
       res = res.where((l) => l.source.trim().toLowerCase() == _selectedSourceFilter!.trim().toLowerCase()).toList();
+    }
+    if (_selectedColorTagFilter != null && _selectedColorTagFilter!.isNotEmpty) {
+      res = res.where((l) {
+        if (l.colorTag == null || l.colorTag!.trim().isEmpty) return false;
+        final pLead = parseLeadColorTag(l.colorTag);
+        final pFilter = parseLeadColorTag(_selectedColorTagFilter);
+        if (pLead != null && pFilter != null) {
+          return pLead == pFilter;
+        }
+        return l.colorTag!.trim().toLowerCase() == _selectedColorTagFilter!.trim().toLowerCase();
+      }).toList();
     }
     if (_searchQuery.isEmpty) return res;
     final q = _searchQuery.toLowerCase();
@@ -299,6 +311,93 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
         },
       ),
     );
+  }
+
+  void _openColorTagFilterModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return SafeArea(
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+            ),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.bgCardDark : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Filter by Colour Tag', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: () => Navigator.pop(ctx),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    children: [
+                      ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.clear_all_rounded, color: Colors.grey, size: 20),
+                        title: const Text('All Colour Tags', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        trailing: _selectedColorTagFilter == null ? const Icon(Icons.check, color: Color(0xFF00BCD4), size: 20) : null,
+                        onTap: () {
+                          setState(() => _selectedColorTagFilter = null);
+                          Navigator.pop(ctx);
+                        },
+                      ),
+                      const Divider(height: 1, indent: 16, endIndent: 16),
+                      ...LeadColorTag.values.map((tag) {
+                        final isSelected = parseLeadColorTag(_selectedColorTagFilter) == tag;
+                        return ListTile(
+                          dense: true,
+                          leading: Icon(tag.icon, color: tag.color, size: 20),
+                          title: Text(tag.label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: tag.color)),
+                          trailing: isSelected ? Icon(Icons.check, color: tag.color, size: 20) : null,
+                          onTap: () {
+                            setState(() => _selectedColorTagFilter = tag.label);
+                            Navigator.pop(ctx);
+                          },
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showChangeColorTagDialog(BuildContext context, Lead lead) {
+    showChangeLeadColorTagModal(context, lead);
   }
 
   void _deleteLead(Lead lead) {
@@ -917,6 +1016,15 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
                             },
                             tooltip: 'Acquisition Sources',
                           ),
+                          IconButton(
+                            icon: Icon(
+                              Icons.palette_outlined,
+                              color: _selectedColorTagFilter != null ? const Color(0xFF8B5CF6) : const Color(0xFF00BCD4),
+                              size: 20,
+                            ),
+                            onPressed: () => _openColorTagFilterModal(context),
+                            tooltip: 'Filter by Colour Tag',
+                          ),
                         ],
                       ),
                       ElevatedButton.icon(
@@ -970,29 +1078,41 @@ class _CRMLeadsPageState extends State<CRMLeadsPage>
                   ),
                 ),
               ),
-              if (_selectedSourceFilter != null)
+              if (_selectedSourceFilter != null || _selectedColorTagFilter != null)
                 Container(
                   color: Theme.of(context).colorScheme.surface,
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Row(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Text(
-                        'Filtered by Source: ',
-                        style: TextStyle(fontSize: 12, color: _textSecondary),
-                      ),
-                      const SizedBox(width: 6),
-                      Chip(
-                        label: Text(
-                          _selectedSourceFilter!,
-                          style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
+                      if (_selectedSourceFilter != null)
+                        Chip(
+                          label: Text(
+                            'Source: ${_selectedSourceFilter!}',
+                            style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                          backgroundColor: const Color(0xFF00BCD4),
+                          deleteIcon: const Icon(Icons.cancel, size: 14, color: Colors.white),
+                          onDeleted: () => setState(() => _selectedSourceFilter = null),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                         ),
-                        backgroundColor: const Color(0xFF00BCD4),
-                        deleteIcon: const Icon(Icons.cancel, size: 14, color: Colors.white),
-                        onDeleted: () => setState(() => _selectedSourceFilter = null),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                      ),
+                      if (_selectedColorTagFilter != null)
+                        Chip(
+                          label: Text(
+                            'Tag: ${parseLeadColorTag(_selectedColorTagFilter)?.label ?? _selectedColorTagFilter!}',
+                            style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                          backgroundColor: parseLeadColorTag(_selectedColorTagFilter)?.color ?? const Color(0xFF8B5CF6),
+                          deleteIcon: const Icon(Icons.cancel, size: 14, color: Colors.white),
+                          onDeleted: () => setState(() => _selectedColorTagFilter = null),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        ),
                     ],
                   ),
                 ),
@@ -1331,94 +1451,132 @@ class _KanbanCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardContent = Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.bgCardDark : Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.borderOf(context)),
-        boxShadow: isDark ? [] : [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          )
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    final parsedTag = parseLeadColorTag(lead.colorTag);
+    final tagColor = parsedTag?.color;
+
+    final cardBg = parsedTag != null
+        ? (isDark ? parsedTag.darkBgColor : parsedTag.lightBgColor)
+        : (isDark ? AppTheme.bgCardDark : Colors.white);
+    final borderColor = tagColor != null
+        ? tagColor.withValues(alpha: 0.35)
+        : AppTheme.borderOf(context);
+
+    // ── KANBAN CARD CONTENT ─────────────────────────────────────────────────
+    // NOTE: Flutter's BoxDecoration cannot combine borderRadius with a
+    // non-uniform Border (different widths per side). Doing so causes the
+    // entire card content to become invisible while only the background colour
+    // is painted.  The fix uses a uniform outer border + a separate inner
+    // left-accent strip so that every BoxDecoration uses a consistent border.
+    final cardContent = ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: borderColor, width: 1.0),
+          boxShadow: isDark ? [] : [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            )
+          ],
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _Avatar(name: lead.initials, color: lead.status.color),
-              const SizedBox(width: 8),
+              // Left accent bar – replaces the non-uniform left BorderSide
+              if (tagColor != null)
+                Container(width: 4, color: tagColor),
+              // Card body
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(lead.fullName,
-                        style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textPrimaryOf(context)),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                    if (lead.companyName.isNotEmpty)
-                      Text('@ ${lead.companyName.toLowerCase()}',
-                          style: TextStyle(
-                              fontSize: 11, color: AppTheme.textSecondaryOf(context)),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
-                  ],
-                ),
-              ),
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_horiz,
-                    size: 16, color: Color(0xFF9CA3AF)),
-                padding: EdgeInsets.zero,
-                itemBuilder: (_) => [
-                  const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red, fontSize: 13))),
-                ],
-                onSelected: (v) {
-                  if (v == 'delete') onDelete();
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isDark ? AppTheme.bgBaseDark : const Color(0xFFE5E7EB),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text('GENERAL',
-                    style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textSecondaryOf(context),
-                        letterSpacing: 0.5)),
-              ),
-              const SizedBox(width: 6),
-              if (lead.value > 0)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF064E3B) : const Color(0xFFECFDF5),
-                    borderRadius: BorderRadius.circular(4),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          _Avatar(name: lead.initials, color: lead.status.color),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(lead.fullName,
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppTheme.textPrimaryOf(context)),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis),
+                                if (lead.companyName.isNotEmpty)
+                                  Text('@ ${lead.companyName.toLowerCase()}',
+                                      style: TextStyle(
+                                          fontSize: 11, color: AppTheme.textSecondaryOf(context)),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis),
+                              ],
+                            ),
+                          ),
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_horiz,
+                                size: 16, color: Color(0xFF9CA3AF)),
+                            padding: EdgeInsets.zero,
+                            itemBuilder: (_) => [
+                              const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red, fontSize: 13))),
+                            ],
+                            onSelected: (v) {
+                              if (v == 'delete') onDelete();
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isDark ? AppTheme.bgBaseDark : const Color(0xFFE5E7EB),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text('GENERAL',
+                                style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.textSecondaryOf(context),
+                                    letterSpacing: 0.5)),
+                          ),
+                          if (lead.colorTag != null && lead.colorTag!.isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            _ColorTagBadge(tagStr: lead.colorTag!, compact: true),
+                          ],
+                          const SizedBox(width: 6),
+                          if (lead.value > 0)
+                            Container(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF064E3B) : const Color(0xFFECFDF5),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text('₹${lead.value.toStringAsFixed(0)}',
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? const Color(0xFFA7F3D0) : const Color(0xFF059669))),
+                            ),
+                        ],
+                      ),
+                    ],
                   ),
-                  child: Text('₹${lead.value.toStringAsFixed(0)}',
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? const Color(0xFFA7F3D0) : const Color(0xFF059669))),
                 ),
+              ),
             ],
           ),
-        ],
+        ),
       ),
     );
 
@@ -1475,127 +1633,179 @@ class _LeadListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardBg = isSelected
-        ? const Color(0xFF00BCD4).withOpacity(0.12)
-        : (isDark ? AppTheme.bgCardDark : Colors.white);
-    final borderColor = isSelected
-        ? const Color(0xFF00BCD4).withOpacity(0.5)
-        : AppTheme.borderOf(context);
+    final parsedTag = parseLeadColorTag(lead.colorTag);
+    final tagColor = parsedTag?.color;
 
+    final cardBg = isSelected
+        ? const Color(0xFF00BCD4).withValues(alpha: 0.12)
+        : (parsedTag != null
+            ? (isDark ? parsedTag.darkBgColor : parsedTag.lightBgColor)
+            : (isDark ? AppTheme.bgCardDark : Colors.white));
+    final borderColor = isSelected
+        ? const Color(0xFF00BCD4).withValues(alpha: 0.5)
+        : (tagColor != null
+            ? tagColor.withValues(alpha: 0.35)
+            : AppTheme.borderOf(context));
+
+    // ── LIST TILE CARD ──────────────────────────────────────────────────────
+    // NOTE: Flutter's BoxDecoration silently drops child rendering when
+    // borderRadius is combined with a non-uniform Border (different widths per
+    // side).  The accent colour is therefore rendered as a separate narrow
+    // Container strip inside the card so that the outer BoxDecoration always
+    // uses a fully uniform border.
+    final accentColor = isSelected ? const Color(0xFF00BCD4) : tagColor;
     return GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: borderColor, width: isSelected ? 1.5 : 1.0),
-          boxShadow: isDark ? [] : [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 3,
-              offset: const Offset(0, 1),
-            )
-          ],
-        ),
-        child: Row(
-          children: [
-            // Circular selection checkbox
-            GestureDetector(
-              onTap: onLongPress,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: Icon(
-                  isSelected
-                      ? Icons.check_circle_rounded
-                      : Icons.radio_button_unchecked_rounded,
-                  color: isSelected
-                      ? const Color(0xFF00BCD4)
-                      : (isSelectionMode
-                          ? AppTheme.textSecondaryOf(context)
-                          : AppTheme.textMutedOf(context)),
-                  size: 22,
-                ),
-              ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: borderColor,
+              width: isSelected ? 1.5 : 1.0,
             ),
-            _Avatar(name: lead.initials, color: lead.status.color, size: 36),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    lead.companyName.isNotEmpty 
-                        ? '${lead.fullName} (${lead.companyName})' 
-                        : lead.fullName,
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimaryOf(context)),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'BDE: ${bdeName ?? 'Unassigned'} • Src: ${lead.source}',
-                    style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context)),
-                  ),
-                  if ((lead.servicesNeeded != null && lead.servicesNeeded!.isNotEmpty) ||
-                      (lead.targetLocations != null && lead.targetLocations!.isNotEmpty))
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        'Service: ${lead.servicesNeeded ?? '—'} • Country: ${lead.targetLocations ?? '—'}',
-                        style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context)),
-                      ),
-                    ),
-                  if (lead.cpr != null || lead.cpa != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        'CPR: ₹${lead.cpr?.toStringAsFixed(0) ?? '—'} • CPA: ₹${lead.cpa?.toStringAsFixed(0) ?? '—'}',
-                        style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context)),
-                      ),
-                    ),
-                  const SizedBox(height: 2),
-                  Text(lead.email,
-                      style: TextStyle(
-                          fontSize: 11, color: AppTheme.textMutedOf(context)),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            boxShadow: isDark ? [] : [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 3,
+                offset: const Offset(0, 1),
+              )
+            ],
+          ),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _StatusBadge(status: lead.status),
-                if (lead.value > 0) ...[
-                  const SizedBox(height: 4),
-                  Text('₹${lead.value.toStringAsFixed(0)}',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textPrimaryOf(context))),
-                ],
+                // Left accent bar – replaces the non-uniform left BorderSide
+                if (accentColor != null)
+                  Container(width: 4, color: accentColor),
+                // Card content
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      accentColor != null ? 10 : 14, 12, 14, 12,
+                    ),
+                    child: Row(
+                      children: [
+                        // Circular selection checkbox
+                        GestureDetector(
+                          onTap: onLongPress,
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 10),
+                            child: Icon(
+                              isSelected
+                                  ? Icons.check_circle_rounded
+                                  : Icons.radio_button_unchecked_rounded,
+                              color: isSelected
+                                  ? const Color(0xFF00BCD4)
+                                  : (isSelectionMode
+                                      ? AppTheme.textSecondaryOf(context)
+                                      : AppTheme.textMutedOf(context)),
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                        _Avatar(name: lead.initials, color: lead.status.color, size: 36),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                lead.companyName.isNotEmpty && lead.fullName != lead.companyName
+                                    ? '${lead.fullName} (${lead.companyName})'
+                                    : lead.fullName,
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.textPrimaryOf(context)),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'BDE: ${bdeName ?? 'Unassigned'} • Src: ${lead.source}',
+                                style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context)),
+                              ),
+                              if ((lead.servicesNeeded != null && lead.servicesNeeded!.isNotEmpty) ||
+                                  (lead.targetLocations != null && lead.targetLocations!.isNotEmpty))
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    'Service: ${lead.servicesNeeded ?? '—'} • Country: ${lead.targetLocations ?? '—'}',
+                                    style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context)),
+                                  ),
+                                ),
+                              if (lead.cpr != null || lead.cpa != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    'CPR: ₹${lead.cpr?.toStringAsFixed(0) ?? '—'} • CPA: ₹${lead.cpa?.toStringAsFixed(0) ?? '—'}',
+                                    style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryOf(context)),
+                                  ),
+                                ),
+                              if (lead.email.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(lead.email,
+                                    style: TextStyle(
+                                        fontSize: 11, color: AppTheme.textMutedOf(context)),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _StatusBadge(status: lead.status),
+                            const SizedBox(height: 4),
+                            if (lead.colorTag != null && lead.colorTag!.isNotEmpty)
+                              _ColorTagBadge(
+                                tagStr: lead.colorTag!,
+                                compact: true,
+                                onTap: () => showChangeLeadColorTagModal(context, lead),
+                              )
+                            else
+                              _ColorTagPlaceholderButton(
+                                onTap: () => showChangeLeadColorTagModal(context, lead),
+                              ),
+                            if (lead.value > 0) ...[
+                              const SizedBox(height: 4),
+                              Text('₹${lead.value.toStringAsFixed(0)}',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppTheme.textPrimaryOf(context))),
+                            ],
+                          ],
+                        ),
+                        if (!isSelectionMode) ...[
+                          const SizedBox(width: 4),
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert,
+                                size: 18, color: Color(0xFF9CA3AF)),
+                            itemBuilder: (_) => [
+                              const PopupMenuItem(value: 'edit', child: Text('Edit', style: TextStyle(fontSize: 13))),
+                              const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red, fontSize: 13))),
+                            ],
+                            onSelected: (v) {
+                              if (v == 'edit') onEdit();
+                              if (v == 'delete') onDelete();
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
-            if (!isSelectionMode) ...[
-              const SizedBox(width: 4),
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert,
-                    size: 18, color: Color(0xFF9CA3AF)),
-                itemBuilder: (_) => [
-                  const PopupMenuItem(value: 'edit', child: Text('Edit', style: TextStyle(fontSize: 13))),
-                  const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red, fontSize: 13))),
-                ],
-                onSelected: (v) {
-                  if (v == 'edit') onEdit();
-                  if (v == 'delete') onDelete();
-                },
-              ),
-            ],
-          ],
+          ),
         ),
       ),
     );
@@ -1634,6 +1844,127 @@ class _LeadDetailSheetState extends State<_LeadDetailSheet> {
 
   void _onRemarksUpdated() {
     setState(() {});
+  }
+
+  void _showChangeColorTagSheet(BuildContext context) {
+    final currentTag = parseLeadColorTag(_currentLead.colorTag);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return SafeArea(
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+            ),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.bgCardDark : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          currentTag != null ? 'COLOUR TAG' : 'SELECT COLOUR',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textMutedOf(context), letterSpacing: 0.5),
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: () => Navigator.pop(ctx),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                // ── If tag is already set: show current colour + Remove only ──
+                if (currentTag != null) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32, height: 32,
+                          decoration: BoxDecoration(color: currentTag.color, shape: BoxShape.circle),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          currentTag.colorName,
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: currentTag.color),
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: currentTag.color.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text('Active', style: TextStyle(fontSize: 11, color: currentTag.color, fontWeight: FontWeight.w600)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.close_rounded, color: Colors.red, size: 20),
+                    title: const Text('Remove Colour Tag', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.red)),
+                    onTap: () {
+                      setState(() => _currentLead.colorTag = null);
+                      context.read<LeadBloc>().add(UpdateLeadColorTagEvent(_currentLead.id, null));
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                ] else ...[
+                  // ── No tag yet: show colour picker ──
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      children: LeadColorTag.values.map((tag) {
+                        return ListTile(
+                          dense: true,
+                          leading: Container(
+                            width: 20, height: 20,
+                            decoration: BoxDecoration(color: tag.color, shape: BoxShape.circle),
+                          ),
+                          title: Text(tag.colorName, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: tag.color)),
+                          onTap: () {
+                            setState(() => _currentLead.colorTag = tag.colorName);
+                            context.read<LeadBloc>().add(UpdateLeadColorTagEvent(_currentLead.id, tag.colorName));
+                            Navigator.pop(ctx);
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -1751,7 +2082,15 @@ class _LeadDetailSheetState extends State<_LeadDetailSheet> {
                 controller: controller,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: [
-                  _StatusBadge(status: _currentLead.status, large: true),
+                  Row(
+                    children: [
+                      _StatusBadge(status: _currentLead.status, large: true),
+                      if (_currentLead.colorTag != null && _currentLead.colorTag!.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        _ColorTagBadge(tagStr: _currentLead.colorTag!),
+                      ],
+                    ],
+                  ),
                   const SizedBox(height: 16),
                   // Change status
                   Text('Move to Stage',
@@ -1765,25 +2104,22 @@ class _LeadDetailSheetState extends State<_LeadDetailSheet> {
                     spacing: 8,
                     runSpacing: 8,
                     children: LeadStatus.values.map((s) {
-                      final isActive = s == _currentLead.status;
-                      return GestureDetector(
-                        onTap: () => widget.onStatusChange(s),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: isActive ? s.color : s.bgColor,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                                color: s.color.withOpacity(0.3)),
-                          ),
-                          child: Text(s.label,
-                              style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: isActive ? Colors.white : s.color,
-                                  letterSpacing: 0.3)),
-                        ),
+                      final isCurrent = _currentLead.status == s;
+                      return ChoiceChip(
+                        label: Text(s.label,
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: isCurrent ? Colors.white : s.color,
+                                fontWeight: FontWeight.bold)),
+                        selected: isCurrent,
+                        selectedColor: s.color,
+                        backgroundColor: s.bgColor,
+                        onSelected: (sel) {
+                          if (sel) {
+                            setState(() => _currentLead.status = s);
+                            widget.onStatusChange(s);
+                          }
+                        },
                       );
                     }).toList(),
                   ),
@@ -1806,6 +2142,16 @@ class _LeadDetailSheetState extends State<_LeadDetailSheet> {
                       _DetailRow(Icons.apartment_outlined, 'Company', _currentLead.companyName.isNotEmpty ? _currentLead.companyName : '—'),
                       if (_currentLead.jobTitle.isNotEmpty)
                         _DetailRow(Icons.work_outline, 'Job Title', _currentLead.jobTitle),
+                      _DetailRow(
+                        Icons.palette_outlined,
+                        'Colour Tag',
+                        _currentLead.colorTag != null && _currentLead.colorTag!.isNotEmpty
+                            ? (parseLeadColorTag(_currentLead.colorTag)?.label ?? _currentLead.colorTag!)
+                            : 'None (Tap to set)',
+                        onTap: () {
+                          _showChangeColorTagSheet(context);
+                        },
+                      ),
                       _DetailRow(Icons.person_pin_outlined, 'Assigned BDE', widget.bdeName ?? 'Unassigned'),
                       _DetailRow(Icons.source_outlined, 'Lead Source', _currentLead.source),
                       _DetailRow(Icons.design_services_outlined, 'Required Service', _currentLead.servicesNeeded ?? '—'),
@@ -2038,6 +2384,7 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
   bool _loadingSources = true;
 
   String? _assignedTo;
+  String? _colorTag;
   late TextEditingController _servicesNeeded;
   late TextEditingController _targetLocations;
   late TextEditingController _cpr;
@@ -2061,6 +2408,7 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
     _value = TextEditingController(text: e?.value.toString() ?? '0');
     _status = e?.status ?? LeadStatus.newLead;
     _source = e?.source ?? 'Website';
+    _colorTag = e?.colorTag;
 
     _assignedTo = e?.assignedTo;
     _servicesNeeded = TextEditingController(text: e?.servicesNeeded ?? '');
@@ -2159,6 +2507,7 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
       cpr: double.tryParse(_cpr.text.trim()),
       cpa: double.tryParse(_cpa.text.trim()),
       remarks: remarksJson,
+      colorTag: _colorTag,
     );
     widget.onSave(lead);
     Navigator.pop(context);
@@ -2472,6 +2821,53 @@ class _AddLeadDialogState extends State<_AddLeadDialog> {
                   ],
                 ),
                 const SizedBox(height: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Colour Tag',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: textPrimary)),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: border),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String?>(
+                          value: parseLeadColorTag(_colorTag)?.label ?? _colorTag,
+                          isExpanded: true,
+                          hint: Text('Select Colour Tag (Optional)', style: TextStyle(fontSize: 12, color: textSecondary)),
+                          dropdownColor: bg,
+                          style: TextStyle(fontSize: 13, color: textPrimary),
+                          items: [
+                            DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('None (Clear Tag)', style: TextStyle(fontSize: 12, color: textSecondary)),
+                            ),
+                            ...LeadColorTag.values.map((tag) {
+                              return DropdownMenuItem<String?>(
+                                value: tag.label,
+                                child: Row(
+                                  children: [
+                                    Icon(tag.icon, size: 14, color: tag.color),
+                                    const SizedBox(width: 8),
+                                    Text(tag.label, style: TextStyle(fontSize: 12, color: tag.color, fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              );
+                            }),
+                          ],
+                          onChanged: (v) => setState(() => _colorTag = v),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 _field(_value, 'Lead Value (₹)',
                     hint: '0',
                     keyboardType: TextInputType.number),
@@ -2648,6 +3044,104 @@ class _StatusBadge extends StatelessWidget {
               fontWeight: FontWeight.w700,
               color: status.color,
               letterSpacing: 0.3)),
+    );
+  }
+}
+
+class _ColorTagBadge extends StatelessWidget {
+  final String tagStr;
+  final bool compact;
+  final VoidCallback? onTap;
+
+  const _ColorTagBadge({required this.tagStr, this.compact = false, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final parsed = parseLeadColorTag(tagStr);
+    final label = parsed != null ? parsed.colorName : tagStr;
+    final color = parsed?.color ?? const Color(0xFF6B7280);
+    final bgColor = color.withValues(alpha: 0.14);
+
+    Widget badge = Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 10,
+        vertical: compact ? 3 : 4,
+      ),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.4), width: 0.8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: compact ? 7 : 8,
+            height: compact ? 7 : 8,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: compact ? 10 : 11,
+              fontWeight: FontWeight.w600,
+              color: color,
+              letterSpacing: 0.2,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+
+    if (onTap != null) {
+      return GestureDetector(
+        onTap: onTap,
+        child: badge,
+      );
+    }
+    return badge;
+  }
+}
+
+class _ColorTagPlaceholderButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _ColorTagPlaceholderButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: isDark ? Colors.white24 : const Color(0xFFD1D5DB), width: 0.8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.palette_outlined, size: 10, color: AppTheme.textMutedOf(context)),
+            const SizedBox(width: 3),
+            Text(
+              'Color Tag',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textSecondaryOf(context),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -3055,4 +3549,132 @@ class _EditRemarkDialogState extends State<_EditRemarkDialog> {
       ),
     );
   }
+}
+
+void showChangeLeadColorTagModal(BuildContext context, Lead lead) {
+  final currentTag = parseLeadColorTag(lead.colorTag);
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      return SafeArea(
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+          ),
+          decoration: BoxDecoration(
+            color: isDark ? AppTheme.bgCardDark : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        currentTag != null ? 'COLOUR TAG' : 'SELECT COLOUR',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textMutedOf(context), letterSpacing: 0.5),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      onPressed: () => Navigator.pop(ctx),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              // ── If tag is already set: show current colour + Remove only ──
+              if (currentTag != null) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(color: currentTag.color, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        currentTag.colorName,
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: currentTag.color),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: currentTag.color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Active',
+                          style: TextStyle(fontSize: 11, color: currentTag.color, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.close_rounded, color: Colors.red, size: 20),
+                  title: const Text('Remove Colour Tag', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.red)),
+                  onTap: () {
+                    context.read<LeadBloc>().add(UpdateLeadColorTagEvent(lead.id, null));
+                    Navigator.pop(ctx);
+                  },
+                ),
+                const SizedBox(height: 8),
+              ] else ...[
+                // ── No tag yet: show colour picker ──
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    children: LeadColorTag.values.map((tag) {
+                      return ListTile(
+                        dense: true,
+                        leading: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(color: tag.color, shape: BoxShape.circle),
+                        ),
+                        title: Text(
+                          tag.colorName,
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: tag.color),
+                        ),
+                        onTap: () {
+                          context.read<LeadBloc>().add(UpdateLeadColorTagEvent(lead.id, tag.colorName));
+                          Navigator.pop(ctx);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }

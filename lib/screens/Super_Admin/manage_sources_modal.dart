@@ -334,11 +334,13 @@ class _ManageSourcesModalState extends State<ManageSourcesModal> {
     return Dialog(
       backgroundColor: bg,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
       child: Container(
         width: MediaQuery.of(context).size.width > 680 ? 650 : double.infinity,
-        constraints: const BoxConstraints(maxHeight: 700),
-        padding: const EdgeInsets.all(20),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
+        padding: const EdgeInsets.all(16),
         child: Stack(
           children: [
             Column(
@@ -467,17 +469,21 @@ class _ManageSourcesModalState extends State<ManageSourcesModal> {
                 const SizedBox(height: 18),
 
                 // Active Sources Section title
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
                   children: [
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.pie_chart_outline, size: 16, color: Color(0xFF00BCD4)),
+                        const Icon(Icons.pie_chart_outline, size: 15, color: Color(0xFF00BCD4)),
                         const SizedBox(width: 6),
                         Text(
-                          'ACTIVE SOURCES & LEAD DISTRIBUTION',
+                          'ACTIVE SOURCES & DISTRIBUTION',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11,
                             fontWeight: FontWeight.bold,
                             color: textPrimary,
                           ),
@@ -497,7 +503,7 @@ class _ManageSourcesModalState extends State<ManageSourcesModal> {
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       final cols = constraints.maxWidth > 400 ? 2 : 1;
-                      final ratio = constraints.maxWidth > 400 ? 2.8 : 4.2;
+                      final ratio = constraints.maxWidth > 400 ? 2.8 : 3.4;
                       return GridView.builder(
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: cols,

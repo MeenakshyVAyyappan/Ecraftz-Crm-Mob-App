@@ -6,6 +6,27 @@ import '../../models/lead_model.dart';
 import '../../services/supabase_service.dart';
 import '../branch/branch_cubit.dart';
 
+// ─── Local colour-tag persistence ────────────────────────────────────────────
+// Colour tags are stored in SharedPreferences so they survive hot-reloads and
+// full app restarts even when the Supabase 'color_tag' column does not exist.
+// Key:   _kColorTagPrefix + lead_id
+// Value: colour name (e.g. "Green") — or empty string meaning "removed"
+const String _kColorTagPrefix = 'lead_color_tag_';
+
+/// Reads all locally-stored colour tags and overlays them onto [list].
+Future<List<Lead>> _applyLocalColorTags(List<Lead> list) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    return list.map((l) {
+      final local = prefs.getString('$_kColorTagPrefix${l.id}');
+      if (local == null) return l; // no local entry → use Supabase value
+      return l.copyWith(colorTag: local.isEmpty ? null : local);
+    }).toList();
+  } catch (_) {
+    return list;
+  }
+}
+
 bool _isSuperAdminRole(String? role) {
   if (role == null) return false;
   final r = role.trim().toLowerCase();
@@ -13,7 +34,12 @@ bool _isSuperAdminRole(String? role) {
       r == 'superadmin' ||
       r == 'super admin' ||
       r == 'admin' ||
-      r == 'administrator';
+      r == 'administrator' ||
+      r == 'crm' ||
+      r == 'crm_admin' ||
+      r == 'crm admin' ||
+      r == 'bde' ||
+      r == 'manager';
 }
 
 abstract class LeadEvent extends Equatable {
@@ -65,6 +91,14 @@ class ChangeLeadStatusEvent extends LeadEvent {
   const ChangeLeadStatusEvent(this.id, this.status);
   @override
   List<Object?> get props => [id, status];
+}
+
+class UpdateLeadColorTagEvent extends LeadEvent {
+  final String id;
+  final String? colorTag;
+  const UpdateLeadColorTagEvent(this.id, this.colorTag);
+  @override
+  List<Object?> get props => [id, colorTag];
 }
 
 class LeadState extends Equatable {
@@ -126,6 +160,13 @@ class LeadBloc extends Bloc<LeadEvent, LeadState> {
         final res = await filterQuery.order('created_at', ascending: false);
         var list = (res as List).map((x) => Lead.fromJson(x)).toList();
 
+        // Filter out corrupt blank dummy leads (where name and contact are empty)
+        list = list.where((l) {
+          final hasName = l.firstName.trim().isNotEmpty || l.lastName.trim().isNotEmpty || l.companyName.trim().isNotEmpty;
+          final hasContact = l.email.trim().isNotEmpty || l.phone.trim().isNotEmpty;
+          return hasName || hasContact;
+        }).toList();
+
         // Secondary in-memory filtering fallback for non-superadmin users
         if (!isSuperAdmin && currentUser != null) {
           final uid = currentUser.id;
@@ -154,6 +195,9 @@ class LeadBloc extends Bloc<LeadEvent, LeadState> {
           }
         }
 
+        // ── Overlay locally-stored colour tags (device persistence fallback) ──
+        list = await _applyLocalColorTags(list);
+
         emit(LeadState(leads: list));
       } catch (e) {
         try {
@@ -171,6 +215,12 @@ class LeadBloc extends Bloc<LeadEvent, LeadState> {
 
           final res = await filterQuery.order('created_at', ascending: false);
           var list = (res as List).map((x) => Lead.fromJson(x)).toList();
+
+          list = list.where((l) {
+            final hasName = l.firstName.trim().isNotEmpty || l.lastName.trim().isNotEmpty || l.companyName.trim().isNotEmpty;
+            final hasContact = l.email.trim().isNotEmpty || l.phone.trim().isNotEmpty;
+            return hasName || hasContact;
+          }).toList();
 
           if (!isSuperAdmin && currentUser != null) {
             final uid = currentUser.id;
@@ -198,6 +248,10 @@ class LeadBloc extends Bloc<LeadEvent, LeadState> {
               }).toList();
             }
           }
+
+          // ── Overlay locally-stored colour tags ──
+          list = await _applyLocalColorTags(list);
+
           emit(LeadState(leads: list));
         } catch (_) {
           emit(state.copyWith());
@@ -243,6 +297,11 @@ class LeadBloc extends Bloc<LeadEvent, LeadState> {
 
     on<DeleteLeadEvent>((event, emit) async {
       try {
+        // Remove locally-stored colour tag for this lead
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove('$_kColorTagPrefix${event.id}');
+        } catch (_) {}
         await _client.from('leads').update({
           'deleted_at': DateTime.now().toUtc().toIso8601String(),
         }).eq('id', event.id);
@@ -255,6 +314,13 @@ class LeadBloc extends Bloc<LeadEvent, LeadState> {
     on<BulkDeleteLeadsEvent>((event, emit) async {
       try {
         if (event.ids.isNotEmpty) {
+          // Remove locally-stored colour tags for all deleted leads
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            for (final id in event.ids) {
+              await prefs.remove('$_kColorTagPrefix$id');
+            }
+          } catch (_) {}
           await _client.from('leads').update({
             'deleted_at': DateTime.now().toUtc().toIso8601String(),
           }).inFilter('id', event.ids);
@@ -274,6 +340,43 @@ class LeadBloc extends Bloc<LeadEvent, LeadState> {
         add(const LoadLeadsEvent());
       } catch (e) {
         // handle error
+      }
+    });
+
+    on<UpdateLeadColorTagEvent>((event, emit) async {
+      // 1. Instant optimistic state update
+      final updatedLeads = state.leads.map((l) {
+        if (l.id == event.id) {
+          return l.copyWith(colorTag: event.colorTag);
+        }
+        return l;
+      }).toList();
+      emit(state.copyWith(leads: updatedLeads));
+
+      // 2. Save to SharedPreferences FIRST — guarantees persistence even if
+      //    Supabase update fails (e.g. color_tag column does not exist yet).
+      //    Empty string = tag was explicitly removed by the user.
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final tag = event.colorTag;
+        if (tag != null && tag.isNotEmpty) {
+          await prefs.setString('$_kColorTagPrefix${event.id}', tag);
+        } else {
+          await prefs.setString('$_kColorTagPrefix${event.id}', '');
+        }
+      } catch (e) {
+        debugPrint('Error saving colour tag locally: $e');
+      }
+
+      // 3. Best-effort Supabase update (works once color_tag column exists)
+      try {
+        await _client.from('leads').update({
+          'color_tag': event.colorTag,
+        }).eq('id', event.id);
+        add(const LoadLeadsEvent());
+      } catch (e) {
+        debugPrint('Error updating lead color tag in Supabase: $e');
+        // Local save above already persists the tag — no further action needed.
       }
     });
   }

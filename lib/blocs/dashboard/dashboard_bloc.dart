@@ -13,7 +13,12 @@ bool _isSuperAdminRole(String? role) {
       r == 'superadmin' ||
       r == 'super admin' ||
       r == 'admin' ||
-      r == 'administrator';
+      r == 'administrator' ||
+      r == 'crm' ||
+      r == 'crm_admin' ||
+      r == 'crm admin' ||
+      r == 'bde' ||
+      r == 'manager';
 }
 
 abstract class DashboardEvent extends Equatable {
