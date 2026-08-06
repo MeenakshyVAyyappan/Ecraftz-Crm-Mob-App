@@ -6,10 +6,8 @@ import 'Super_Admin/client_onboarding_screen.dart';
 import 'Super_Admin/project_screen.dart';
 import 'Super_Admin/tasks_screen.dart';
 import 'Super_Admin/teams_screen.dart';
-import 'Super_Admin/billing_invoice.dart';
 import 'Super_Admin/asset_renewal.dart';
 import 'Super_Admin/scheduler_screen.dart';
-import 'Super_Admin/client_statement_screen.dart';
 import 'Super_Admin/reports_screen.dart';
 import 'Super_Admin/team_timesheets.dart';
 import 'Super_Admin/leave_approval.dart';
@@ -19,7 +17,9 @@ import 'Super_Admin/hr_and_payroll.dart';
 import 'Super_Admin/client_feedback_screen.dart';
 import 'Super_Admin/meeting_scheduler_screen.dart';
 import 'attendance/attendance_dashboard_screen.dart';
-import 'Super_Admin/create_invoices_screen.dart';
+import 'billing/billing_dashboard_screen.dart';
+import 'billing/create_invoice_screen.dart';
+import 'billing/client_statements_screen.dart' as billing_ledger;
 import '../services/supabase_service.dart';
 import '../services/notification_service.dart';
 import '../widgets/app_snackbar.dart';
@@ -139,7 +139,7 @@ class _MainShellState extends State<MainShell> {
           onItemSelected: _onItemSelected,
         );    
       case 7:
-        return BillingPage(  
+        return BillingDashboardScreen(  
           selectedIndex: _selectedIndex,
           onItemSelected: _onItemSelected,
         );  
@@ -149,7 +149,7 @@ class _MainShellState extends State<MainShell> {
           onItemSelected: _onItemSelected,
         );  
       case 9:
-        return ClientStatementsScreen(  
+        return billing_ledger.ClientStatementsScreen(  
           selectedIndex: _selectedIndex,
           onItemSelected: _onItemSelected,
         );
@@ -206,10 +206,7 @@ class _MainShellState extends State<MainShell> {
       case 20:
         return const AttendanceDashboardScreen();
       case 21:
-        return CreateInvoicesPage(
-          selectedIndex: _selectedIndex,
-          onItemSelected: _onItemSelected,
-        );
+        return const CreateInvoiceScreen();
 
       default:
         return DashboardScreen(

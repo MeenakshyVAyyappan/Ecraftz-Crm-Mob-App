@@ -22,7 +22,7 @@ import 'emply_leave_request.dart';
 import '../Super_Admin/crm_leads_page.dart';
 import '../Super_Admin/active_clients_screen.dart';
 import '../Super_Admin/client_onboarding_screen.dart';
-import '../Super_Admin/billing_invoice.dart';
+import '../billing/billing_dashboard_screen.dart';
 import '../Super_Admin/asset_renewal.dart';
 import '../Super_Admin/client_statement_screen.dart';
 import '../Super_Admin/scheduler_screen.dart';
@@ -103,7 +103,7 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
         TeamTimesheetScreen(selectedIndex: _selectedIndex, onItemSelected: _onSelectPage, showAppBar: false),
         const ProjectsScreen(),
         const EmployeeTasksScreen(),
-        BillingPage(selectedIndex: _selectedIndex, onItemSelected: _onSelectPage, showAppBar: false),
+        BillingDashboardScreen(selectedIndex: _selectedIndex, onItemSelected: _onSelectPage, showAppBar: false),
         AssetRenewalsPage(selectedIndex: _selectedIndex, onItemSelected: _onSelectPage, showAppBar: false),
         ClientStatementsScreen(selectedIndex: _selectedIndex, onItemSelected: _onSelectPage, showAppBar: false),
         SchedulerScreen(selectedIndex: _selectedIndex, onItemSelected: _onSelectPage, showAppBar: false),

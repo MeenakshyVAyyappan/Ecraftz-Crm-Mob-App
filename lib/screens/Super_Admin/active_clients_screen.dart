@@ -18,6 +18,9 @@ import '../../blocs/branch/branch_cubit.dart';
 import '../../theme/app_theme.dart';
 import '../../blocs/theme/theme_bloc.dart';
 import 'client_statement_screen.dart';
+import 'package:intl/intl.dart';
+import '../../services/financials_service.dart';
+import '../../models/income_entry_model.dart';
 
 String _formatDate(DateTime dt) {
   const months = [
@@ -201,6 +204,25 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
           context.read<BillingBloc>().add(AddInvoiceEvent(inv, branchState: branchState));
           InvoicePdfGenerator.printInvoice(inv, profile);
         },
+      ),
+    );
+  }
+
+  void _showPayRenewal(ActiveClient client) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: _ProcessClientRenewalSheet(
+          client: client,
+          onSaved: () {
+            context.read<ClientBloc>().add(LoadClientsEvent(
+              branchState: context.read<BranchCubit>().state,
+            ));
+          },
+        ),
       ),
     );
   }
@@ -722,6 +744,7 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
           client: clients[i],
           isLast: i == clients.length - 1,
           isWide: isWide,
+          onPayRenewal: () => _showPayRenewal(clients[i]),
           onDetails: () => _showClientDetail(clients[i]),
           onInvoice: () => _showInvoice(clients[i]),
           onAutoRenew: () => _toggleAutoRenew(clients[i]),
@@ -763,6 +786,7 @@ class _ActiveClientsPageState extends State<ActiveClientsPage> {
               client: clients[i],
               isLast: i == clients.length - 1,
               isWide: isWide,
+              onPayRenewal: () => _showPayRenewal(clients[i]),
               onDetails: () => _showClientDetail(clients[i]),
               onInvoice: () => _showInvoice(clients[i]),
               onAutoRenew: () => _toggleAutoRenew(clients[i]),
@@ -808,6 +832,24 @@ List<PopupMenuEntry<String>> _buildClientPopupMenuItems(ActiveClient client, Bui
   final isAutoRenew = client.renewalStatus == 'auto-renew' || client.renewalStatus == 'active';
 
   return [
+    PopupMenuItem<String>(
+      value: 'pay_renewal',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.credit_card_rounded, size: 18, color: Color(0xFF10B981)),
+          const SizedBox(width: 10),
+          const Text(
+            'Pay Renewal',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF10B981),
+            ),
+          ),
+        ],
+      ),
+    ),
     PopupMenuItem<String>(
       value: 'auto_renew',
       child: Row(
@@ -946,6 +988,7 @@ class _ClientRow extends StatelessWidget {
   final ActiveClient client;
   final bool isLast;
   final bool isWide;
+  final VoidCallback onPayRenewal;
   final VoidCallback onDetails;
   final VoidCallback onInvoice;
   final VoidCallback onAutoRenew;
@@ -960,6 +1003,7 @@ class _ClientRow extends StatelessWidget {
     required this.client,
     required this.isLast,
     required this.isWide,
+    required this.onPayRenewal,
     required this.onDetails,
     required this.onInvoice,
     required this.onAutoRenew,
@@ -1036,6 +1080,7 @@ class _ClientRow extends StatelessWidget {
                   color: isDark ? AppTheme.bgCardDark : Colors.white,
                   itemBuilder: (ctx) => _buildClientPopupMenuItems(client, ctx),
                   onSelected: (v) {
+                    if (v == 'pay_renewal') onPayRenewal();
                     if (v == 'auto_renew') onAutoRenew();
                     if (v == 'edit') onEdit();
                     if (v == 'create_proposal') onCreateProposal();
@@ -1081,22 +1126,36 @@ class _ClientRow extends StatelessWidget {
                     ),
                   ],
                 ),
-                Row(
-                  children: [
-                    _ActionBtn(
-                      icon: Icons.info_outline_rounded,
-                      label: 'Details',
-                      onTap: onDetails,
-                      color: const Color(0xFF00BCD4),
+                Flexible(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _ActionBtn(
+                          icon: Icons.credit_card_rounded,
+                          label: 'Pay Renewal',
+                          onTap: onPayRenewal,
+                          color: const Color(0xFF10B981),
+                        ),
+                        const SizedBox(width: 4),
+                        _ActionBtn(
+                          icon: Icons.info_outline_rounded,
+                          label: 'Details',
+                          onTap: onDetails,
+                          color: const Color(0xFF00BCD4),
+                        ),
+                        const SizedBox(width: 4),
+                        _ActionBtn(
+                          icon: Icons.receipt_long_outlined,
+                          label: 'Invoice',
+                          onTap: onInvoice,
+                          color: const Color(0xFF00BCD4),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    _ActionBtn(
-                      icon: Icons.receipt_long_outlined,
-                      label: 'Create Invoice',
-                      onTap: onInvoice,
-                      color: const Color(0xFF00BCD4),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
@@ -1180,6 +1239,13 @@ class _ClientRow extends StatelessWidget {
             child: Row(
               children: [
                 _ActionBtn(
+                  icon: Icons.credit_card_rounded,
+                  label: 'Pay Renewal',
+                  onTap: onPayRenewal,
+                  color: const Color(0xFF10B981),
+                ),
+                const SizedBox(width: 6),
+                _ActionBtn(
                   icon: Icons.info_outline_rounded,
                   label: 'Details',
                   onTap: onDetails,
@@ -1188,7 +1254,7 @@ class _ClientRow extends StatelessWidget {
                 const SizedBox(width: 6),
                 _ActionBtn(
                   icon: Icons.receipt_long_outlined,
-                  label: 'Create Invoice',
+                  label: 'Invoice',
                   onTap: onInvoice,
                   color: const Color(0xFF00BCD4),
                 ),
@@ -1200,6 +1266,7 @@ class _ClientRow extends StatelessWidget {
                   color: isDark ? AppTheme.bgCardDark : Colors.white,
                   itemBuilder: (ctx) => _buildClientPopupMenuItems(client, ctx),
                   onSelected: (v) {
+                    if (v == 'pay_renewal') onPayRenewal();
                     if (v == 'auto_renew') onAutoRenew();
                     if (v == 'edit') onEdit();
                     if (v == 'create_proposal') onCreateProposal();
@@ -3989,6 +4056,732 @@ class _CreateProposalSheetState extends State<CreateProposalSheet> {
           },
         ),
       ),
+    );
+  }
+}
+
+// ─── PROCESS CLIENT RENEWAL PAYMENT SHEET ─────────────────────────────────────
+
+class _ProcessClientRenewalSheet extends StatefulWidget {
+  final ActiveClient client;
+  final VoidCallback onSaved;
+
+  const _ProcessClientRenewalSheet({
+    required this.client,
+    required this.onSaved,
+  });
+
+  @override
+  State<_ProcessClientRenewalSheet> createState() => _ProcessClientRenewalSheetState();
+}
+
+class _ProcessClientRenewalSheetState extends State<_ProcessClientRenewalSheet> {
+  late DateTime _renewedDate;
+  late DateTime _nextRenewalDate;
+  late TextEditingController _amountCtrl;
+  late TextEditingController _notesCtrl;
+  String _selectedCycle = 'Monthly (+1 Month)';
+  bool _isSubmitting = false;
+
+  final List<String> _cycleOptions = [
+    'Monthly (+1 Month)',
+    'Quarterly (+3 Months)',
+    'Half-Yearly (+6 Months)',
+    'Yearly (+1 Year)',
+    'Custom',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _renewedDate = DateTime.now();
+    final initialAmt = widget.client.contractValue > 0
+        ? widget.client.contractValue
+        : (widget.client.amount ?? 0.0);
+    _amountCtrl = TextEditingController(
+      text: initialAmt > 0 ? initialAmt.toStringAsFixed(0) : '10000',
+    );
+    _notesCtrl = TextEditingController();
+    _nextRenewalDate = DateTime.now();
+    _calculateNextRenewalDate();
+  }
+
+  void _calculateNextRenewalDate() {
+    setState(() {
+      switch (_selectedCycle) {
+        case 'Monthly (+1 Month)':
+          _nextRenewalDate = DateTime(_renewedDate.year, _renewedDate.month + 1, _renewedDate.day);
+          break;
+        case 'Quarterly (+3 Months)':
+          _nextRenewalDate = DateTime(_renewedDate.year, _renewedDate.month + 3, _renewedDate.day);
+          break;
+        case 'Half-Yearly (+6 Months)':
+          _nextRenewalDate = DateTime(_renewedDate.year, _renewedDate.month + 6, _renewedDate.day);
+          break;
+        case 'Yearly (+1 Year)':
+          _nextRenewalDate = DateTime(_renewedDate.year + 1, _renewedDate.month, _renewedDate.day);
+          break;
+        case 'Custom':
+          break;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitRenewal() async {
+    final amount = double.tryParse(_amountCtrl.text.trim()) ?? 0.0;
+    if (amount <= 0) {
+      AppSnackBar.showCustom(
+        context,
+        const SnackBar(
+          content: Text('Please enter a valid renewal amount.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final nextDateStr = DateFormat('yyyy-MM-dd').format(_nextRenewalDate);
+      final notes = _notesCtrl.text.trim();
+
+      // 1. Update client status & renewal date in Supabase
+      await SupabaseService.client.from('clients').update({
+        'renewal_status': 'RENEWED',
+        'renewal_date': nextDateStr,
+        'amount': amount,
+        'contract_value': amount,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', widget.client.id);
+
+      // 2. Add income entry so payment reflects in Income & Sales section
+      final user = SupabaseService.currentUser;
+      final orgId = widget.client.branchId ?? user?.id ?? '00000000-0000-0000-0000-000000000000';
+
+      await FinancialsService.addIncomeEntry(
+        IncomeEntryModel(
+          organizationId: orgId,
+          date: _renewedDate,
+          categoryName: 'Retainers',
+          name: 'Renewal Payment - ${widget.client.name}',
+          clientId: widget.client.id,
+          clientName: widget.client.name,
+          amount: amount,
+          paymentMethod: 'Bank Transfer',
+          notes: notes.isNotEmpty
+              ? notes
+              : 'Client renewal payment received for ${widget.client.name}. Next due: $nextDateStr',
+        ),
+      );
+
+      if (mounted) {
+        widget.onSaved();
+        Navigator.pop(context);
+        AppSnackBar.showCustom(
+          context,
+          SnackBar(
+            content: Text('Renewal payment recorded & added to Income for ${widget.client.name}!'),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        AppSnackBar.showCustom(
+          context,
+          SnackBar(
+            content: Text('Failed to process renewal payment: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppTheme.bgCardDark : Colors.white;
+    final textPrimary = AppTheme.textPrimaryOf(context);
+    final textSecondary = AppTheme.textSecondaryOf(context);
+    final border = AppTheme.borderOf(context);
+
+    final formattedNextDueDate = DateFormat('EEEE, MMMM dd, yyyy').format(_nextRenewalDate);
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 580),
+      child: AnimatedPadding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        duration: const Duration(milliseconds: 100),
+        curve: Curves.decelerate,
+        child: Container(
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: border),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 16,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ── 1. HEADER BAR ──
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 16, 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.credit_card_rounded, color: Color(0xFF10B981), size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'PROCESS CLIENT RENEWAL PAYMENT',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF10B981),
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            RichText(
+                              text: TextSpan(
+                                style: TextStyle(fontSize: 12, color: textSecondary),
+                                children: [
+                                  const TextSpan(text: 'Record renewal payment for '),
+                                  TextSpan(
+                                    text: widget.client.name,
+                                    style: TextStyle(fontWeight: FontWeight.bold, color: textPrimary),
+                                  ),
+                                  const TextSpan(text: ' and calculate the next renewal date.'),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.close_rounded, color: textSecondary, size: 20),
+                        onPressed: () => Navigator.pop(context),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const Divider(height: 1),
+
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // ── 2. CLIENT INFO CARD ──
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.client.name,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color: textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Contact: ${widget.client.name}',
+                                  style: TextStyle(fontSize: 12, color: textSecondary),
+                                ),
+                              ],
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  'CURRENT STATUS',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.textMutedOf(context),
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF3C7),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    (widget.client.renewalStatus ?? 'PENDING').toUpperCase(),
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFFD97706),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // ── 3. FORM FIELDS ──
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isWide = constraints.maxWidth > 420;
+
+                          final renewedDateField = _buildFieldContainer(
+                            label: 'RENEWED DATE *',
+                            labelIcon: Icons.calendar_today_outlined,
+                            labelColor: const Color(0xFF10B981),
+                            helperText: 'Date payment was received',
+                            bgColor: const Color(0xFFECFDF5),
+                            borderColor: const Color(0xFF10B981),
+                            child: InkWell(
+                              onTap: () async {
+                                final d = await showDatePicker(
+                                  context: context,
+                                  initialDate: _renewedDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2035),
+                                );
+                                if (d != null) {
+                                  setState(() {
+                                    _renewedDate = d;
+                                    _calculateNextRenewalDate();
+                                  });
+                                }
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      DateFormat('dd-MM-yyyy').format(_renewedDate),
+                                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textPrimary),
+                                    ),
+                                    const Icon(Icons.calendar_month, size: 18, color: Color(0xFF10B981)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+
+                          final renewalCycleField = _buildFieldContainer(
+                            label: 'RENEWAL CYCLE *',
+                            labelIcon: Icons.autorenew,
+                            labelColor: const Color(0xFF0284C7),
+                            helperText: 'Billing frequency',
+                            bgColor: const Color(0xFFF0F9FF),
+                            borderColor: const Color(0xFF0284C7).withOpacity(0.4),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _selectedCycle,
+                                  isExpanded: true,
+                                  icon: const Icon(Icons.keyboard_arrow_down, size: 20, color: Color(0xFF0284C7)),
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textPrimary),
+                                  dropdownColor: bg,
+                                  items: _cycleOptions
+                                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                                      .toList(),
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      setState(() {
+                                        _selectedCycle = val;
+                                        _calculateNextRenewalDate();
+                                      });
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+
+                          final amountField = _buildFieldContainer(
+                            label: 'RENEWAL AMOUNT (₹) *',
+                            labelIcon: Icons.attach_money,
+                            labelColor: const Color(0xFF10B981),
+                            bgColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                            borderColor: border,
+                            child: TextField(
+                              controller: _amountCtrl,
+                              keyboardType: TextInputType.number,
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textPrimary),
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                border: InputBorder.none,
+                              ),
+                            ),
+                          );
+
+                          final nextRenewalDateField = _buildFieldContainer(
+                            label: 'NEXT RENEWAL DATE *',
+                            labelIcon: Icons.access_time,
+                            labelColor: const Color(0xFF6366F1),
+                            bgColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                            borderColor: border,
+                            child: InkWell(
+                              onTap: () async {
+                                final d = await showDatePicker(
+                                  context: context,
+                                  initialDate: _nextRenewalDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2035),
+                                );
+                                if (d != null) {
+                                  setState(() => _nextRenewalDate = d);
+                                }
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      DateFormat('dd-MM-yyyy').format(_nextRenewalDate),
+                                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: textPrimary),
+                                    ),
+                                    const Icon(Icons.calendar_today_outlined, size: 18, color: Color(0xFF6366F1)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+
+                          if (isWide) {
+                            return Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(child: renewedDateField),
+                                    const SizedBox(width: 12),
+                                    Expanded(child: renewalCycleField),
+                                  ],
+                                ),
+                                const SizedBox(height: 14),
+                                Row(
+                                  children: [
+                                    Expanded(child: amountField),
+                                    const SizedBox(width: 12),
+                                    Expanded(child: nextRenewalDateField),
+                                  ],
+                                ),
+                              ],
+                            );
+                          } else {
+                            return Column(
+                              children: [
+                                renewedDateField,
+                                const SizedBox(height: 12),
+                                renewalCycleField,
+                                const SizedBox(height: 12),
+                                amountField,
+                                const SizedBox(height: 12),
+                                nextRenewalDateField,
+                              ],
+                            );
+                          }
+                        },
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // ── 4. INFO BANNER BOX ──
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEEF2FF),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFC7D2FE)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF6366F1), size: 22),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Next Due Date: $formattedNextDueDate',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF4338CA),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  RichText(
+                                    text: const TextSpan(
+                                      style: TextStyle(fontSize: 11, color: Color(0xFF6366F1)),
+                                      children: [
+                                        TextSpan(text: 'Status will be marked as '),
+                                        TextSpan(
+                                          text: 'RENEWED',
+                                          style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF059669)),
+                                        ),
+                                        TextSpan(text: '.'),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // ── 5. PAYMENT NOTES FIELD ──
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'PAYMENT NOTES / TRANSACTION REF',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: textPrimary,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          TextField(
+                            controller: _notesCtrl,
+                            maxLines: 3,
+                            style: TextStyle(fontSize: 13, color: textPrimary),
+                            decoration: InputDecoration(
+                              hintText: 'e.g. Paid via UPI ref #940182, Invoice #INV-102',
+                              hintStyle: TextStyle(color: AppTheme.textMutedOf(context), fontSize: 12),
+                              filled: true,
+                              fillColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                              contentPadding: const EdgeInsets.all(12),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(color: border),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(color: border),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(color: Color(0xFF10B981)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // ── 6. BUTTONS (100% Responsive for all device screen sizes) ──
+                      LayoutBuilder(
+                        builder: (context, btnConstraints) {
+                          final isCompact = btnConstraints.maxWidth < 420;
+                          if (isCompact) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                ElevatedButton.icon(
+                                  onPressed: _isSubmitting ? null : _submitRenewal,
+                                  icon: _isSubmitting
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                        )
+                                      : const Icon(Icons.auto_awesome, size: 16, color: Colors.white),
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      _isSubmitting ? 'CONFIRMING...' : 'CONFIRM RENEWAL PAYMENT',
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF00A86B),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                                    elevation: 0,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                OutlinedButton(
+                                  onPressed: _isSubmitting ? null : () => Navigator.pop(context),
+                                  style: OutlinedButton.styleFrom(
+                                    side: BorderSide(color: border),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  ),
+                                  child: Text(
+                                    'Cancel',
+                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textPrimary),
+                                  ),
+                                ),
+                              ],
+                            );
+                          } else {
+                            return Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                OutlinedButton(
+                                  onPressed: _isSubmitting ? null : () => Navigator.pop(context),
+                                  style: OutlinedButton.styleFrom(
+                                    side: BorderSide(color: border),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                  ),
+                                  child: Text(
+                                    'Cancel',
+                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textPrimary),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Flexible(
+                                  child: ElevatedButton.icon(
+                                    onPressed: _isSubmitting ? null : _submitRenewal,
+                                    icon: _isSubmitting
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                          )
+                                        : const Icon(Icons.auto_awesome, size: 16, color: Colors.white),
+                                    label: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        _isSubmitting ? 'CONFIRMING...' : 'CONFIRM RENEWAL PAYMENT',
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                          letterSpacing: 0.3,
+                                        ),
+                                      ),
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF00A86B),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                      elevation: 0,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFieldContainer({
+    required String label,
+    required IconData labelIcon,
+    required Color labelColor,
+    required Widget child,
+    String? helperText,
+    Color? bgColor,
+    Color? borderColor,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(labelIcon, size: 13, color: labelColor),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: labelColor,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: bgColor ?? Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: borderColor ?? Colors.grey.shade300),
+          ),
+          child: child,
+        ),
+        if (helperText != null) ...[
+          const SizedBox(height: 3),
+          Text(
+            helperText,
+            style: TextStyle(fontSize: 10, color: labelColor.withOpacity(0.8)),
+          ),
+        ],
+      ],
     );
   }
 }
